@@ -39,6 +39,41 @@
         return escapeHtml(text);
     }
 
+    function updateModelDropdown(models) {
+        if (!modelSelect) return;
+        const currentVal = modelSelect.value;
+        
+        let html = '<optgroup label="🚀 Enjambre Local (Ollama - ' + models.length + ' detectados)">';
+        if (models.length === 0) {
+            html += '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Default)</option>';
+        } else {
+            models.forEach(m => {
+                let label = m;
+                if (m.includes('distill') || m.includes('kimi')) label += ' (Kimi+Opus 🧠)';
+                else if (m.includes('coder') || m.includes('code')) label += ' (Coder ⚡)';
+                else if (m.includes('phi')) label += ' (Fast ⚡)';
+                else if (m.includes('aya')) label += ' (Traductor 🌐)';
+                html += '<option value="' + escapeHtml(m) + '">' + escapeHtml(label) + '</option>';
+            });
+        }
+        html += '</optgroup>';
+        html += '<optgroup label="☁️ Orquestadores & CLIs">';
+        html += '<option value="cli:gemini">Gemini CLI (Google AI)</option>';
+        html += '<option value="cli:claude">Claude CLI (Anthropic)</option>';
+        html += '</optgroup>';
+        
+        modelSelect.innerHTML = html;
+        
+        if (currentVal) {
+            for (let i = 0; i < modelSelect.options.length; i++) {
+                if (modelSelect.options[i].value === currentVal) {
+                    modelSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
     function updateBotMessageDisplay(div, fullText, modelName) {
         if (!div) return;
         currentBotRawText = fullText;
@@ -208,6 +243,9 @@
         switch (message.type) {
             case 'modelsList':
                 if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
+                if (message.models && Array.isArray(message.models)) {
+                    updateModelDropdown(message.models);
+                }
                 break;
             case 'streamToken':
                 if (currentBotRawText === '' && currentBotMsgDiv) {
