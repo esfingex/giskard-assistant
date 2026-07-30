@@ -1,6 +1,6 @@
 /**
- * Giskard-Sys VSCode Extension — Cell: Chat Webview Sidebar
- * Dedicated Webview script loaded from media/chatView.js
+ * Giskard Assistant VSCode Extension — Cell: Chat Webview Sidebar
+ * Dedicated Webview script loaded from media/chatView.js and media/marked.min.js
  */
 
 import * as vscode from 'vscode';
@@ -178,6 +178,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
+        const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'marked.min.js'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chatView.js'));
 
         return `<!DOCTYPE html>
@@ -192,17 +193,34 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 10px; opacity: 0.8; margin-bottom: 6px; padding: 2px 4px; background: var(--vscode-editor-inactiveSelectionBackground); border-radius: 4px; }
         select, button, input, textarea { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 5px; border-radius: 4px; font-size: 11px; }
         select { flex: 1; }
-        .messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding-right: 4px; }
-        .msg { padding: 6px 10px; border-radius: 6px; white-space: pre-wrap; font-size: 11px; word-break: break-word; line-height: 1.4; }
-        .msg.user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); align-self: flex-end; }
-        .msg.bot { background: var(--vscode-editor-inactiveSelectionBackground); align-self: flex-start; width: 94%; box-sizing: border-box; }
+        .messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding-right: 4px; }
+        .msg { padding: 8px 12px; border-radius: 8px; font-size: 11px; word-break: break-word; line-height: 1.5; }
+        .msg.user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); align-self: flex-end; white-space: pre-wrap; }
+        .msg.bot { background: var(--vscode-editor-inactiveSelectionBackground); align-self: flex-start; width: 96%; box-sizing: border-box; }
         
-        .model-tag { display: inline-block; font-size: 9px; font-weight: bold; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 1px 5px; border-radius: 3px; margin-bottom: 4px; }
-        details.think-box { background: rgba(0,0,0,0.2); border: 1px dashed var(--vscode-input-border); border-radius: 4px; padding: 6px; margin-bottom: 6px; font-size: 10px; }
+        .model-tag { display: inline-block; font-size: 9px; font-weight: bold; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; }
+        details.think-box { background: rgba(0,0,0,0.25); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 10px; }
         details.think-box summary { cursor: pointer; font-weight: bold; opacity: 0.85; user-select: none; }
         details.think-box summary:hover { opacity: 1; }
-        .think-content { font-style: italic; opacity: 0.8; border-left: 2px solid var(--vscode-button-background); padding-left: 6px; margin-top: 4px; white-space: pre-wrap; font-size: 10px; }
-        .answer-content { white-space: pre-wrap; margin-top: 2px; }
+        .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; }
+        
+        /* Markdown Renderer Styles */
+        .answer-content { font-size: 11px; line-height: 1.6; word-break: break-word; margin-top: 4px; }
+        .answer-content p { margin: 6px 0; }
+        .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { color: #38bdf8; font-weight: bold; margin: 12px 0 6px 0; border-bottom: 1px solid rgba(56,189,248,0.2); padding-bottom: 3px; }
+        .answer-content h1 { font-size: 14px; }
+        .answer-content h2 { font-size: 13px; }
+        .answer-content h3 { font-size: 12px; }
+        .answer-content pre { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 8px 0; font-family: var(--vscode-editor-font-family, monospace); }
+        .answer-content code { background: rgba(255,255,255,0.08); color: #e2e8f0; padding: 2px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; }
+        .answer-content pre code { background: transparent; padding: 0; color: inherit; }
+        .answer-content table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5px; }
+        .answer-content th, .answer-content td { border: 1px solid var(--vscode-input-border); padding: 6px 10px; text-align: left; }
+        .answer-content th { background: rgba(56,189,248,0.15); color: #38bdf8; font-weight: bold; }
+        .answer-content tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+        .answer-content ul, .answer-content ol { margin: 6px 0; padding-left: 20px; }
+        .answer-content li { margin: 3px 0; }
+        .answer-content blockquote { border-left: 3px solid #38bdf8; margin: 8px 0; padding-left: 10px; opacity: 0.85; font-style: italic; }
 
         .input-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: transparent; position: relative; }
         textarea { resize: none; width: 100%; box-sizing: border-box; }
@@ -244,7 +262,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
 
         <div class="messages" id="messages">
-            <div class="msg bot">🤖 Giskard Copilot listo. Contexto de Sandbox activado por defecto.</div>
+            <div class="msg bot">🤖 Giskard Assistant listo. Contexto de Sandbox activado por defecto.</div>
         </div>
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
@@ -294,6 +312,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
+    <script src="${markedUri}"></script>
     <script src="${scriptUri}"></script>
 </body>
 </html>`;

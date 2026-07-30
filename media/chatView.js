@@ -27,6 +27,18 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    function formatMarkdown(text) {
+        if (!text) return '';
+        if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+            try {
+                return marked.parse(text);
+            } catch (e) {
+                console.error('Markdown error:', e);
+            }
+        }
+        return escapeHtml(text);
+    }
+
     function updateBotMessageDisplay(div, fullText, modelName) {
         if (!div) return;
         currentBotRawText = fullText;
@@ -44,18 +56,18 @@
             div.innerHTML = modelTagHtml +
                             '<details class="think-box" open>' +
                             '<summary>💡 Pensamiento de la IA (Ocultar/Mostrar)</summary>' +
-                            '<div class="think-content">' + escapeHtml(thinkContent) + '</div>' +
+                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
                             '</details>' +
-                            '<div class="answer-content">' + escapeHtml(answerContent) + '</div>';
+                            '<div class="answer-content">' + formatMarkdown(answerContent) + '</div>';
         } else if (clean.startsWith('<think>')) {
             const thinkContent = clean.replace('<think>', '').trim();
             div.innerHTML = modelTagHtml +
                             '<details class="think-box" open>' +
                             '<summary>💡 Pensamiento de la IA (Razonando...)</summary>' +
-                            '<div class="think-content">' + escapeHtml(thinkContent) + '</div>' +
+                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
                             '</details>';
         } else {
-            div.innerHTML = modelTagHtml + '<div class="answer-content">' + escapeHtml(fullText) + '</div>';
+            div.innerHTML = modelTagHtml + '<div class="answer-content">' + formatMarkdown(fullText) + '</div>';
         }
     }
 
