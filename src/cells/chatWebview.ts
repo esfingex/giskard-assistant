@@ -245,13 +245,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             <select id="model-select">
                 <optgroup label="🚀 Enjambre Local (Ollama)">
                     <option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Kimi+Opus 🧠)</option>
-                    <option value="qwen3-coder:30b">qwen3-coder:30b (Fast ⚡)</option>
-                    <option value="phi4:14b">phi4:14b (Fast ⚡)</option>
-                    <option value="aya-expanse:8b">aya-expanse:8b (Traductor 🌐)</option>
-                </optgroup>
-                <optgroup label="☁️ Orquestadores & CLIs">
-                    <option value="cli:gemini">Gemini CLI (Google AI)</option>
-                    <option value="cli:claude">Claude CLI (Anthropic)</option>
                 </optgroup>
             </select>
         </div>
@@ -283,7 +276,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     <!-- Modal Ajustes Conector / API -->
     <div class="modal" id="settings-modal">
         <div class="modal-card">
-            <h4>⚙️ Conexión API / Conector Soberano</h4>
+            <h4>⚙️ Ajustes y Filtro de Modelos</h4>
             <div class="field">
                 <label>URL Servidor Giskard-Sys:</label>
                 <input type="text" id="cfg-connector-url" value="http://localhost:3500">
@@ -296,6 +289,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     <option value="gemini">Gemini CLI</option>
                     <option value="claude">Claude CLI</option>
                 </select>
+            </div>
+            <div class="field">
+                <label>🎯 Modelos Visibles en Selector:</label>
+                <div id="model-filter-list" style="max-height: 100px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
             </div>
             <div class="field">
                 <label>Base URL Remota (OpenAI/Compatible):</label>

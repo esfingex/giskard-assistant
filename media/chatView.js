@@ -16,11 +16,14 @@
     const closeModalBtn = document.getElementById('close-modal-btn');
     const saveCfgBtn = document.getElementById('save-cfg-btn');
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
+    const modelFilterList = document.getElementById('model-filter-list');
 
     let currentBotMsgDiv = null;
     let currentBotRawText = '';
     let currentActiveModel = '';
     let selectedContextType = 'none';
+
+    let lastDetectedModels = [];
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -39,15 +42,58 @@
         return escapeHtml(text);
     }
 
-    function updateModelDropdown(models) {
-        if (!modelSelect) return;
-        const currentVal = modelSelect.value;
+    function getEnabledModels() {
+        try {
+            const saved = localStorage.getItem('giskard_enabled_models');
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function setEnabledModels(enabledList) {
+        try {
+            localStorage.setItem('giskard_enabled_models', JSON.stringify(enabledList));
+        } catch {}
+    }
+
+    function renderModelFilterList(ollamaModels) {
+        if (!modelFilterList) return;
+        lastDetectedModels = ollamaModels || [];
         
-        let html = '<optgroup label="🚀 Enjambre Local (Ollama - ' + models.length + ' detectados)">';
-        if (models.length === 0) {
-            html += '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Default)</option>';
-        } else {
-            models.forEach(m => {
+        const enabled = getEnabledModels();
+        const allCandidates = [
+            ...lastDetectedModels,
+            'cli:gemini',
+            'cli:claude'
+        ];
+
+        let html = '';
+        allCandidates.forEach(m => {
+            const isChecked = !enabled || enabled.includes(m);
+            const display = m.startsWith('cli:') ? m.replace('cli:', '') + ' (CLI)' : m;
+            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
+                <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
+                <span>${escapeHtml(display)}</span>
+            </label>`;
+        });
+        modelFilterList.innerHTML = html;
+    }
+
+    function updateModelDropdown(ollamaModels) {
+        if (!modelSelect) return;
+        lastDetectedModels = ollamaModels || [];
+        const currentVal = modelSelect.value;
+        const enabled = getEnabledModels();
+
+        const localModels = lastDetectedModels.filter(m => !enabled || enabled.includes(m));
+        const showGemini = !enabled || enabled.includes('cli:gemini');
+        const showClaude = !enabled || enabled.includes('cli:claude');
+
+        let html = '';
+        if (localModels.length > 0) {
+            html += '<optgroup label="🚀 Enjambre Local (Ollama - ' + localModels.length + ' activos)">';
+            localModels.forEach(m => {
                 let label = m;
                 if (m.includes('distill') || m.includes('kimi')) label += ' (Kimi+Opus 🧠)';
                 else if (m.includes('coder') || m.includes('code')) label += ' (Coder ⚡)';
@@ -55,12 +101,19 @@
                 else if (m.includes('aya')) label += ' (Traductor 🌐)';
                 html += '<option value="' + escapeHtml(m) + '">' + escapeHtml(label) + '</option>';
             });
+            html += '</optgroup>';
         }
-        html += '</optgroup>';
-        html += '<optgroup label="☁️ Orquestadores & CLIs">';
-        html += '<option value="cli:gemini">Gemini CLI (Google AI)</option>';
-        html += '<option value="cli:claude">Claude CLI (Anthropic)</option>';
-        html += '</optgroup>';
+
+        if (showGemini || showClaude) {
+            html += '<optgroup label="☁️ Orquestadores & CLIs">';
+            if (showGemini) html += '<option value="cli:gemini">Gemini CLI (Google AI)</option>';
+            if (showClaude) html += '<option value="cli:claude">Claude CLI (Anthropic)</option>';
+            html += '</optgroup>';
+        }
+
+        if (!html) {
+            html = '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Default)</option>';
+        }
         
         modelSelect.innerHTML = html;
         
@@ -133,6 +186,14 @@
             const provider = document.getElementById('cfg-provider').value;
             const baseUrl = document.getElementById('cfg-base-url').value.trim();
             const apiKey = document.getElementById('cfg-api-key').value.trim();
+
+            // Guardar seleccion de modelos visibles
+            const checkedModels = [];
+            document.querySelectorAll('.model-filter-cb').forEach(cb => {
+                if (cb.checked) checkedModels.push(cb.value);
+            });
+            setEnabledModels(checkedModels);
+            updateModelDropdown(lastDetectedModels);
 
             if (connectorUrl) {
                 vscode.postMessage({ type: 'saveConnectorUrl', url: connectorUrl });
@@ -244,6 +305,7 @@
             case 'modelsList':
                 if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
                 if (message.models && Array.isArray(message.models)) {
+                    renderModelFilterList(message.models);
                     updateModelDropdown(message.models);
                 }
                 break;
