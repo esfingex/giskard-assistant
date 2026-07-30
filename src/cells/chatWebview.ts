@@ -222,6 +222,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .answer-content li { margin: 3px 0; }
         .answer-content blockquote { border-left: 3px solid #38bdf8; margin: 8px 0; padding-left: 10px; opacity: 0.85; font-style: italic; }
 
+        .filter-group-title { font-weight: bold; font-size: 10px; color: #38bdf8; margin: 4px 0 4px 0; padding-bottom: 2px; border-bottom: 1px solid rgba(56,189,248,0.2); }
+        .filter-tag { font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+        .filter-tag.ollama { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+        .filter-tag.cli { background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.4); }
+
         .input-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: transparent; position: relative; }
         textarea { resize: none; width: 100%; box-sizing: border-box; }
         .toolbar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
@@ -292,7 +297,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             </div>
             <div class="field">
                 <label>🎯 Modelos Visibles en Selector:</label>
-                <div id="model-filter-list" style="max-height: 100px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                <div id="model-filter-list" style="max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
             </div>
             <div class="field">
                 <label>Base URL Remota (OpenAI/Compatible):</label>

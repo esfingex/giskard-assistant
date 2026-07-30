@@ -62,21 +62,36 @@
         lastDetectedModels = ollamaModels || [];
         
         const enabled = getEnabledModels();
-        const allCandidates = [
-            ...lastDetectedModels,
-            'cli:gemini',
-            'cli:claude'
-        ];
-
         let html = '';
-        allCandidates.forEach(m => {
-            const isChecked = !enabled || enabled.includes(m);
-            const display = m.startsWith('cli:') ? m.replace('cli:', '') + ' (CLI)' : m;
-            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
-                <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
-                <span>${escapeHtml(display)}</span>
+
+        // Grupo 1: Enjambre Local (Ollama)
+        if (lastDetectedModels.length > 0) {
+            html += '<div class="filter-group-title">🚀 Enjambre Local (Ollama - ' + lastDetectedModels.length + ' detectados)</div>';
+            lastDetectedModels.forEach(m => {
+                const isChecked = !enabled || enabled.includes(m);
+                html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 4px;">
+                    <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
+                    <span class="filter-tag ollama">OLLAMA</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+                </label>`;
+            });
+        }
+
+        // Grupo 2: Orquestadores & CLIs
+        html += '<div class="filter-group-title" style="margin-top: 8px;">☁️ Orquestadores & CLIs</div>';
+        const cliModels = [
+            { id: 'cli:gemini', name: 'Gemini CLI (Google AI)' },
+            { id: 'cli:claude', name: 'Claude CLI (Anthropic)' }
+        ];
+        cliModels.forEach(c => {
+            const isChecked = !enabled || enabled.includes(c.id);
+            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 4px;">
+                <input type="checkbox" class="model-filter-cb" value="${escapeHtml(c.id)}" ${isChecked ? 'checked' : ''}>
+                <span class="filter-tag cli">CLI</span>
+                <span>${escapeHtml(c.name)}</span>
             </label>`;
         });
+
         modelFilterList.innerHTML = html;
     }
 
