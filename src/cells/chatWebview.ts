@@ -222,6 +222,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .answer-content li { margin: 3px 0; }
         .answer-content blockquote { border-left: 3px solid #38bdf8; margin: 8px 0; padding-left: 10px; opacity: 0.85; font-style: italic; }
 
+        /* Modal Tabs */
+        .tab-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--vscode-input-border); margin-bottom: 8px; padding-bottom: 4px; }
+        .tab-btn { flex: 1; background: transparent; border: none; padding: 6px 4px; font-size: 10px; font-weight: bold; cursor: pointer; opacity: 0.6; border-radius: 4px; color: var(--vscode-foreground); }
+        .tab-btn.active { opacity: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+        .tab-content { display: none; flex-direction: column; gap: 8px; }
+        .tab-content.active { display: flex; }
+
         .filter-group-title { font-weight: bold; font-size: 10px; color: #38bdf8; margin: 4px 0 4px 0; padding-bottom: 2px; border-bottom: 1px solid rgba(56,189,248,0.2); }
         .filter-tag { font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
         .filter-tag.ollama { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
@@ -278,36 +285,50 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
-    <!-- Modal Ajustes Conector / API -->
+    <!-- Modal Ajustes Conector / API con Pestañas (Tabs) -->
     <div class="modal" id="settings-modal">
         <div class="modal-card">
-            <h4>⚙️ Ajustes y Filtro de Modelos</h4>
-            <div class="field">
-                <label>URL Servidor Giskard-Sys:</label>
-                <input type="text" id="cfg-connector-url" value="http://localhost:3500">
+            <h4>⚙️ Ajustes de Giskard Assistant</h4>
+            
+            <div class="tab-nav">
+                <button type="button" class="tab-btn active" id="tab-btn-local">🚀 Local & Visibilidad</button>
+                <button type="button" class="tab-btn" id="tab-btn-remote">☁️ API Remota & Keys</button>
             </div>
-            <div class="field">
-                <label>Proveedor Activo Backend:</label>
-                <select id="cfg-provider">
-                    <option value="ollama">Ollama (Local)</option>
-                    <option value="openai_compat">OpenAI / Compatible / Remoto</option>
-                    <option value="gemini">Gemini CLI</option>
-                    <option value="claude">Claude CLI</option>
-                </select>
+
+            <!-- Tab 1: Local & Models -->
+            <div class="tab-content active" id="tab-content-local">
+                <div class="field">
+                    <label>URL Servidor Giskard-Sys:</label>
+                    <input type="text" id="cfg-connector-url" value="http://localhost:3500">
+                </div>
+                <div class="field">
+                    <label>Proveedor Activo Backend:</label>
+                    <select id="cfg-provider">
+                        <option value="ollama">Ollama (Local)</option>
+                        <option value="openai_compat">OpenAI / Compatible / Remoto</option>
+                        <option value="gemini">Gemini CLI</option>
+                        <option value="claude">Claude CLI</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>🎯 Modelos Visibles en Selector:</label>
+                    <div id="model-filter-list" style="max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                </div>
             </div>
-            <div class="field">
-                <label>🎯 Modelos Visibles en Selector:</label>
-                <div id="model-filter-list" style="max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+
+            <!-- Tab 2: Remote & Keys -->
+            <div class="tab-content" id="tab-content-remote">
+                <div class="field">
+                    <label>Base URL Remota (OpenAI/Compatible):</label>
+                    <input type="text" id="cfg-base-url" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="field">
+                    <label>API Key Remota (OpenAI / DeepSeek / External):</label>
+                    <input type="password" id="cfg-api-key" placeholder="sk-...">
+                </div>
             </div>
-            <div class="field">
-                <label>Base URL Remota (OpenAI/Compatible):</label>
-                <input type="text" id="cfg-base-url" placeholder="https://api.openai.com/v1">
-            </div>
-            <div class="field">
-                <label>API Key Remota:</label>
-                <input type="password" id="cfg-api-key" placeholder="sk-...">
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
+
+            <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;">
                 <button id="close-modal-btn" style="background: transparent;">Cancelar</button>
                 <button id="save-cfg-btn" class="btn-send">Guardar 💾</button>
             </div>

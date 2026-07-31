@@ -18,6 +18,11 @@
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const modelFilterList = document.getElementById('model-filter-list');
 
+    const tabBtnLocal = document.getElementById('tab-btn-local');
+    const tabBtnRemote = document.getElementById('tab-btn-remote');
+    const tabContentLocal = document.getElementById('tab-content-local');
+    const tabContentRemote = document.getElementById('tab-content-remote');
+
     let currentBotMsgDiv = null;
     let currentBotRawText = '';
     let currentActiveModel = '';
@@ -181,6 +186,22 @@
         const totalEstTokens = Math.ceil(totalChars / 4);
         tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / 32,768';
         tokenCounter.style.color = totalEstTokens > 24000 ? '#ff6b6b' : 'inherit';
+    }
+
+    // Manejo de Pestañas (Tabs) en Modal Ajustes
+    if (tabBtnLocal && tabBtnRemote) {
+        tabBtnLocal.addEventListener('click', () => {
+            tabBtnLocal.classList.add('active');
+            tabBtnRemote.classList.remove('active');
+            if (tabContentLocal) tabContentLocal.classList.add('active');
+            if (tabContentRemote) tabContentRemote.classList.remove('active');
+        });
+        tabBtnRemote.addEventListener('click', () => {
+            tabBtnRemote.classList.add('active');
+            tabBtnLocal.classList.remove('active');
+            if (tabContentRemote) tabContentRemote.classList.add('active');
+            if (tabContentLocal) tabContentLocal.classList.remove('active');
+        });
     }
 
     if (openSettingsBtn) {
