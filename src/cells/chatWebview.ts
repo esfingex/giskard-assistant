@@ -500,6 +500,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             <div class="tab-nav">
                 <button type="button" class="tab-btn active" id="tab-btn-local">Local & Visibilidad</button>
                 <button type="button" class="tab-btn" id="tab-btn-remote">API Remota & Keys</button>
+                <button type="button" class="tab-btn" id="tab-btn-palette">🎨 Paleta & Estilos</button>
             </div>
 
             <!-- Tab 1: Local & Models & Command Policy & Graphify -->
@@ -551,6 +552,32 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 <div class="field">
                     <label>API Key Remota (OpenAI / DeepSeek / External):</label>
                     <input type="password" id="cfg-api-key" placeholder="sk-...">
+                </div>
+            </div>
+
+            <!-- Tab 3: Configurable Color Palette -->
+            <div class="tab-content" id="tab-content-palette">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 10px; font-weight: bold;">⚡ Presets de 1 Clic:</label>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px;">
+                        <button type="button" id="preset-white" style="font-size: 9px; padding: 4px 6px; background: #1e293b; color: #ffffff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⚪ Blanco Minimal</button>
+                        <button type="button" id="preset-cyan" style="font-size: 9px; padding: 4px 6px; background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer;">🔵 Neón Cyan</button>
+                        <button type="button" id="preset-emerald" style="font-size: 9px; padding: 4px 6px; background: #064e3b; color: #34d399; border: 1px solid #34d399; border-radius: 4px; cursor: pointer;">🟢 Matrix Emerald</button>
+                        <button type="button" id="preset-purple" style="font-size: 9px; padding: 4px 6px; background: #3b0764; color: #c084fc; border: 1px solid #c084fc; border-radius: 4px; cursor: pointer;">🟣 Cyberpunk</button>
+                    </div>
+
+                    <div class="field">
+                        <label>Color de Texto Principal:</label>
+                        <input type="color" id="palette-text-color" value="#f8fafc" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
+                    <div class="field">
+                        <label>Color de Encabezados (H1, H2, H3):</label>
+                        <input type="color" id="palette-header-color" value="#ffffff" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
+                    <div class="field">
+                        <label>Color de Acento (Etiquetas y Botones):</label>
+                        <input type="color" id="palette-accent-color" value="#38bdf8" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
                 </div>
             </div>
 

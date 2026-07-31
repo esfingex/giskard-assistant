@@ -380,20 +380,61 @@
         modelSelect.addEventListener('change', updateTokenCounter);
     }
 
-    if (tabBtnLocal && tabBtnRemote) {
-        tabBtnLocal.addEventListener('click', () => {
-            tabBtnLocal.classList.add('active');
-            tabBtnRemote.classList.remove('active');
-            if (tabContentLocal) tabContentLocal.classList.add('active');
-            if (tabContentRemote) tabContentRemote.classList.remove('active');
-        });
-        tabBtnRemote.addEventListener('click', () => {
-            tabBtnRemote.classList.add('active');
-            tabBtnLocal.classList.remove('active');
-            if (tabContentRemote) tabContentRemote.classList.add('active');
-            if (tabContentLocal) tabContentLocal.classList.remove('active');
-        });
+    const tabBtnPalette = document.getElementById('tab-btn-palette');
+    const tabContentPalette = document.getElementById('tab-content-palette');
+
+    function switchTab(activeBtn, activeContent) {
+        [tabBtnLocal, tabBtnRemote, tabBtnPalette].forEach(b => { if (b) b.classList.remove('active'); });
+        [tabContentLocal, tabContentRemote, tabContentPalette].forEach(c => { if (c) c.classList.remove('active'); });
+        if (activeBtn) activeBtn.classList.add('active');
+        if (activeContent) activeContent.classList.add('active');
     }
+
+    if (tabBtnLocal) tabBtnLocal.addEventListener('click', () => switchTab(tabBtnLocal, tabContentLocal));
+    if (tabBtnRemote) tabBtnRemote.addEventListener('click', () => switchTab(tabBtnRemote, tabContentRemote));
+    if (tabBtnPalette) tabBtnPalette.addEventListener('click', () => switchTab(tabBtnPalette, tabContentPalette));
+
+    const colorTextInp = document.getElementById('palette-text-color');
+    const colorHeaderInp = document.getElementById('palette-header-color');
+    const colorAccentInp = document.getElementById('palette-accent-color');
+
+    function setCustomColors(textColor, headerColor, accentColor) {
+        const root = document.documentElement;
+        if (textColor) root.style.setProperty('--user-font-color', textColor);
+        if (headerColor) root.style.setProperty('--user-header-color', headerColor);
+        if (accentColor) {
+            root.style.setProperty('--user-header-border', accentColor);
+        }
+        if (colorTextInp && textColor) colorTextInp.value = textColor;
+        if (colorHeaderInp && headerColor) colorHeaderInp.value = headerColor;
+        if (colorAccentInp && accentColor) colorAccentInp.value = accentColor;
+
+        try {
+            localStorage.setItem('giskard_palette', JSON.stringify({ textColor, headerColor, accentColor }));
+        } catch {}
+    }
+
+    const presetWhite = document.getElementById('preset-white');
+    const presetCyan = document.getElementById('preset-cyan');
+    const presetEmerald = document.getElementById('preset-emerald');
+    const presetPurple = document.getElementById('preset-purple');
+
+    if (presetWhite) presetWhite.addEventListener('click', () => setCustomColors('#f8fafc', '#ffffff', '#475569'));
+    if (presetCyan) presetCyan.addEventListener('click', () => setCustomColors('#e0f2fe', '#38bdf8', '#0284c7'));
+    if (presetEmerald) presetEmerald.addEventListener('click', () => setCustomColors('#ecfdf5', '#34d399', '#059669'));
+    if (presetPurple) presetPurple.addEventListener('click', () => setCustomColors('#faf5ff', '#c084fc', '#9333ea'));
+
+    if (colorTextInp) colorTextInp.addEventListener('input', () => setCustomColors(colorTextInp.value, colorHeaderInp ? colorHeaderInp.value : null, colorAccentInp ? colorAccentInp.value : null));
+    if (colorHeaderInp) colorHeaderInp.addEventListener('input', () => setCustomColors(colorTextInp ? colorTextInp.value : null, colorHeaderInp.value, colorAccentInp ? colorAccentInp.value : null));
+    if (colorAccentInp) colorAccentInp.addEventListener('input', () => setCustomColors(colorTextInp ? colorTextInp.value : null, colorHeaderInp ? colorHeaderInp.value : null, colorAccentInp.value));
+
+    try {
+        const savedP = localStorage.getItem('giskard_palette');
+        if (savedP) {
+            const p = JSON.parse(savedP);
+            setCustomColors(p.textColor, p.headerColor, p.accentColor);
+        }
+    } catch {}
 
     if (mountWorkspaceBtn) {
         mountWorkspaceBtn.addEventListener('click', () => {
