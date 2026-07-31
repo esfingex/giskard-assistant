@@ -43,18 +43,44 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    function preprocessMarkdown(text) {
+        if (!text) return '';
+        let clean = text;
+
+        // Separar títulos Markdown pegados (ej. "usbPara" -> "usb\n\n## Para")
+        clean = clean.replace(/([^\n])(##+\s)/g, '$1\n\n$2');
+
+        // Separar listas numeradas pegadas (ej. "proyecto.1. Examen" -> "proyecto.\n1. Examen")
+        clean = clean.replace(/([^\n])(\d+\.\s+[A-ZÁÉÍÓÚÑa-z])/g, '$1\n$2');
+
+        // Separar listas de viñetas pegadas (ej. "caso- Examen" -> "caso\n- Examen")
+        clean = clean.replace(/([^\n])(-\s+[A-ZÁÉÍÓÚÑa-z])/g, '$1\n$2');
+
+        // Separar bloques de código pegados (ej. "inicial bash#" -> "inicial\n```bash\n#")
+        clean = clean.replace(/([^\n])(```[a-z]*)/g, '$1\n$2');
+
+        // Insertar salto de línea tras apertura de código si falta (ej. ```bash# -> ```bash\n#)
+        clean = clean.replace(/(```[a-z]*)\s*#/g, '$1\n#');
+
+        return clean;
+    }
+
     function formatMarkdown(text) {
         if (!text) return '';
-        let htmlText = text;
+        const preprocessed = preprocessMarkdown(text);
+        let htmlText = preprocessed;
         if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
             try {
-                htmlText = marked.parse(text);
+                if (typeof marked.setOptions === 'function') {
+                    marked.setOptions({ breaks: true, gfm: true });
+                }
+                htmlText = marked.parse(preprocessed);
             } catch (e) {
                 console.error('Markdown error:', e);
-                htmlText = escapeHtml(text);
+                htmlText = escapeHtml(preprocessed);
             }
         } else {
-            htmlText = escapeHtml(text);
+            htmlText = escapeHtml(preprocessed);
         }
         return htmlText;
     }
