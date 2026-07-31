@@ -16,6 +16,9 @@
     const closeModalBtn = document.getElementById('close-modal-btn');
     const saveCfgBtn = document.getElementById('save-cfg-btn');
     const mountWorkspaceBtn = document.getElementById('mount-workspace-btn');
+    const runGraphifyBtn = document.getElementById('run-graphify-btn');
+    const ctxGraphify = document.getElementById('ctx-graphify');
+
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const modelFilterList = document.getElementById('model-filter-list');
 
@@ -175,7 +178,6 @@
         const enabled = getEnabledModels();
         let html = '';
 
-        // Grupo 1: Enjambre Local (Ollama)
         if (lastDetectedModels.length > 0) {
             html += '<div class="filter-group-title">🚀 Enjambre Local (Ollama - ' + lastDetectedModels.length + ' detectados)</div>';
             lastDetectedModels.forEach(m => {
@@ -188,7 +190,6 @@
             });
         }
 
-        // Grupo 2: Orquestadores & CLIs
         html += '<div class="filter-group-title" style="margin-top: 8px;">☁️ Orquestadores & CLIs</div>';
         const cliModels = [
             { id: 'cli:gemini', name: 'Gemini CLI (Google AI)' },
@@ -261,7 +262,6 @@
         const activeModel = modelName || (modelSelect ? modelSelect.value : 'model');
         const modelTagHtml = '<div class="model-tag">🏷️ ' + escapeHtml(activeModel) + '</div>';
 
-        // Detectar traza de pensamiento
         if (clean.indexOf('</think>') !== -1) {
             const parts = clean.split('</think>');
             const thinkContent = parts[0].replace('<think>', '').trim();
@@ -297,7 +297,6 @@
         tokenCounter.style.color = totalEstTokens > 24000 ? '#ff6b6b' : 'inherit';
     }
 
-    // Manejo de Pestañas (Tabs) en Modal Ajustes
     if (tabBtnLocal && tabBtnRemote) {
         tabBtnLocal.addEventListener('click', () => {
             tabBtnLocal.classList.add('active');
@@ -316,6 +315,19 @@
     if (mountWorkspaceBtn) {
         mountWorkspaceBtn.addEventListener('click', () => {
             vscode.postMessage({ type: 'mountWorkspace' });
+        });
+    }
+
+    if (runGraphifyBtn) {
+        runGraphifyBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'runGraphify' });
+        });
+    }
+
+    if (ctxGraphify) {
+        ctxGraphify.addEventListener('click', () => {
+            vscode.postMessage({ type: 'runGraphify' });
+            if (ctxMenu) ctxMenu.style.display = 'none';
         });
     }
 
@@ -465,12 +477,20 @@
                     renderCommandPolicyList(message.policy.allowed_commands);
                 }
                 break;
+            case 'graphifyResult':
+                if (messagesDiv) {
+                    const bDiv = document.createElement('div');
+                    bDiv.className = 'msg bot';
+                    bDiv.innerHTML = '🕸️ <b>Grafo de Memoria Graphify Generado:</b><br><pre style="font-size:10px; max-height: 150px; overflow-y: auto;">' + escapeHtml(message.result) + '</pre>';
+                    messagesDiv.appendChild(bDiv);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+                break;
             case 'streamToken':
                 if (currentBotRawText === '' && currentBotMsgDiv) {
                     currentBotMsgDiv.textContent = '';
                 }
 
-                // Scroll inteligente
                 const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
 
                 currentBotRawText += message.token;

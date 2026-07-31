@@ -2,7 +2,7 @@
   "name": "giskard-assistant",
   "displayName": "Giskard Assistant — Sovereign AI Connector",
   "description": "Sovereign sidebar chat supporting Ollama, Gemini CLI, Claude CLI, and external AI APIs.",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "publisher": "giskard",
   "icon": "resources/icon.png",
   "repository": {

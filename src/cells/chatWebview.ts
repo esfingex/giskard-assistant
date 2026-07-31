@@ -53,11 +53,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await this._handleMountWorkspace();
             } else if (data.type === 'executeShellCommand') {
                 await this._handleExecuteShellCommand(data.command);
+            } else if (data.type === 'checkGraphify') {
+                await this._handleCheckGraphify();
+            } else if (data.type === 'runGraphify') {
+                await this._handleRunGraphify();
             }
         });
 
         this._sendModelsList();
         this._handleFetchPolicy();
+        this._handleCheckGraphify();
     }
 
     public async refreshState() {
@@ -65,12 +70,55 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         this._view.webview.postMessage({ type: 'stateRefreshed', url: getConnectorUrl() });
         await this._sendModelsList();
         await this._handleFetchPolicy();
+        await this._handleCheckGraphify();
     }
 
     private async _sendModelsList() {
         if (!this._view) return;
         const models = await fetchLlmModels();
         this._view.webview.postMessage({ type: 'modelsList', models, currentUrl: getConnectorUrl() });
+    }
+
+    private async _handleCheckGraphify() {
+        if (!this._view) return;
+        try {
+            const url = `${getConnectorUrl()}/extensions/graphify/check`;
+            const res = await fetch(url);
+            const data: any = await res.json();
+            this._view.webview.postMessage({ type: 'graphifyStatus', status: data });
+        } catch {
+            this._view.webview.postMessage({ type: 'graphifyStatus', status: { success: false, error: 'Sin conexión a Giskard-Sys' } });
+        }
+    }
+
+    private async _handleRunGraphify() {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) {
+            vscode.window.showWarningMessage("No hay ninguna carpeta de workspace abierta en VSCode para indexar con Graphify.");
+            return;
+        }
+
+        const targetPath = folders[0].uri.fsPath;
+        vscode.window.showInformationMessage(`🕸️ Iniciando indexación con Graphify en: ${targetPath}...`);
+        try {
+            const url = `${getConnectorUrl()}/extensions/graphify/run`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ path: targetPath })
+            });
+            const data: any = await res.json();
+            if (data.success) {
+                vscode.window.showInformationMessage(`✓ Graphify: Grafo de memoria generado exitosamente para ${targetPath}`);
+                if (this._view) {
+                    this._view.webview.postMessage({ type: 'graphifyResult', result: data.data });
+                }
+            } else {
+                vscode.window.showErrorMessage(`Graphify Error: ${data.error}`);
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error ejecutando Graphify: ${err.message}`);
+        }
     }
 
     private async _handleFetchPolicy() {
@@ -83,7 +131,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 this._view.webview.postMessage({ type: 'policyLoaded', policy: data.data });
             }
         } catch {
-            // Silencioso si no conecta
+            // Silencioso
         }
     }
 
@@ -390,7 +438,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .input-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: transparent; position: relative; }
         textarea { resize: none; width: 100%; box-sizing: border-box; }
         .toolbar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
-        .menu-dropdown { position: absolute; bottom: 35px; left: 0; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border); border-radius: 6px; display: none; flex-direction: column; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 180px; }
+        .menu-dropdown { position: absolute; bottom: 35px; left: 0; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border); border-radius: 6px; display: none; flex-direction: column; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 220px; }
         .menu-item { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--vscode-menu-foreground); }
         .menu-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
         .btn-add, .btn-compress { background: transparent; border: 1px solid var(--vscode-input-border); cursor: pointer; padding: 4px 6px; border-radius: 4px; font-size: 10px; }
@@ -424,6 +472,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
+                <div class="menu-item" id="ctx-graphify">🕸️ Graphify: Grafo Memoria</div>
                 <div class="menu-item" id="ctx-media">🖼️ Media / Captura</div>
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
                 <div class="menu-item" id="ctx-action-check">⚡ Action: rtk cargo check</div>
@@ -448,14 +497,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 <button type="button" class="tab-btn" id="tab-btn-remote">☁️ API Remota & Keys</button>
             </div>
 
-            <!-- Tab 1: Local & Models & Command Policy -->
+            <!-- Tab 1: Local & Models & Command Policy & Graphify -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field">
                     <label>URL Servidor Giskard-Sys:</label>
                     <input type="text" id="cfg-connector-url" value="http://localhost:3500">
                 </div>
-                <div style="margin: 2px 0;">
-                    <button type="button" id="mount-workspace-btn" style="width: 100%; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 10px; cursor: pointer;">📁 Montar Workspace Actual en Sandbox Jail</button>
+                <div style="display: flex; gap: 4px; margin: 2px 0;">
+                    <button type="button" id="mount-workspace-btn" style="flex: 1; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer;">📁 Montar Workspace</button>
+                    <button type="button" id="run-graphify-btn" style="flex: 1; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold;">🕸️ Generar Grafo Graphify</button>
                 </div>
                 <div class="field">
                     <label>Proveedor Activo Backend:</label>
@@ -468,13 +518,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="field">
                     <label>🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="max-height: 80px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                    <div id="model-filter-list" style="max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
                 </div>
                 <div class="field" style="margin-top: 4px;">
                     <label>🛡️ Comandos Permitidos (Shell / Tools):</label>
-                    <div id="cmd-policy-list" style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando permisos...</div>
+                    <div id="cmd-policy-list" style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 60px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando permisos...</div>
                     <div style="display: flex; gap: 4px; margin-top: 4px;">
-                        <input type="text" id="add-cmd-input" placeholder="ej. docker, npm, python..." style="flex: 1; font-size: 10px;">
+                        <input type="text" id="add-cmd-input" placeholder="ej. docker, npm..." style="flex: 1; font-size: 10px;">
                         <button type="button" id="add-cmd-btn" style="padding: 2px 6px; font-size: 10px;">+ Permitir</button>
                     </div>
                 </div>
