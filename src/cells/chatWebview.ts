@@ -30,6 +30,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
             } else if (data.type === 'fetchModels') {
                 await this._sendModelsList();
+            } else if (data.type === 'fetchPolicy') {
+                await this._handleFetchPolicy();
+            } else if (data.type === 'addAllowedCommand') {
+                await this._handleAddCommandPolicy(data.command);
+            } else if (data.type === 'removeAllowedCommand') {
+                await this._handleRemoveCommandPolicy(data.command);
             } else if (data.type === 'executeAction') {
                 await this._handleAction(data.action);
             } else if (data.type === 'saveSettings') {
@@ -51,18 +57,72 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         });
 
         this._sendModelsList();
+        this._handleFetchPolicy();
     }
 
     public async refreshState() {
         if (!this._view) return;
         this._view.webview.postMessage({ type: 'stateRefreshed', url: getConnectorUrl() });
         await this._sendModelsList();
+        await this._handleFetchPolicy();
     }
 
     private async _sendModelsList() {
         if (!this._view) return;
         const models = await fetchLlmModels();
         this._view.webview.postMessage({ type: 'modelsList', models, currentUrl: getConnectorUrl() });
+    }
+
+    private async _handleFetchPolicy() {
+        if (!this._view) return;
+        try {
+            const url = `${getConnectorUrl()}/policy`;
+            const res = await fetch(url);
+            const data: any = await res.json();
+            if (data.success) {
+                this._view.webview.postMessage({ type: 'policyLoaded', policy: data.data });
+            }
+        } catch {
+            // Silencioso si no conecta
+        }
+    }
+
+    private async _handleAddCommandPolicy(command: string) {
+        if (!this._view) return;
+        try {
+            const url = `${getConnectorUrl()}/policy/commands/add`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command })
+            });
+            const data: any = await res.json();
+            if (data.success) {
+                vscode.window.showInformationMessage(`✓ Comando permitido en Giskard-Sys: ${command}`);
+                await this._handleFetchPolicy();
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error al agregar comando: ${err.message}`);
+        }
+    }
+
+    private async _handleRemoveCommandPolicy(command: string) {
+        if (!this._view) return;
+        try {
+            const url = `${getConnectorUrl()}/policy/commands/remove`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command })
+            });
+            const data: any = await res.json();
+            if (data.success) {
+                vscode.window.showInformationMessage(`🚫 Comando bloqueado/removido en Giskard-Sys: ${command}`);
+                await this._handleFetchPolicy();
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error al remover comando: ${err.message}`);
+        }
     }
 
     private async _handleExecuteShellCommand(cmdText: string) {
@@ -324,6 +384,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .filter-tag { font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
         .filter-tag.ollama { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
         .filter-tag.cli { background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.4); }
+        .cmd-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; background: rgba(255,255,255,0.08); border: 1px solid var(--vscode-input-border); padding: 1px 5px; border-radius: 4px; }
+        .cmd-badge button { background: transparent; border: none; color: #f87171; font-weight: bold; cursor: pointer; padding: 0 2px; }
 
         .input-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: transparent; position: relative; }
         textarea { resize: none; width: 100%; box-sizing: border-box; }
@@ -386,7 +448,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 <button type="button" class="tab-btn" id="tab-btn-remote">☁️ API Remota & Keys</button>
             </div>
 
-            <!-- Tab 1: Local & Models -->
+            <!-- Tab 1: Local & Models & Command Policy -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field">
                     <label>URL Servidor Giskard-Sys:</label>
@@ -406,7 +468,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="field">
                     <label>🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="max-height: 110px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                    <div id="model-filter-list" style="max-height: 80px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                </div>
+                <div class="field" style="margin-top: 4px;">
+                    <label>🛡️ Comandos Permitidos (Shell / Tools):</label>
+                    <div id="cmd-policy-list" style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando permisos...</div>
+                    <div style="display: flex; gap: 4px; margin-top: 4px;">
+                        <input type="text" id="add-cmd-input" placeholder="ej. docker, npm, python..." style="flex: 1; font-size: 10px;">
+                        <button type="button" id="add-cmd-btn" style="padding: 2px 6px; font-size: 10px;">+ Permitir</button>
+                    </div>
                 </div>
             </div>
 

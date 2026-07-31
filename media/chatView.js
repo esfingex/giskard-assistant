@@ -19,6 +19,10 @@
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const modelFilterList = document.getElementById('model-filter-list');
 
+    const cmdPolicyList = document.getElementById('cmd-policy-list');
+    const addCmdInput = document.getElementById('add-cmd-input');
+    const addCmdBtn = document.getElementById('add-cmd-btn');
+
     const tabBtnLocal = document.getElementById('tab-btn-local');
     const tabBtnRemote = document.getElementById('tab-btn-remote');
     const tabContentLocal = document.getElementById('tab-content-local');
@@ -56,7 +60,7 @@
         if (!container) return;
         const pres = container.querySelectorAll('pre');
         pres.forEach(pre => {
-            if (pre.querySelector('.code-toolbar')) return; // Ya tiene toolbar
+            if (pre.querySelector('.code-toolbar')) return;
 
             const codeEl = pre.querySelector('code');
             const codeText = codeEl ? codeEl.innerText : pre.innerText;
@@ -110,6 +114,42 @@
             pre.style.marginTop = '0';
             pre.style.borderTopLeftRadius = '0';
             pre.style.borderTopRightRadius = '0';
+        });
+    }
+
+    function renderCommandPolicyList(cmds) {
+        if (!cmdPolicyList) return;
+        if (!cmds || cmds.length === 0) {
+            cmdPolicyList.innerHTML = '<span style="opacity: 0.6; font-size: 9px;">Ningún comando permitido (Modo Solo Lectura Total)</span>';
+            return;
+        }
+        let html = '';
+        cmds.forEach(c => {
+            html += `<div class="cmd-badge">
+                <span>${escapeHtml(c)}</span>
+                <button type="button" class="remove-cmd-btn" data-cmd="${escapeHtml(c)}" title="Bloquear / Eliminar comando">✖</button>
+            </div>`;
+        });
+        cmdPolicyList.innerHTML = html;
+
+        cmdPolicyList.querySelectorAll('.remove-cmd-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cmd = btn.getAttribute('data-cmd');
+                if (cmd) {
+                    vscode.postMessage({ type: 'removeAllowedCommand', command: cmd });
+                }
+            });
+        });
+    }
+
+    if (addCmdBtn && addCmdInput) {
+        addCmdBtn.addEventListener('click', () => {
+            const val = addCmdInput.value.trim();
+            if (val) {
+                vscode.postMessage({ type: 'addAllowedCommand', command: val });
+                addCmdInput.value = '';
+            }
         });
     }
 
@@ -281,7 +321,8 @@
 
     if (openSettingsBtn) {
         openSettingsBtn.addEventListener('click', () => { 
-            if (settingsModal) settingsModal.style.display = 'flex'; 
+            if (settingsModal) settingsModal.style.display = 'flex';
+            vscode.postMessage({ type: 'fetchPolicy' });
         });
     }
 
@@ -417,6 +458,11 @@
                 if (message.models && Array.isArray(message.models)) {
                     renderModelFilterList(message.models);
                     updateModelDropdown(message.models);
+                }
+                break;
+            case 'policyLoaded':
+                if (message.policy && Array.isArray(message.policy.allowed_commands)) {
+                    renderCommandPolicyList(message.policy.allowed_commands);
                 }
                 break;
             case 'streamToken':
