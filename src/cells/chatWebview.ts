@@ -519,35 +519,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         <option value="cyan_accent">Azul Neón / Cyan Accent</option>
                     </select>
                 </div>
-            <textarea id="prompt" rows="2" placeholder="Pregunta a la IA... (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
-            <div class="toolbar">
-                <button class="btn-add" id="add-ctx-btn">+ Context</button>
-                <label><input type="checkbox" id="inc-file" checked> Archivo activo</label>
-                <button id="send-btn" class="btn-send">Enviar ⚡</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Ajustes Conector / API con Pestañas (Tabs) -->
-    <div class="modal" id="settings-modal">
-        <div class="modal-card">
-            <h4>⚙️ Ajustes de Giskard Assistant</h4>
-            
-            <div class="tab-nav">
-                <button type="button" class="tab-btn active" id="tab-btn-local">🚀 Local & Visibilidad</button>
-                <button type="button" class="tab-btn" id="tab-btn-remote">☁️ API Remota & Keys</button>
-            </div>
-
-            <!-- Tab 1: Local & Models & Command Policy & Graphify -->
-            <div class="tab-content active" id="tab-content-local">
-                <div class="field">
-                    <label>URL Servidor Giskard-Sys:</label>
-                    <input type="text" id="cfg-connector-url" value="http://localhost:3500">
-                </div>
-                <div style="display: flex; gap: 4px; margin: 2px 0;">
-                    <button type="button" id="mount-workspace-btn" style="flex: 1; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer;">📁 Montar Workspace</button>
-                    <button type="button" id="run-graphify-btn" style="flex: 1; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold;">🕸️ Generar Grafo Graphify</button>
-                </div>
                 <div class="field">
                     <label>Proveedor Activo Backend:</label>
                     <select id="cfg-provider">
