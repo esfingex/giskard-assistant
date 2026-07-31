@@ -514,13 +514,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     <button type="button" id="run-graphify-btn" style="flex: 1; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold;">Generar Grafo Graphify</button>
                 </div>
                 <div class="field">
-                    <label>Tema & Color de Texto:</label>
-                    <select id="cfg-theme-select">
-                        <option value="minimal_white">Blanco Minimalista (Estilo Antigravity)</option>
-                        <option value="cyan_accent">Azul Neón / Cyan Accent</option>
-                    </select>
-                </div>
-                <div class="field">
                     <label>Proveedor Activo Backend:</label>
                     <select id="cfg-provider">
                         <option value="ollama">Ollama (Local)</option>
