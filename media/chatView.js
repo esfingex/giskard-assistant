@@ -385,6 +385,7 @@
         openSettingsBtn.addEventListener('click', () => { 
             if (settingsModal) settingsModal.style.display = 'flex';
             vscode.postMessage({ type: 'fetchPolicy' });
+            vscode.postMessage({ type: 'fetchModels' });
         });
     }
 

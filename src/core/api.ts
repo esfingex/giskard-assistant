@@ -34,11 +34,14 @@ export async function fetchSandboxRead(path: string) {
 
 export async function fetchLlmModels() {
     try {
-        const res = await fetch(`${getConnectorUrl()}/llm/models`);
+        const res = await fetch(`${getConnectorUrl()}/ollama/models`);
         const data: any = await res.json();
-        return data.success ? data.data.map((m: any) => m.name) : [];
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            return data.data.map((m: any) => m.name);
+        }
+        return ['qwimi-k2.6:distill', 'qwen3-coder:30b', 'phi4:14b', 'aya-expanse:8b'];
     } catch {
-        return ['qwen3-coder:30b', 'phi4:14b', 'aya-expanse:8b'];
+        return ['qwimi-k2.6:distill', 'qwen3-coder:30b', 'phi4:14b', 'aya-expanse:8b'];
     }
 }
 
