@@ -41,6 +41,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await this.refreshState();
             } else if (data.type === 'compressMemory') {
                 await this._handleCompressMemory(data.history);
+            } else if (data.type === 'openDiff') {
+                await this._handleOpenDiff(data.code);
+            } else if (data.type === 'mountWorkspace') {
+                await this._handleMountWorkspace();
             }
         });
 
@@ -57,6 +61,65 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         const models = await fetchLlmModels();
         this._view.webview.postMessage({ type: 'modelsList', models, currentUrl: getConnectorUrl() });
+    }
+
+    private async _handleMountWorkspace() {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) {
+            vscode.window.showWarningMessage("No hay ninguna carpeta de workspace abierta en VSCode.");
+            return;
+        }
+
+        const targetPath = folders[0].uri.fsPath;
+        try {
+            const url = `${getConnectorUrl()}/workspace/mount`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ path: targetPath })
+            });
+            const data: any = await res.json();
+            if (data.success) {
+                vscode.window.showInformationMessage(`✓ Workspace montado en Sandbox Jail: ${targetPath}`);
+            } else {
+                vscode.window.showErrorMessage(`Fallo al montar workspace: ${data.error}`);
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error de conexión al conector: ${err.message}`);
+        }
+    }
+
+    private async _handleOpenDiff(proposedCode: string) {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            const doc = await vscode.workspace.openTextDocument({ content: proposedCode, language: 'typescript' });
+            await vscode.window.showTextDocument(doc);
+            return;
+        }
+
+        const activeDoc = editor.document;
+        const activeUri = activeDoc.uri;
+        const activeText = activeDoc.getText();
+
+        const tempDoc = await vscode.workspace.openTextDocument({ content: proposedCode, language: activeDoc.languageId });
+        await vscode.commands.executeCommand('vscode.diff', activeUri, tempDoc.uri, `Propuesta de Cambios: ${activeDoc.fileName}`);
+
+        const selection = await vscode.window.showInformationMessage(
+            `Giskard Assistant: ¿Deseas aplicar esta propuesta de cambios a ${activeDoc.fileName}?`,
+            "Aplicar Cambios ✏️", "Descartar"
+        );
+
+        if (selection === "Aplicar Cambios ✏️") {
+            const fullRange = new vscode.Range(
+                activeDoc.positionAt(0),
+                activeDoc.positionAt(activeText.length)
+            );
+            const edit = new vscode.WorkspaceEdit();
+            edit.replace(activeUri, fullRange, proposedCode);
+            await vscode.workspace.applyEdit(edit);
+            await activeDoc.save();
+            vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${activeDoc.fileName}`);
+        }
     }
 
     private async _handleCompressMemory(history: string) {
@@ -301,6 +364,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     <label>URL Servidor Giskard-Sys:</label>
                     <input type="text" id="cfg-connector-url" value="http://localhost:3500">
                 </div>
+                <div style="margin: 2px 0;">
+                    <button type="button" id="mount-workspace-btn" style="width: 100%; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 10px; cursor: pointer;">📁 Montar Workspace Actual en Sandbox Jail</button>
+                </div>
                 <div class="field">
                     <label>Proveedor Activo Backend:</label>
                     <select id="cfg-provider">
@@ -312,7 +378,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="field">
                     <label>🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                    <div id="model-filter-list" style="max-height: 110px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
                 </div>
             </div>
 

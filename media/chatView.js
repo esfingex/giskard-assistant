@@ -15,6 +15,7 @@
     const settingsModal = document.getElementById('settings-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const saveCfgBtn = document.getElementById('save-cfg-btn');
+    const mountWorkspaceBtn = document.getElementById('mount-workspace-btn');
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const modelFilterList = document.getElementById('model-filter-list');
 
@@ -37,14 +38,70 @@
 
     function formatMarkdown(text) {
         if (!text) return '';
+        let htmlText = text;
         if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
             try {
-                return marked.parse(text);
+                htmlText = marked.parse(text);
             } catch (e) {
                 console.error('Markdown error:', e);
+                htmlText = escapeHtml(text);
             }
+        } else {
+            htmlText = escapeHtml(text);
         }
-        return escapeHtml(text);
+        return htmlText;
+    }
+
+    function attachCodeBlockActions(container) {
+        if (!container) return;
+        const pres = container.querySelectorAll('pre');
+        pres.forEach(pre => {
+            if (pre.querySelector('.code-toolbar')) return; // Ya tiene toolbar
+
+            const codeEl = pre.querySelector('code');
+            const codeText = codeEl ? codeEl.innerText : pre.innerText;
+
+            const toolbar = document.createElement('div');
+            toolbar.className = 'code-toolbar';
+            toolbar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 4px 8px; border-bottom: 1px solid var(--vscode-input-border); border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 10px; opacity: 0.9;';
+
+            const langLabel = document.createElement('span');
+            langLabel.style.color = '#38bdf8';
+            langLabel.style.fontWeight = 'bold';
+            langLabel.textContent = '💻 Código';
+
+            const btnGroup = document.createElement('div');
+            btnGroup.style.display = 'flex';
+            btnGroup.style.gap = '6px';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = '📋 Copiar';
+            copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;';
+            copyBtn.onclick = (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(codeText);
+                copyBtn.textContent = '✓ Copiado';
+                setTimeout(() => { copyBtn.textContent = '📋 Copiar'; }, 2000);
+            };
+
+            const diffBtn = document.createElement('button');
+            diffBtn.textContent = '📝 Ver Diff en VSCode';
+            diffBtn.style.cssText = 'background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+            diffBtn.onclick = (e) => {
+                e.stopPropagation();
+                vscode.postMessage({ type: 'openDiff', code: codeText });
+            };
+
+            btnGroup.appendChild(copyBtn);
+            btnGroup.appendChild(diffBtn);
+            toolbar.appendChild(langLabel);
+            toolbar.appendChild(btnGroup);
+
+            pre.parentNode.insertBefore(toolbar, pre);
+            pre.style.marginTop = '0';
+            pre.style.borderTopLeftRadius = '0';
+            pre.style.borderTopRightRadius = '0';
+        });
     }
 
     function getEnabledModels() {
@@ -147,7 +204,7 @@
         }
     }
 
-    function updateBotMessageDisplay(div, fullText, modelName) {
+    function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
         if (!div) return;
         currentBotRawText = fullText;
         let clean = fullText.replace(/&lt;think&gt;/g, '<think>').replace(/&lt;\/think&gt;/g, '</think>');
@@ -155,14 +212,15 @@
         const activeModel = modelName || (modelSelect ? modelSelect.value : 'model');
         const modelTagHtml = '<div class="model-tag">🏷️ ' + escapeHtml(activeModel) + '</div>';
 
-        // Detectar traza de pensamiento (soporta con o sin tag <think> inicial)
+        // Detectar traza de pensamiento
         if (clean.indexOf('</think>') !== -1) {
             const parts = clean.split('</think>');
             const thinkContent = parts[0].replace('<think>', '').trim();
             const answerContent = parts.slice(1).join('</think>').trim();
 
+            const openAttr = isStreaming ? 'open' : '';
             div.innerHTML = modelTagHtml +
-                            '<details class="think-box" open>' +
+                            '<details class="think-box" ' + openAttr + '>' +
                             '<summary>💡 Pensamiento de la IA (Ocultar/Mostrar)</summary>' +
                             '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
                             '</details>' +
@@ -177,6 +235,8 @@
         } else {
             div.innerHTML = modelTagHtml + '<div class="answer-content">' + formatMarkdown(fullText) + '</div>';
         }
+
+        attachCodeBlockActions(div);
     }
 
     function updateTokenCounter() {
@@ -204,6 +264,12 @@
         });
     }
 
+    if (mountWorkspaceBtn) {
+        mountWorkspaceBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'mountWorkspace' });
+        });
+    }
+
     if (openSettingsBtn) {
         openSettingsBtn.addEventListener('click', () => { 
             if (settingsModal) settingsModal.style.display = 'flex'; 
@@ -223,7 +289,6 @@
             const baseUrl = document.getElementById('cfg-base-url').value.trim();
             const apiKey = document.getElementById('cfg-api-key').value.trim();
 
-            // Guardar seleccion de modelos visibles
             const checkedModels = [];
             document.querySelectorAll('.model-filter-cb').forEach(cb => {
                 if (cb.checked) checkedModels.push(cb.value);
@@ -320,7 +385,7 @@
         currentBotRawText = '';
         currentActiveModel = modelSelect ? modelSelect.value : '';
 
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
         updateTokenCounter();
 
         vscode.postMessage({
@@ -349,12 +414,23 @@
                 if (currentBotRawText === '' && currentBotMsgDiv) {
                     currentBotMsgDiv.textContent = '';
                 }
+
+                // Scroll inteligente: solo scroll si el usuario está cerca del final
+                const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
+
                 currentBotRawText += message.token;
-                updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel);
-                if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel, true);
+
+                if (messagesDiv && isNearBottom) {
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
                 updateTokenCounter();
                 break;
             case 'streamComplete':
+                if (currentBotMsgDiv) {
+                    // Cierra la ventana de pensamiento automaticamente al terminar el streaming
+                    updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel, false);
+                }
                 currentBotMsgDiv = null;
                 currentBotRawText = '';
                 updateTokenCounter();
