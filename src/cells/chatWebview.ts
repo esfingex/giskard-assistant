@@ -307,12 +307,32 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
 
         let fullPrompt = prompt;
+
+        // Auto-detect Active VSCode Workspace Project
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+            const activeFolder = folders[0];
+            const folderPath = activeFolder.uri.fsPath;
+            const folderName = activeFolder.name;
+
+            fullPrompt = `[Proyecto Abierto en VSCode: ${folderName} (${folderPath})]\n${fullPrompt}`;
+
+            // Auto-mount active workspace folder in giskard-sys backend
+            try {
+                await fetch(`${getConnectorUrl()}/workspace/mount`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                    body: JSON.stringify({ path: folderPath })
+                });
+            } catch {}
+        }
+
         if (includeActiveFile) {
             const editor = vscode.window.activeTextEditor;
             if (editor) {
                 const docText = editor.document.getText();
                 const fileName = editor.document.fileName;
-                fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${prompt}`;
+                fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${fullPrompt}`;
             }
         }
 
