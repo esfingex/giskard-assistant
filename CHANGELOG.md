@@ -1,6 +1,6 @@
 # 📜 CHANGELOG — Giskard Assistant (VSCode Extension)
 
-Todos los cambios notables, funciones agregadas, arquitecturas e integraciones de la extensión **Giskard Assistant** están documentados en este archivo.
+Todos los cambios notables, funciones agregadas, arquitecturas e integraciones de la extensión **Giskard Assistant** están documentados cronológicamente en este archivo desde la versión inicial `v1.0.0`.
 
 ---
 
@@ -34,7 +34,7 @@ Todos los cambios notables, funciones agregadas, arquitecturas e integraciones d
 
 ### 🛠️ Cambiado
 - **Limpieza de Interfaz:**
-  - Eliminado el selector redundante `Tema & Color de Texto` de la Pestaña 1 en favor de la pestaña especializada `🎨 Paleta & Estilos`.
+  - Eliminado el selector redundante `Tema & Color de Texto` de la Pestaña 1 en favor de la pestaña dedicada `🎨 Paleta & Estilos`.
 
 ---
 
@@ -44,6 +44,14 @@ Todos los cambios notables, funciones agregadas, arquitecturas e integraciones d
 - **Pestaña Dedicada de Estilos `🎨 Paleta & Estilos`:**
   - Adición de la tercera pestaña en el modal de Ajustes (⚙️).
   - Selectores de color en tiempo real para texto principal, encabezados H1-H4 y bordes de acento.
+
+---
+
+## 🛠️ [2.9.0] - 2026-07-31
+
+### 🛠️ Corregido
+- **Limpieza de Maquetación Modal:**
+  - Eliminación de etiquetas HTML duplicadas en el modal de Ajustes.
 
 ---
 
@@ -93,17 +101,82 @@ Todos los cambios notables, funciones agregadas, arquitecturas e integraciones d
   - Contador de tokens en tiempo real hasta 131,072 tokens para modelos de razonamiento (`qwimi-k2.6:distill`).
 - **Gestor Visual de Políticas de Comandos:**
   - Badges interactivos `[✖]` y `[+ Permitir]` para administrar comandos autorizados en `giskard-sys`.
+
+---
+
+## 🕸️ [2.3.0] - 2026-07-29
+
+### ✨ Agregado
 - **Integración con Graphify:**
   - Botón y endpoint para indexar grafos de conocimiento SQLite (`/extensions/graphify/run`).
 
 ---
 
-## 🐝 [2.0.0 - 2.3.0] - 2026-07-28 / 2026-07-30
+## 🛡️ [2.2.0] - 2026-07-29
 
 ### ✨ Agregado
-- **Soporte Multi-Proveedor LLM:**
-  - Conexión con Ollama local, Gemini CLI (`cli:gemini`) y Claude CLI (`cli:claude`).
-- **Parseo de Trazas de Pensamiento (`<think>`):**
+- **Command Policy Manager en Ajustes:**
+  - Control de comandos autorizados para la ejecución en Sandbox Jail.
+
+---
+
+## ⚡ [2.1.0] - 2026-07-28
+
+### ✨ Agregado
+- **Ejecución en Shell Integrada de VSCode:**
+  - Botones `[ ⚡ Ejecutar en Shell ]` en los bloques de código.
+  - Creación y enfoque automático de `Giskard Terminal`.
+
+---
+
+## 📝 [2.0.0] - 2026-07-28
+
+### ✨ Agregado
+- **Aprobación de Cambios por Diff Nativo de VSCode:**
+  - Botón `[ 📝 Ver Diff en VSCode ]` que invoca `vscode.diff`.
+- **Caja de Razonamiento Auto-Colapsable:**
   - Desplegable interactivo `💡 Pensamiento de la IA (Ocultar/Mostrar)`.
-- **Integración Soberana:**
-  - Conexión REST + SSE streaming con el daemon soberano `giskard-sys` en `http://localhost:3500`.
+
+---
+
+## ⚙️ [1.5.0] - 2026-07-27
+
+### ✨ Agregado
+- Rediseño del modal de Ajustes en 2 pestañas organizadas (`Local & Visibilidad` vs `API Remota & Keys`).
+
+---
+
+## 🏷️ [1.4.0] - 2026-07-27
+
+### ✨ Agregado
+- Agrupación y etiquetado de modelos por tipo de conexión (Badges `OLLAMA` vs `CLI`).
+
+---
+
+## 👁️ [1.3.0] - 2026-07-27
+
+### ✨ Agregado
+- Filtros de visibilidad de modelos mediante casillas de verificación en Ajustes.
+
+---
+
+## 🤖 [1.2.0] - 2026-07-26
+
+### ✨ Agregado
+- Poblamiento dinámico del selector de modelos desde el endpoint `/ollama/models`.
+
+---
+
+## 📄 [1.1.0] - 2026-07-26
+
+### ✨ Agregado
+- Integración del parser local `marked.min.js` para renderizado de GitHub Markdown enriquecido.
+
+---
+
+## 🎉 [1.0.0] - 2026-07-25
+
+### ✨ Agregado
+- **Commit Inicial de la Extensión Soberana Giskard Assistant:**
+  - Webview Panel dedicado en la barra lateral de VSCode.
+  - Conexión soberana REST + SSE Streaming con el daemon `giskard-sys` en `http://localhost:3500`.
