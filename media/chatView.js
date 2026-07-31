@@ -397,20 +397,28 @@
     const colorTextInp = document.getElementById('palette-text-color');
     const colorHeaderInp = document.getElementById('palette-header-color');
     const colorAccentInp = document.getElementById('palette-accent-color');
+    const colorUserBgInp = document.getElementById('palette-user-bg');
+    const colorBotBgInp = document.getElementById('palette-bot-bg');
+    const colorThinkBgInp = document.getElementById('palette-think-bg');
 
-    function setCustomColors(textColor, headerColor, accentColor) {
+    function setCustomColors(textColor, headerColor, accentColor, userBg, botBg, thinkBg) {
         const root = document.documentElement;
         if (textColor) root.style.setProperty('--user-font-color', textColor);
         if (headerColor) root.style.setProperty('--user-header-color', headerColor);
-        if (accentColor) {
-            root.style.setProperty('--user-header-border', accentColor);
-        }
+        if (accentColor) root.style.setProperty('--user-header-border', accentColor);
+        if (userBg) root.style.setProperty('--user-msg-bg', userBg);
+        if (botBg) root.style.setProperty('--bot-msg-bg', botBg);
+        if (thinkBg) root.style.setProperty('--think-box-bg', thinkBg);
+
         if (colorTextInp && textColor) colorTextInp.value = textColor;
         if (colorHeaderInp && headerColor) colorHeaderInp.value = headerColor;
         if (colorAccentInp && accentColor) colorAccentInp.value = accentColor;
+        if (colorUserBgInp && userBg) colorUserBgInp.value = userBg;
+        if (colorBotBgInp && botBg) colorBotBgInp.value = botBg;
+        if (colorThinkBgInp && thinkBg) colorThinkBgInp.value = thinkBg;
 
         try {
-            localStorage.setItem('giskard_palette', JSON.stringify({ textColor, headerColor, accentColor }));
+            localStorage.setItem('giskard_palette', JSON.stringify({ textColor, headerColor, accentColor, userBg, botBg, thinkBg }));
         } catch {}
     }
 
@@ -419,20 +427,31 @@
     const presetEmerald = document.getElementById('preset-emerald');
     const presetPurple = document.getElementById('preset-purple');
 
-    if (presetWhite) presetWhite.addEventListener('click', () => setCustomColors('#f8fafc', '#ffffff', '#475569'));
-    if (presetCyan) presetCyan.addEventListener('click', () => setCustomColors('#e0f2fe', '#38bdf8', '#0284c7'));
-    if (presetEmerald) presetEmerald.addEventListener('click', () => setCustomColors('#ecfdf5', '#34d399', '#059669'));
-    if (presetPurple) presetPurple.addEventListener('click', () => setCustomColors('#faf5ff', '#c084fc', '#9333ea'));
+    if (presetWhite) presetWhite.addEventListener('click', () => setCustomColors('#f8fafc', '#ffffff', '#475569', '#1e293b', '#0f172a', 'rgba(0,0,0,0.3)'));
+    if (presetCyan) presetCyan.addEventListener('click', () => setCustomColors('#e0f2fe', '#38bdf8', '#0284c7', '#0284c7', '#0f172a', 'rgba(2,132,199,0.15)'));
+    if (presetEmerald) presetEmerald.addEventListener('click', () => setCustomColors('#ecfdf5', '#34d399', '#059669', '#059669', '#064e3b', 'rgba(5,150,105,0.15)'));
+    if (presetPurple) presetPurple.addEventListener('click', () => setCustomColors('#faf5ff', '#c084fc', '#9333ea', '#7e22ce', '#3b0764', 'rgba(147,51,234,0.15)'));
 
-    if (colorTextInp) colorTextInp.addEventListener('input', () => setCustomColors(colorTextInp.value, colorHeaderInp ? colorHeaderInp.value : null, colorAccentInp ? colorAccentInp.value : null));
-    if (colorHeaderInp) colorHeaderInp.addEventListener('input', () => setCustomColors(colorTextInp ? colorTextInp.value : null, colorHeaderInp.value, colorAccentInp ? colorAccentInp.value : null));
-    if (colorAccentInp) colorAccentInp.addEventListener('input', () => setCustomColors(colorTextInp ? colorTextInp.value : null, colorHeaderInp ? colorHeaderInp.value : null, colorAccentInp.value));
+    function updateColorsFromInputs() {
+        setCustomColors(
+            colorTextInp ? colorTextInp.value : null,
+            colorHeaderInp ? colorHeaderInp.value : null,
+            colorAccentInp ? colorAccentInp.value : null,
+            colorUserBgInp ? colorUserBgInp.value : null,
+            colorBotBgInp ? colorBotBgInp.value : null,
+            colorThinkBgInp ? colorThinkBgInp.value : null
+        );
+    }
+
+    [colorTextInp, colorHeaderInp, colorAccentInp, colorUserBgInp, colorBotBgInp, colorThinkBgInp].forEach(inp => {
+        if (inp) inp.addEventListener('input', updateColorsFromInputs);
+    });
 
     try {
         const savedP = localStorage.getItem('giskard_palette');
         if (savedP) {
             const p = JSON.parse(savedP);
-            setCustomColors(p.textColor, p.headerColor, p.accentColor);
+            setCustomColors(p.textColor, p.headerColor, p.accentColor, p.userBg, p.botBg, p.thinkBg);
         }
     } catch {}
 

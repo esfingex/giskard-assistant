@@ -394,11 +394,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         select { flex: 1; }
         .messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding-right: 4px; }
         .msg { padding: 8px 12px; border-radius: 8px; font-size: 11px; word-break: break-word; line-height: 1.5; }
-        .msg.user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); align-self: flex-end; white-space: pre-wrap; }
-        .msg.bot { background: var(--vscode-editor-inactiveSelectionBackground); align-self: flex-start; width: 96%; box-sizing: border-box; }
+        .msg.user { background: var(--user-msg-bg); color: #ffffff; align-self: flex-end; white-space: pre-wrap; }
+        .msg.bot { background: var(--bot-msg-bg); align-self: flex-start; width: 96%; box-sizing: border-box; }
         
         .model-tag { display: inline-block; font-size: 9px; font-weight: bold; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; }
-        details.think-box { background: rgba(0,0,0,0.25); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 10px; }
+        details.think-box { background: var(--think-box-bg); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 10px; }
         details.think-box summary { cursor: pointer; font-weight: bold; opacity: 0.85; user-select: none; }
         details.think-box summary:hover { opacity: 1; }
         .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; }
@@ -408,6 +408,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             --user-font-color: #f8fafc;
             --user-header-color: #ffffff;
             --user-header-border: rgba(255, 255, 255, 0.15);
+            --user-msg-bg: var(--vscode-button-background);
+            --bot-msg-bg: var(--vscode-editor-inactiveSelectionBackground);
+            --think-box-bg: rgba(0, 0, 0, 0.25);
         }
         .answer-content { font-size: 11px; line-height: 1.6; word-break: break-word; margin-top: 4px; color: var(--user-font-color); }
         .answer-content p { margin: 6px 0; }
@@ -561,15 +564,27 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
                     <div class="field">
                         <label>Color de Texto Principal:</label>
-                        <input type="color" id="palette-text-color" value="#f8fafc" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                        <input type="color" id="palette-text-color" value="#f8fafc" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
                     </div>
                     <div class="field">
                         <label>Color de Encabezados (H1, H2, H3):</label>
-                        <input type="color" id="palette-header-color" value="#ffffff" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                        <input type="color" id="palette-header-color" value="#ffffff" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
                     </div>
                     <div class="field">
                         <label>Color de Acento (Etiquetas y Botones):</label>
-                        <input type="color" id="palette-accent-color" value="#38bdf8" style="height: 26px; padding: 2px; cursor: pointer; width: 100%;">
+                        <input type="color" id="palette-accent-color" value="#38bdf8" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
+                    <div class="field">
+                        <label>💬 Burbuja de Usuario (Fondo):</label>
+                        <input type="color" id="palette-user-bg" value="#0284c7" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
+                    <div class="field">
+                        <label>🤖 Burbuja de IA (Fondo):</label>
+                        <input type="color" id="palette-bot-bg" value="#1e293b" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
+                    </div>
+                    <div class="field">
+                        <label>💡 Caja de Razonamiento (Fondo):</label>
+                        <input type="color" id="palette-think-bg" value="#0f172a" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
                     </div>
                 </div>
             </div>
