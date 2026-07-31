@@ -68,7 +68,7 @@
             const langLabel = document.createElement('span');
             langLabel.style.color = '#38bdf8';
             langLabel.style.fontWeight = 'bold';
-            langLabel.textContent = '💻 Código';
+            langLabel.textContent = '💻 Código / Shell';
 
             const btnGroup = document.createElement('div');
             btnGroup.style.display = 'flex';
@@ -84,6 +84,14 @@
                 setTimeout(() => { copyBtn.textContent = '📋 Copiar'; }, 2000);
             };
 
+            const runBtn = document.createElement('button');
+            runBtn.textContent = '⚡ Ejecutar en Shell';
+            runBtn.style.cssText = 'background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+            runBtn.onclick = (e) => {
+                e.stopPropagation();
+                vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
+            };
+
             const diffBtn = document.createElement('button');
             diffBtn.textContent = '📝 Ver Diff en VSCode';
             diffBtn.style.cssText = 'background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
@@ -93,6 +101,7 @@
             };
 
             btnGroup.appendChild(copyBtn);
+            btnGroup.appendChild(runBtn);
             btnGroup.appendChild(diffBtn);
             toolbar.appendChild(langLabel);
             toolbar.appendChild(btnGroup);
@@ -415,7 +424,7 @@
                     currentBotMsgDiv.textContent = '';
                 }
 
-                // Scroll inteligente: solo scroll si el usuario está cerca del final
+                // Scroll inteligente
                 const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
 
                 currentBotRawText += message.token;
@@ -428,7 +437,6 @@
                 break;
             case 'streamComplete':
                 if (currentBotMsgDiv) {
-                    // Cierra la ventana de pensamiento automaticamente al terminar el streaming
                     updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel, false);
                 }
                 currentBotMsgDiv = null;

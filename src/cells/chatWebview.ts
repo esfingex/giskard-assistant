@@ -45,6 +45,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await this._handleOpenDiff(data.code);
             } else if (data.type === 'mountWorkspace') {
                 await this._handleMountWorkspace();
+            } else if (data.type === 'executeShellCommand') {
+                await this._handleExecuteShellCommand(data.command);
             }
         });
 
@@ -61,6 +63,32 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         const models = await fetchLlmModels();
         this._view.webview.postMessage({ type: 'modelsList', models, currentUrl: getConnectorUrl() });
+    }
+
+    private async _handleExecuteShellCommand(cmdText: string) {
+        let terminal = vscode.window.activeTerminal;
+        if (!terminal) {
+            terminal = vscode.window.createTerminal('Giskard Terminal');
+        }
+        terminal.show();
+        terminal.sendText(cmdText);
+
+        try {
+            const url = `${getConnectorUrl()}/exec`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command: 'shell', args: [cmdText] })
+            });
+            const data: any = await res.json();
+            if (data.success) {
+                vscode.window.showInformationMessage(`⚡ Comando Shell ejecutado via Giskard-Sys: ${cmdText}`);
+            } else {
+                vscode.window.showWarningMessage(`Shell enviada a Terminal integrada (${data.error || 'OK'})`);
+            }
+        } catch (err: any) {
+            // Silencioso
+        }
     }
 
     private async _handleMountWorkspace() {
