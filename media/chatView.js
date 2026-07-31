@@ -94,6 +94,12 @@
             const codeEl = pre.querySelector('code');
             const codeText = codeEl ? codeEl.innerText : pre.innerText;
 
+            if (!codeText || !codeText.trim()) {
+                pre.style.display = 'none';
+                return;
+            }
+            pre.style.display = 'block';
+
             const toolbar = document.createElement('div');
             toolbar.className = 'code-toolbar';
             toolbar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 4px 8px; border-bottom: 1px solid var(--vscode-input-border); border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 10px; opacity: 0.9;';
