@@ -222,10 +222,10 @@
             html += '<optgroup label="🚀 Enjambre Local (Ollama - ' + localModels.length + ' activos)">';
             localModels.forEach(m => {
                 let label = m;
-                if (m.includes('distill') || m.includes('kimi')) label += ' (Kimi+Opus 🧠)';
-                else if (m.includes('coder') || m.includes('code')) label += ' (Coder ⚡)';
-                else if (m.includes('phi')) label += ' (Fast ⚡)';
-                else if (m.includes('aya')) label += ' (Traductor 🌐)';
+                if (m.includes('distill') || m.includes('kimi')) label += ' (Kimi+Opus 🧠 128K)';
+                else if (m.includes('coder') || m.includes('code')) label += ' (Coder ⚡ 64K)';
+                else if (m.includes('phi')) label += ' (Fast ⚡ 32K)';
+                else if (m.includes('aya')) label += ' (Traductor 🌐 32K)';
                 html += '<option value="' + escapeHtml(m) + '">' + escapeHtml(label) + '</option>';
             });
             html += '</optgroup>';
@@ -233,13 +233,13 @@
 
         if (showGemini || showClaude) {
             html += '<optgroup label="☁️ Orquestadores & CLIs">';
-            if (showGemini) html += '<option value="cli:gemini">Gemini CLI (Google AI)</option>';
-            if (showClaude) html += '<option value="cli:claude">Claude CLI (Anthropic)</option>';
+            if (showGemini) html += '<option value="cli:gemini">Gemini CLI (1M Context 🧠)</option>';
+            if (showClaude) html += '<option value="cli:claude">Claude CLI (200K Context 🧠)</option>';
             html += '</optgroup>';
         }
 
         if (!html) {
-            html = '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Default)</option>';
+            html = '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (128K Default)</option>';
         }
         
         modelSelect.innerHTML = html;
@@ -252,6 +252,7 @@
                 }
             }
         }
+        updateTokenCounter();
     }
 
     function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
@@ -293,8 +294,25 @@
         let totalChars = 0;
         messagesDiv.querySelectorAll('.msg').forEach(m => totalChars += m.textContent.length);
         const totalEstTokens = Math.ceil(totalChars / 4);
-        tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / 32,768';
-        tokenCounter.style.color = totalEstTokens > 24000 ? '#ff6b6b' : 'inherit';
+
+        let maxTokens = 32768;
+        const currentModel = (modelSelect ? modelSelect.value : '').toLowerCase();
+        if (currentModel.includes('qwimi') || currentModel.includes('distill') || currentModel.includes('kimi')) {
+            maxTokens = 131072; // 128K Context Window
+        } else if (currentModel.includes('coder') || currentModel.includes('code') || currentModel.includes('agent')) {
+            maxTokens = 65536; // 64K Context Window
+        } else if (currentModel.includes('gemini')) {
+            maxTokens = 1048576; // 1M Context Window
+        } else if (currentModel.includes('claude')) {
+            maxTokens = 200000; // 200K Context Window
+        }
+
+        tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / ' + maxTokens.toLocaleString();
+        tokenCounter.style.color = totalEstTokens > (maxTokens * 0.8) ? '#ff6b6b' : 'inherit';
+    }
+
+    if (modelSelect) {
+        modelSelect.addEventListener('change', updateTokenCounter);
     }
 
     if (tabBtnLocal && tabBtnRemote) {
