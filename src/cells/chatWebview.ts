@@ -404,22 +404,27 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; }
         
         /* Markdown Renderer Styles */
-        .answer-content { font-size: 11px; line-height: 1.6; word-break: break-word; margin-top: 4px; }
+        :root {
+            --user-font-color: #f8fafc;
+            --user-header-color: #ffffff;
+            --user-header-border: rgba(255, 255, 255, 0.15);
+        }
+        .answer-content { font-size: 11px; line-height: 1.6; word-break: break-word; margin-top: 4px; color: var(--user-font-color); }
         .answer-content p { margin: 6px 0; }
-        .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { color: #38bdf8; font-weight: bold; margin: 12px 0 6px 0; border-bottom: 1px solid rgba(56,189,248,0.2); padding-bottom: 3px; }
+        .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { color: var(--user-header-color); font-weight: bold; margin: 12px 0 6px 0; border-bottom: 1px solid var(--user-header-border); padding-bottom: 3px; }
         .answer-content h1 { font-size: 14px; }
         .answer-content h2 { font-size: 13px; }
         .answer-content h3 { font-size: 12px; }
         .answer-content pre { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 8px 0; font-family: var(--vscode-editor-font-family, monospace); }
-        .answer-content code { background: rgba(255,255,255,0.08); color: #e2e8f0; padding: 2px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; }
+        .answer-content code { background: rgba(255,255,255,0.08); color: #f8fafc; padding: 2px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; }
         .answer-content pre code { background: transparent; padding: 0; color: inherit; }
         .answer-content table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5px; }
         .answer-content th, .answer-content td { border: 1px solid var(--vscode-input-border); padding: 6px 10px; text-align: left; }
-        .answer-content th { background: rgba(56,189,248,0.15); color: #38bdf8; font-weight: bold; }
+        .answer-content th { background: rgba(255,255,255,0.06); color: var(--user-header-color); font-weight: bold; }
         .answer-content tr:nth-child(even) { background: rgba(255,255,255,0.03); }
         .answer-content ul, .answer-content ol { margin: 6px 0; padding-left: 20px; }
         .answer-content li { margin: 3px 0; }
-        .answer-content blockquote { border-left: 3px solid #38bdf8; margin: 8px 0; padding-left: 10px; opacity: 0.85; font-style: italic; }
+        .answer-content blockquote { border-left: 3px solid var(--user-header-color); margin: 8px 0; padding-left: 10px; opacity: 0.9; font-style: italic; }
 
         /* Modal Tabs */
         .tab-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--vscode-input-border); margin-bottom: 8px; padding-bottom: 4px; }
@@ -456,28 +461,64 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         <div class="header">
             <button class="btn-settings" id="open-settings-btn" title="Ajustes de Conector / API">⚙️</button>
             <select id="model-select">
-                <optgroup label="🚀 Enjambre Local (Ollama)">
-                    <option value="qwimi-k2.6:distill">qwimi-k2.6:distill (Kimi+Opus 🧠)</option>
+                <optgroup label="Enjambre Local (Ollama)">
+                    <option value="qwimi-k2.6:distill">qwimi-k2.6:distill (128K)</option>
                 </optgroup>
             </select>
         </div>
 
         <div class="status-bar">
-            <span id="token-counter">🔢 Tokens: 0 / 32,768</span>
-            <button class="btn-compress" id="compress-btn" title="Guardar resumen en memoria soberana y limpiar ventana">🧹 Comprimir Memoria</button>
+            <span id="token-counter">Tokens: 0 / 32,768</span>
+            <button class="btn-compress" id="compress-btn" title="Guardar resumen en memoria soberana y limpiar ventana">Comprimir Memoria</button>
         </div>
 
         <div class="messages" id="messages">
-            <div class="msg bot">🤖 Giskard Assistant listo. Contexto de Sandbox activado por defecto.</div>
+            <div class="msg bot">Giskard Assistant listo. Contexto de Sandbox activado.</div>
         </div>
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
-                <div class="menu-item" id="ctx-graphify">🕸️ Graphify: Grafo Memoria</div>
-                <div class="menu-item" id="ctx-media">🖼️ Media / Captura</div>
+                <div class="menu-item" id="ctx-graphify">Graphify: Grafo Memoria</div>
+                <div class="menu-item" id="ctx-media">Media / Captura</div>
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
-                <div class="menu-item" id="ctx-action-check">⚡ Action: rtk cargo check</div>
-                <div class="menu-item" id="ctx-action-python">⚡ Action: rtk python3 test</div>
+                <div class="menu-item" id="ctx-action-check">Action: rtk cargo check</div>
+                <div class="menu-item" id="ctx-action-python">Action: rtk python3 test</div>
             </div>
+            <textarea id="prompt" rows="2" placeholder="Pregunta a la IA... (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
+            <div class="toolbar">
+                <button class="btn-add" id="add-ctx-btn">+ Context</button>
+                <label><input type="checkbox" id="inc-file" checked> Archivo activo</label>
+                <button id="send-btn" class="btn-send">Enviar ⚡</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ajustes Conector / API con Pestañas (Tabs) -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-card">
+            <h4>⚙️ Ajustes de Giskard Assistant</h4>
+            
+            <div class="tab-nav">
+                <button type="button" class="tab-btn active" id="tab-btn-local">Local & Visibilidad</button>
+                <button type="button" class="tab-btn" id="tab-btn-remote">API Remota & Keys</button>
+            </div>
+
+            <!-- Tab 1: Local & Models & Command Policy & Graphify -->
+            <div class="tab-content active" id="tab-content-local">
+                <div class="field">
+                    <label>URL Servidor Giskard-Sys:</label>
+                    <input type="text" id="cfg-connector-url" value="http://localhost:3500">
+                </div>
+                <div style="display: flex; gap: 4px; margin: 2px 0;">
+                    <button type="button" id="mount-workspace-btn" style="flex: 1; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer;">Montar Workspace</button>
+                    <button type="button" id="run-graphify-btn" style="flex: 1; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold;">Generar Grafo Graphify</button>
+                </div>
+                <div class="field">
+                    <label>Tema & Color de Texto:</label>
+                    <select id="cfg-theme-select">
+                        <option value="minimal_white">Blanco Minimalista (Estilo Antigravity)</option>
+                        <option value="cyan_accent">Azul Neón / Cyan Accent</option>
+                    </select>
+                </div>
             <textarea id="prompt" rows="2" placeholder="Pregunta a la IA... (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
             <div class="toolbar">
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>

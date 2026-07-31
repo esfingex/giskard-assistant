@@ -43,14 +43,47 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    function applyTheme(theme) {
+        const root = document.documentElement;
+        if (theme === 'cyan_accent') {
+            root.style.setProperty('--user-font-color', '#e0f2fe');
+            root.style.setProperty('--user-header-color', '#38bdf8');
+            root.style.setProperty('--user-header-border', 'rgba(56, 189, 248, 0.25)');
+        } else {
+            root.style.setProperty('--user-font-color', '#f8fafc');
+            root.style.setProperty('--user-header-color', '#ffffff');
+            root.style.setProperty('--user-header-border', 'rgba(255, 255, 255, 0.15)');
+        }
+        try { localStorage.setItem('giskard_theme', theme); } catch {}
+    }
+
+    const savedTheme = (function() { try { return localStorage.getItem('giskard_theme') || 'minimal_white'; } catch { return 'minimal_white'; } })();
+    applyTheme(savedTheme);
+
+    const themeSelect = document.getElementById('cfg-theme-select');
+    if (themeSelect) {
+        themeSelect.value = savedTheme;
+        themeSelect.addEventListener('change', () => {
+            applyTheme(themeSelect.value);
+        });
+    }
+
     function preprocessMarkdown(text) {
         if (!text) return '';
         let clean = text;
 
+        // Separar tablas Markdown pegadas (ej. "Directorio | Propósito ||-----------|----------------|| src/")
+        clean = clean.replace(/([^\n])(\|\s*[-:]+\s*\|)/g, '$1\n$2');
+        clean = clean.replace(/([^|\n])(\|\s*[A-ZÁÉÍÓÚÑa-z0-9_\/`])/g, '$1\n$2');
+
+        // Separar palabras pegadas a inicio de frase (ej. "RepositorioEl" -> "Repositorio El")
+        clean = clean.replace(/([a-zA-Záéíóúñ]+)([A-Z][a-z]{2,})/g, '$1 $2');
+
         // Separar títulos Markdown pegados (ej. "usbPara" -> "usb\n\n## Para")
         clean = clean.replace(/([^\n])(##+\s)/g, '$1\n\n$2');
 
-        // Separar listas numeradas pegadas (ej. "proyecto.1. Examen" -> "proyecto.\n1. Examen")
+        // Separar listas numeradas pegadas en párrafos (ej. "que:1. ✅" o "1. ✅ ... 2. ✅" -> "\n1. ✅")
+        clean = clean.replace(/([:\.a-zA-ZáéíóúñA-Z])(\d+\.\s+[✅✔️\w])/g, '$1\n$2');
         clean = clean.replace(/([^\n])(\d+\.\s+[A-ZÁÉÍÓÚÑa-z])/g, '$1\n$2');
 
         // Separar listas de viñetas pegadas (ej. "caso- Examen" -> "caso\n- Examen")
