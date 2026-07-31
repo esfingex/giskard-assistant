@@ -122,7 +122,7 @@
         if (!container) return;
         const pres = container.querySelectorAll('pre');
         pres.forEach(pre => {
-            if (pre.querySelector('.code-toolbar')) return;
+            if (pre.parentNode && pre.parentNode.classList && pre.parentNode.classList.contains('code-box')) return;
 
             const codeEl = pre.querySelector('code');
             const codeText = codeEl ? codeEl.innerText : pre.innerText;
@@ -133,14 +133,19 @@
             }
             pre.style.display = 'block';
 
-            const toolbar = document.createElement('div');
-            toolbar.className = 'code-toolbar';
-            toolbar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 4px 8px; border-bottom: 1px solid var(--vscode-input-border); border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 10px; opacity: 0.9;';
+            // Create collapsible <details class="code-box" open>
+            const details = document.createElement('details');
+            details.className = 'code-box';
+            details.open = true;
+
+            const summary = document.createElement('summary');
+            summary.className = 'code-toolbar';
+            summary.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.35); padding: 4px 8px; border: 1px solid var(--vscode-input-border); border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 10px; cursor: pointer; user-select: none; opacity: 0.95;';
 
             const langLabel = document.createElement('span');
             langLabel.style.color = '#38bdf8';
             langLabel.style.fontWeight = 'bold';
-            langLabel.textContent = '💻 Código / Shell';
+            langLabel.textContent = '▶ 💻 Código / Shell (Ocultar/Mostrar)';
 
             const btnGroup = document.createElement('div');
             btnGroup.style.display = 'flex';
@@ -150,6 +155,7 @@
             copyBtn.textContent = '📋 Copiar';
             copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;';
             copyBtn.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 navigator.clipboard.writeText(codeText);
                 copyBtn.textContent = '✓ Copiado';
@@ -160,6 +166,7 @@
             runBtn.textContent = '⚡ Ejecutar en Shell';
             runBtn.style.cssText = 'background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
             runBtn.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
             };
@@ -168,6 +175,7 @@
             diffBtn.textContent = '📝 Ver Diff en VSCode';
             diffBtn.style.cssText = 'background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
             diffBtn.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 vscode.postMessage({ type: 'openDiff', code: codeText });
             };
@@ -175,13 +183,19 @@
             btnGroup.appendChild(copyBtn);
             btnGroup.appendChild(runBtn);
             btnGroup.appendChild(diffBtn);
-            toolbar.appendChild(langLabel);
-            toolbar.appendChild(btnGroup);
+            summary.appendChild(langLabel);
+            summary.appendChild(btnGroup);
 
-            pre.parentNode.insertBefore(toolbar, pre);
             pre.style.marginTop = '0';
             pre.style.borderTopLeftRadius = '0';
             pre.style.borderTopRightRadius = '0';
+            pre.style.maxHeight = '320px';
+            pre.style.overflowY = 'auto';
+            pre.style.overflowX = 'auto';
+
+            pre.parentNode.insertBefore(details, pre);
+            details.appendChild(summary);
+            details.appendChild(pre);
         });
     }
 

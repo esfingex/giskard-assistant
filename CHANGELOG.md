@@ -2,6 +2,16 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.4.0] - 2026-07-31
+
+### Agregado
+- **Bloques de Código y Shell Colapsables (`<details class="code-box" open>`):**
+  - Encabezado interactivo `▶ 💻 Código / Shell (Ocultar/Mostrar)` para replegar/desplegar bloques de código de 1 clic.
+- **Scroll Interno en Cajas de Pensamiento (`<think>`):**
+  - Límite de altura `max-height: 180px` con scroll vertical interno en `.think-content`.
+- **Scroll Inteligente Vertical y Horizontal en Código / Terminal:**
+  - Límite de altura `max-height: 320px` con `overflow-y: auto` y `overflow-x: auto` en elementos `<pre>`.
+
 ---
 
 ## [3.3.0] - 2026-07-31

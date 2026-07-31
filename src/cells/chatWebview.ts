@@ -418,10 +418,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .msg.bot { background: var(--bot-msg-bg); align-self: flex-start; width: 96%; box-sizing: border-box; }
         
         .model-tag { display: inline-block; font-size: 9px; font-weight: bold; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; }
-        details.think-box { background: var(--think-box-bg); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 10px; }
+        details.think-box { background: var(--think-box-bg); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; font-size: 10px; }
         details.think-box summary { cursor: pointer; font-weight: bold; opacity: 0.85; user-select: none; }
         details.think-box summary:hover { opacity: 1; }
-        .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; }
+        .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; max-height: 180px; overflow-y: auto; }
+        
+        details.code-box { margin: 8px 0; border-radius: 6px; }
+        details.code-box summary::-webkit-details-marker { display: none; }
         
         /* Markdown Renderer Styles */
         :root {
