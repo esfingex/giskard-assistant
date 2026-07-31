@@ -421,7 +421,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         details.think-box { background: var(--think-box-bg); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; font-size: 10px; }
         details.think-box summary { cursor: pointer; font-weight: bold; opacity: 0.85; user-select: none; }
         details.think-box summary:hover { opacity: 1; }
-        .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding-left: 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; max-height: 180px; overflow-y: auto; }
+        .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding: 4px 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; max-height: 200px; overflow-y: auto; word-break: break-word; }
+        .think-content h1, .think-content h2, .think-content h3, .think-content h4 { font-size: 11px; font-weight: bold; margin: 4px 0; border: none; padding: 0; color: inherit; }
+        .think-content p { margin: 4px 0; }
+        .think-content ol, .think-content ul { margin: 4px 0; padding-left: 16px; }
         
         details.code-box { margin: 8px 0; border-radius: 6px; }
         details.code-box summary::-webkit-details-marker { display: none; }
@@ -441,7 +444,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .answer-content h1 { font-size: 14px; }
         .answer-content h2 { font-size: 13px; }
         .answer-content h3 { font-size: 12px; }
-        .answer-content pre { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 8px 0; font-family: var(--vscode-editor-font-family, monospace); }
+        .answer-content pre { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 10px; overflow: auto; margin: 0; font-family: var(--vscode-editor-font-family, monospace); white-space: pre; word-break: normal; }
         .answer-content code { background: rgba(255,255,255,0.08); color: #f8fafc; padding: 2px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; }
         .answer-content pre code { background: transparent; padding: 0; color: inherit; }
         .answer-content table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5px; }

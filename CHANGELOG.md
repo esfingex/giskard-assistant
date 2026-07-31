@@ -2,6 +2,18 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.5.0] - 2026-07-31
+
+### Corregido
+- **Protección de Bloques de Código en Preprocesador:**
+  - Separación de fragmentos de código (` ```...``` `) para evitar la alteración o colapso de saltos de línea y árboles ASCII de archivos.
+- **Ajuste de Encabezados dentro de Cajas de Pensamiento (`<think>`):**
+  - Estilizado de `h1-h4` dentro de `.think-content` con tipografía pequeña y proporcional para evitar que los títulos corten la traza.
+- **Formateo Estricto de Listas Ordenadas en Prosa:**
+  - Forzado de saltos de línea antes de subpuntos numerados (`1.`, `2.`, `3.`) para garantizar el renderizado de listas `<ol>` en Markdown.
+
+---
+
 ## [3.4.0] - 2026-07-31
 
 ### Agregado

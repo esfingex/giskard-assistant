@@ -70,32 +70,36 @@
 
     function preprocessMarkdown(text) {
         if (!text) return '';
-        let clean = text;
 
-        // Separar tablas Markdown pegadas (ej. "Directorio | Propósito ||-----------|----------------|| src/")
-        clean = clean.replace(/([^\n])(\|\s*[-:]+\s*\|)/g, '$1\n$2');
-        clean = clean.replace(/([^|\n])(\|\s*[A-ZÁÉÍÓÚÑa-z0-9_\/`])/g, '$1\n$2');
+        // Separar bloques de código (```...```) para NO alterar código ni árboles ASCII internos con expresiones regulares
+        const parts = text.split(/(```[\s\S]*?```)/g);
 
-        // Separar palabras pegadas a inicio de frase (ej. "RepositorioEl" -> "Repositorio El")
-        clean = clean.replace(/([a-zA-Záéíóúñ]+)([A-Z][a-z]{2,})/g, '$1 $2');
+        return parts.map(part => {
+            if (part.startsWith('```')) {
+                // Dejar el bloque de código 100% intacto con su formato original
+                return part;
+            }
 
-        // Separar títulos Markdown pegados (ej. "usbPara" -> "usb\n\n## Para")
-        clean = clean.replace(/([^\n])(##+\s)/g, '$1\n\n$2');
+            let clean = part;
 
-        // Separar listas numeradas pegadas en párrafos (ej. "que:1. ✅" o "1. ✅ ... 2. ✅" -> "\n1. ✅")
-        clean = clean.replace(/([:\.a-zA-ZáéíóúñA-Z])(\d+\.\s+[✅✔️\w])/g, '$1\n$2');
-        clean = clean.replace(/([^\n])(\d+\.\s+[A-ZÁÉÍÓÚÑa-z])/g, '$1\n$2');
+            // 1. Separar títulos Markdown pegados (ej. "usbPara" -> "usb\n\n## Para")
+            clean = clean.replace(/([^\n])(\s*##+\s)/g, '$1\n\n$2');
 
-        // Separar listas de viñetas pegadas (ej. "caso- Examen" -> "caso\n- Examen")
-        clean = clean.replace(/([^\n])(-\s+[A-ZÁÉÍÓÚÑa-z])/g, '$1\n$2');
+            // 2. Separar listas numeradas pegadas en texto (ej. "Pasos1. **Revisar...**2. **Analizar...**" -> "\n1. **Revisar...**\n2. **Analizar...**")
+            clean = clean.replace(/([:\.\wáéíóúñA-Záéíóúñ])\s*(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
+            clean = clean.replace(/([^\n])(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
 
-        // Separar bloques de código pegados (ej. "inicial bash#" -> "inicial\n```bash\n#")
-        clean = clean.replace(/([^\n])(```[a-z]*)/g, '$1\n$2');
+            // 3. Separar listas de viñetas pegadas (ej. "Nota: - Elemento")
+            clean = clean.replace(/([^\n])(-\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
 
-        // Insertar salto de línea tras apertura de código si falta (ej. ```bash# -> ```bash\n#)
-        clean = clean.replace(/(```[a-z]*)\s*#/g, '$1\n#');
+            // 4. Separar palabras pegadas a inicios de nombre (ej. "PrincipalesREADME" -> "Principales README")
+            clean = clean.replace(/([a-z0-9áéíóúñ])([A-Z][a-z]{2,})/g, '$1 $2');
 
-        return clean;
+            // 5. Separar inline code pegado a palabras (ej. "sistema.gnome-extension" -> "sistema. gnome-extension")
+            clean = clean.replace(/([a-z0-9áéíóúñ])(\`[a-zA-Z_\-\/]+\`)/g, '$1 $2');
+
+            return clean;
+        }).join('');
     }
 
     function formatMarkdown(text) {
