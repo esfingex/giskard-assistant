@@ -47,7 +47,7 @@ class TestGiskardAssistantSelfFix(unittest.TestCase):
         import requests
         stream_url = f"{CONNECTOR_URL}/llm/stream"
         payload = {
-            "model": "qwimi-k2.6:distill",
+            "model": "satgeze/ornith-9b-1m:latest",
             "prompt": prompt,
             "inject_sandbox_context": False
         }
