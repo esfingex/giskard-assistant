@@ -576,6 +576,20 @@
     if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
     
     const ctxPython = document.getElementById('ctx-action-python');
+    const stopBtn = document.getElementById('stop-btn');
+
+    function setGenerationState(isGenerating) {
+        if (sendBtn) sendBtn.style.display = isGenerating ? 'none' : 'inline-block';
+        if (stopBtn) stopBtn.style.display = isGenerating ? 'inline-block' : 'none';
+    }
+
+    if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'stopGeneration' });
+            setGenerationState(false);
+        });
+    }
+
     if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
 
     if (sendBtn) sendBtn.addEventListener('click', send);
@@ -622,6 +636,7 @@
 
         selectedContextType = 'none';
         if (addCtxBtn) addCtxBtn.textContent = '+ Context';
+        setGenerationState(true);
     }
 
     window.addEventListener('message', event => {
@@ -670,6 +685,7 @@
                 currentBotMsgDiv = null;
                 currentBotRawText = '';
                 updateTokenCounter();
+                setGenerationState(false);
                 break;
             case 'memoryCompressed':
                 if (messagesDiv) {
@@ -685,6 +701,7 @@
                 if (currentBotMsgDiv) {
                     currentBotMsgDiv.textContent = message.message || message.text;
                 }
+                setGenerationState(false);
                 break;
             case 'streamError':
             case 'settingsError':
@@ -697,6 +714,7 @@
                     }
                     currentBotMsgDiv.textContent = errText;
                 }
+                setGenerationState(false);
                 break;
         }
     });

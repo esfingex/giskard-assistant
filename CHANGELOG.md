@@ -2,6 +2,16 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.6.0] - 2026-07-31
+
+### Agregado
+- **Botón de Detener Generación (`[ 🛑 Detener ]`):**
+  - Implementación de `AbortController` y señal de cancelación en tiempo real en la extensión para abortar la generación del modelo inmediatamente si entra en bucle.
+- **Alternancia de Botón Enviar / Detener:**
+  - Alternancia dinámica del botón `Enviar ⚡` a `🛑 Detener` durante la transmisión SSE de tokens.
+
+---
+
 ## [3.5.0] - 2026-07-31
 
 ### Corregido

@@ -8,6 +8,7 @@ import { getConnectorUrl, getClientId, execCliCommand, fetchLlmModels, updatePro
 
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
+    private _activeAbortController: AbortController | null = null;
 
     constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -57,6 +58,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await this._handleCheckGraphify();
             } else if (data.type === 'runGraphify') {
                 await this._handleRunGraphify();
+            } else if (data.type === 'stopGeneration') {
+                this._handleStopGeneration();
             }
         });
 
@@ -353,12 +356,18 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
+        if (this._activeAbortController) {
+            this._activeAbortController.abort();
+        }
+        this._activeAbortController = new AbortController();
+
         try {
             const url = `${getConnectorUrl()}/llm/stream`;
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({ model, prompt: fullPrompt, inject_sandbox_context: true })
+                body: JSON.stringify({ model, prompt: fullPrompt, inject_sandbox_context: true }),
+                signal: this._activeAbortController.signal
             });
 
             if (!res.ok || !res.body) {
@@ -392,7 +401,21 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
             this._view.webview.postMessage({ type: 'streamComplete' });
         } catch (err: any) {
-            this._view.webview.postMessage({ type: 'streamError', error: `Error conectando al conector soberano: ${err.message}` });
+            if (err.name !== 'AbortError') {
+                this._view.webview.postMessage({ type: 'streamError', error: `Error conectando al conector soberano: ${err.message}` });
+            }
+        } finally {
+            this._activeAbortController = null;
+        }
+    }
+
+    private _handleStopGeneration() {
+        if (this._activeAbortController) {
+            this._activeAbortController.abort();
+            this._activeAbortController = null;
+        }
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'streamComplete' });
         }
     }
 
@@ -517,6 +540,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>
                 <label><input type="checkbox" id="inc-file" checked> Archivo activo</label>
                 <button id="send-btn" class="btn-send">Enviar ⚡</button>
+                <button id="stop-btn" class="btn-send" style="display: none; background: #ef4444; border-color: #ef4444; color: #ffffff;">🛑 Detener</button>
             </div>
         </div>
     </div>
