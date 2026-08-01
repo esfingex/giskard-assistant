@@ -2,6 +2,14 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.7.0] - 2026-07-31
+
+### Agregado
+- **Apertura y Enfoque Automático de la Barra de Chat:**
+  - Auto-ejecución del comando `giskard-sys.openChat` al activar la extensión para desplegar de inmediato el panel lateral del chat en la interfaz visible de VSCode.
+
+---
+
 ## [3.6.0] - 2026-07-31
 
 ### Agregado
