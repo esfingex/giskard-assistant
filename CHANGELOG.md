@@ -2,6 +2,15 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.9.0] - 2026-07-31
+
+### Refactorización de Arquitectura
+- **Desacoplamiento Total Backend/Frontend:**
+  - Limpieza completa del System Prompt en `giskard-sys` eliminando reglas de maquetación y formateo CSS/UI.
+  - Traslado del formateo visual, maquetación de listas, protección de bloques de código y envoltorio de árboles ASCII (`├──`, `└──`) a `giskard-assistant` (`media/chatView.js`).
+
+---
+
 ## [3.8.0] - 2026-07-31
 
 ### Agregado

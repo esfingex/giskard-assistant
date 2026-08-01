@@ -98,6 +98,11 @@
             // 5. Separar inline code pegado a palabras (ej. "sistema.gnome-extension" -> "sistema. gnome-extension")
             clean = clean.replace(/([a-z0-9áéíóúñ])(\`[a-zA-Z_\-\/]+\`)/g, '$1 $2');
 
+            // 6. Detectar mapas de directorios ASCII sueltos (├──, └──, │) y envolverlos en bloques ```text en la extensión
+            if (clean.includes('├──') || clean.includes('└──')) {
+                clean = clean.replace(/((?:^[ \t]*(?:├──|└──|│|\/)[^\n]*\n?)+)/gm, '\n```text\n$1```\n');
+            }
+
             return clean;
         }).join('');
     }
