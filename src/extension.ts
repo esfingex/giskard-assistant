@@ -25,10 +25,19 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Auto-enfocar la barra de chat de Giskard Assistant al iniciar
+    // Auto-enfocar y ejecutar demostración interactiva en vivo al iniciar
     setTimeout(() => {
         vscode.commands.executeCommand('giskard-sys.openChat');
-    }, 500);
+        setTimeout(() => {
+            provider.runLiveDemo();
+        }, 1200);
+    }, 800);
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-sys.runLiveDemo', () => {
+            provider.runLiveDemo();
+        })
+    );
 
     // 4. Comando de Sincronización de Estado
     context.subscriptions.push(

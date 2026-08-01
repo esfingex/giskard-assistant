@@ -642,6 +642,14 @@
     window.addEventListener('message', event => {
         const message = event.data;
         switch (message.type) {
+            case 'runLiveDemo':
+                if (promptInput) {
+                    promptInput.value = message.prompt || 'Analiza el proyecto pequen-usb y ejecuta la compilación con ./build.sh';
+                    setTimeout(() => {
+                        send();
+                    }, 800);
+                }
+                break;
             case 'modelsList':
                 if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
                 if (message.models && Array.isArray(message.models)) {

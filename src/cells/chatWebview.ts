@@ -76,6 +76,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         await this._handleCheckGraphify();
     }
 
+    public async runLiveDemo() {
+        if (!this._view) return;
+        this._view.show?.(true);
+        setTimeout(() => {
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'runLiveDemo',
+                    prompt: 'Analiza el proyecto pequen-usb y ejecuta la compilación con ./build.sh'
+                });
+            }
+        }, 600);
+    }
+
     private async _sendModelsList() {
         if (!this._view) return;
         const models = await fetchLlmModels();

@@ -2,6 +2,14 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [3.8.0] - 2026-07-31
+
+### Agregado
+- **Demostración Interactiva Automática en Vivo (`giskard-sys.runLiveDemo`):**
+  - Autocompletado del chat, activación de envio en tiempo real y transmisión de tokens visible en vivo sobre la ventana de VSCode.
+
+---
+
 ## [3.7.0] - 2026-07-31
 
 ### Agregado
