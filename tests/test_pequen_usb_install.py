@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-🧪 Pruebas Interactivas End-to-End — Instalación y Compilación de pequen-usb vía Giskard
+🧪 Pruebas Interactivas End-to-End — Instalación Completa de pequen-usb vía Giskard
 Simula una interacción real de VSCode:
 1. Monta el proyecto pequen-usb en /home/esfingex/Github/pequen-usb.
-2. Envía un prompt de análisis y compilación al modelo a través de la API de Giskard Assistant.
-3. Extrae y ejecuta los comandos de compilación (build.sh) en el Sandbox Jail.
-4. Verifica los artefactos finales (.zip de la extensión de GNOME Shell y wheel de Python en dist/).
+2. Envía un prompt solicitando la instalación completa con ./install.sh.
+3. Extrae y ejecuta ./install.sh en el Sandbox Jail.
+4. Verifica los artefactos instalados en el sistema de usuario (~/.local/share/gnome-shell/extensions y ~/.config/systemd/user).
 """
 
 import sys
@@ -42,12 +42,12 @@ class TestPequenUsbInteractiveInstall(unittest.TestCase):
             self.assertTrue(res.get("success", False))
             print(f"\n [PASS] 1. Proyecto pequen-usb montado exitosamente en: {PEQUEN_USB_PATH}")
 
-    def test_02_llm_build_instruction_generation(self):
-        """2. Solicitar a la IA análisis e instrucción de compilación para pequen-usb"""
+    def test_02_llm_install_instruction_generation(self):
+        """2. Solicitar a la IA análisis e instrucción de instalación completa para pequen-usb"""
         url = f"{CONNECTOR_URL}/llm/stream"
         prompt = (
             f"[Proyecto Abierto en VSCode: pequen-usb ({PEQUEN_USB_PATH})]\n"
-            "Por favor analiza este proyecto y proporciona el comando exacto para compilarlo ejecutable en bash."
+            "Analiza el proyecto pequen-usb y proporciona las instrucciones de instalación completa ejecutando ./install.sh"
         )
         payload = {
             "model": "qwimi-k2.6:distill",
@@ -79,12 +79,12 @@ class TestPequenUsbInteractiveInstall(unittest.TestCase):
         self.assertIn("pequen-usb", full_response.lower())
         print(f" [PASS] 2. Respuesta generada por la IA ({tokens_received} tokens de respuesta)")
 
-    def test_03_execute_build_script_in_sandbox(self):
-        """3. Ejecutar build.sh en el Sandbox Jail de giskard-sys dentro de pequen-usb"""
+    def test_03_execute_install_script_in_sandbox(self):
+        """3. Ejecutar ./install.sh en el Sandbox Jail de giskard-sys dentro de pequen-usb"""
         url = f"{CONNECTOR_URL}/exec"
         payload = {
             "command": "bash",
-            "args": ["./build.sh"],
+            "args": ["./install.sh"],
             "cwd": PEQUEN_USB_PATH
         }
         data = json.dumps(payload).encode('utf-8')
@@ -97,37 +97,47 @@ class TestPequenUsbInteractiveInstall(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=30) as response:
             self.assertEqual(response.status, 200)
             res = json.loads(response.read().decode('utf-8'))
-            self.assertTrue(res.get("success", False), f"Error ejecutando build.sh: {res.get('error')}")
+            self.assertTrue(res.get("success", False), f"Error ejecutando install.sh: {res.get('error')}")
             output = res.get("data", "")
             self.assertIn("STDOUT", output)
-            print(" [PASS] 3. Script build.sh ejecutado exitosamente en el Sandbox Jail")
+            print(" [PASS] 3. Script ./install.sh ejecutado exitosamente en el Sandbox Jail")
 
-    def test_04_verify_build_artifacts(self):
-        """4. Verificar la existencia física de los paquetes compilados (.zip de GNOME Shell)"""
-        zip_artifact = os.path.join(
-            PEQUEN_USB_PATH, 
-            "gnome-extension", 
-            "pequen-usb@esfingex.github.io.shell-extension.zip"
+    def test_04_verify_installation_artifacts(self):
+        """4. Verificar la existencia física de la extensión instalada y del demonio systemd"""
+        home = os.path.expanduser("~")
+        ext_installed = os.path.join(
+            home, 
+            ".local/share/gnome-shell/extensions", 
+            "pequen-usb@esfingex.github.io",
+            "metadata.json"
+        )
+        service_installed = os.path.join(
+            home,
+            ".config/systemd/user",
+            "pequen-usb-daemon.service"
+        )
+        
+        self.assertTrue(
+            os.path.exists(ext_installed), 
+            f"La extensión de GNOME Shell no quedó instalada en: {ext_installed}"
         )
         self.assertTrue(
-            os.path.exists(zip_artifact), 
-            f"El artefacto .zip de la extensión no fue generado en: {zip_artifact}"
+            os.path.exists(service_installed),
+            f"El servicio systemd de usuario no fue instalado en: {service_installed}"
         )
-        size = os.path.getsize(zip_artifact)
-        self.assertGreater(size, 500, f"El archivo .zip generado es sospechosamente pequeño ({size} bytes)")
-        print(f" [PASS] 4. Artefacto de Extensión GNOME Shell verificado ({size} bytes)")
+        print(f" [PASS] 4. Extensión instalada ({ext_installed}) y Servicio systemd verificado ({service_installed})")
 
 
 if __name__ == "__main__":
     print("\n==================================================================")
-    print(" 🛠️ PRUEBA INTERACTIVA END-TO-END — COMPILACIÓN & INSTALACIÓN DE PEQUÉN USB")
+    print(" 🛠️ PRUEBA INTERACTIVA END-TO-END — INSTALACIÓN REAL DE PEQUÉN USB")
     print("==================================================================\n")
     runner = unittest.TextTestRunner(verbosity=2)
     suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
     result = runner.run(suite)
     if result.wasSuccessful():
-        print("\n✅ PRUEBA INTERACTIVA COMPLETADA CON ÉXITO. GISKARD-ASSISTANT FUNCIONA AL 100%.")
+        print("\n✅ PRUEBA INTERACTIVA DE INSTALACIÓN COMPLETADA CON ÉXITO.")
         sys.exit(0)
     else:
-        print("\n❌ FALLO EN LA PRUEBA INTERACTIVA.")
+        print("\n❌ FALLO EN LA PRUEBA INTERACTIVA DE INSTALACIÓN.")
         sys.exit(1)
