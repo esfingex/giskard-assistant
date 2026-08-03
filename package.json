@@ -85,12 +85,12 @@
         "giskard-assistant.connectorUrl": {
           "type": "string",
           "default": "http://localhost:3500",
-          "description": "URL del backend del conector soberano Giskard-Sys."
+          "description": "URL del backend soberano al que se conecta el asistente."
         },
         "giskard-assistant.clientId": {
           "type": "string",
           "default": "VSCode-Copilot",
-          "description": "Identificador de cliente enviado en X-Client-Id."
+          "description": "Identificador de cliente enviado en la cabecera X-Client-Id."
         },
         "giskard-assistant.defaultModel": {
           "type": "string",

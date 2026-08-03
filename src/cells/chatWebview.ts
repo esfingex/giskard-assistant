@@ -79,7 +79,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'saveConnectorUrl':
                     const config = vscode.workspace.getConfiguration('giskard-assistant');
                     await config.update('connectorUrl', data.url, vscode.ConfigurationTarget.Global);
-                    vscode.window.showInformationMessage(`✓ Giskard-Sys configurado en: ${data.url}`);
+                    vscode.window.showInformationMessage(`✓ Conector configurado en: ${data.url}`);
                     await this.refreshState();
                     break;
                 case 'compressMemory':
@@ -265,7 +265,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleExecuteShellCommand(cmdText: string) {
-        // Find or create a dedicated Giskard Terminal
+        // Find or create a dedicated Giskard Assistant Terminal
         let terminal = vscode.window.terminals.find(t => t.name === 'Giskard Terminal');
         if (!terminal) {
             terminal = vscode.window.createTerminal('Giskard Terminal');
@@ -314,7 +314,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await activeDoc.save();
             vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${activeDoc.fileName}`);
 
-            // Also persist to giskard-assistant sandbox
+            // Also persist file to backend sandbox
             try {
                 await fetchWithTimeout(`${getConnectorUrl()}/write`, {
                     method: 'POST',
@@ -494,7 +494,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             if (err.name !== 'AbortError') {
                 this._view.webview.postMessage({
                     type: 'streamError',
-                    error: `Error conectando al conector soberano: ${err.message}`
+                    error: `Error conectando al backend soberano: ${err.message}`
                 });
             }
         } finally {
@@ -516,7 +516,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             if (!res.ok || !res.body) {
                 this._view.webview.postMessage({
                     type: 'streamError',
-                    error: `Giskard-Sys offline. Ollama fallback también falló (HTTP ${res.status}).`
+                    error: `Backend offline. Ollama fallback también falló (HTTP ${res.status}).`
                 });
                 return;
             }
@@ -544,7 +544,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             if (err.name !== 'AbortError') {
                 this._view.webview.postMessage({
                     type: 'streamError',
-                    error: `Giskard-Sys y Ollama fallback inaccesibles: ${err.message}`
+                    error: `Backend y Ollama fallback inaccesibles: ${err.message}`
                 });
             }
         } finally {
@@ -674,10 +674,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
-    <!-- Modal Ajustes -->
+    <!-- Modal Ajustes del Conector -->
     <div class="modal" id="settings-modal">
         <div class="modal-card">
-            <h4>⚙️ Ajustes de Giskard Assistant</h4>
+            <h4>⚙️ Ajustes del Conector</h4>
             <div class="tab-nav">
                 <button type="button" class="tab-btn active" id="tab-btn-local">Local & Visibilidad</button>
                 <button type="button" class="tab-btn" id="tab-btn-remote">API Remota & Keys</button>
@@ -687,7 +687,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             <!-- Tab 1: Local -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field">
-                    <label>URL Servidor Giskard-Sys:</label>
+                    <label>URL del Backend Soberano:</label>
                     <input type="text" id="cfg-connector-url" value="http://localhost:3500">
                 </div>
                 <div class="field">

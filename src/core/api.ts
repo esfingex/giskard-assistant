@@ -1,5 +1,5 @@
 /**
- * Giskard-Sys VSCode Extension — Core API & Settings Client
+ * Giskard Assistant VSCode Extension — Core API & Backend Client
  * Copyright (C) 2025  Giskard Project
  *
  * This program is free software: you can redistribute it and/or modify
