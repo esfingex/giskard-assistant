@@ -1,10 +1,36 @@
 /**
  * Giskard Assistant VSCode Extension — Cell: Chat Webview Sidebar
- * Dedicated Webview script loaded from media/chatView.js and media/marked.min.js
+ * Copyright (C) 2025  Giskard Project
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This file handles ONLY the bridge between VSCode host and the Webview.
+ * All rendering and CSS live in media/chatView.js.
+ * System prompts MUST NOT contain layout CSS.
  */
 
 import * as vscode from 'vscode';
-import { getConnectorUrl, getClientId, execCliCommand, fetchLlmModels, updateProviderConfig } from '../core/api';
+import {
+    getConnectorUrl,
+    getClientId,
+    execCliCommand,
+    fetchLlmModels,
+    updateProviderConfig,
+    fetchWithTimeout,
+    checkHealth,
+    resetSession
+} from '../core/api';
+
+interface CodeContextBlock {
+    relativePath: string;
+    startLine: number;
+    endLine: number;
+    code: string;
+    lang: string;
+}
 
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -26,46 +52,79 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // Message router — clean dispatch, no auto-loads on init
         webviewView.webview.onDidReceiveMessage(async (data) => {
-            if (data.type === 'sendPrompt') {
-                await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
-            } else if (data.type === 'fetchModels') {
-                await this._sendModelsList();
-            } else if (data.type === 'fetchPolicy') {
-                await this._handleFetchPolicy();
-            } else if (data.type === 'addAllowedCommand') {
-                await this._handleAddCommandPolicy(data.command);
-            } else if (data.type === 'removeAllowedCommand') {
-                await this._handleRemoveCommandPolicy(data.command);
-            } else if (data.type === 'executeAction') {
-                await this._handleAction(data.action);
-            } else if (data.type === 'saveSettings') {
-                await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
-            } else if (data.type === 'saveConnectorUrl') {
-                const config = vscode.workspace.getConfiguration('giskard-sys');
-                await config.update('connectorUrl', data.url, vscode.ConfigurationTarget.Global);
-                vscode.window.showInformationMessage(`✓ Conector Giskard-Sys configurado en: ${data.url}`);
-                await this.refreshState();
-            } else if (data.type === 'compressMemory') {
-                await this._handleCompressMemory(data.history);
-            } else if (data.type === 'openDiff') {
-                await this._handleOpenDiff(data.code);
-            } else if (data.type === 'mountWorkspace') {
-                await this._handleMountWorkspace();
-            } else if (data.type === 'executeShellCommand') {
-                await this._handleExecuteShellCommand(data.command);
-            } else if (data.type === 'checkGraphify') {
-                await this._handleCheckGraphify();
-            } else if (data.type === 'runGraphify') {
-                await this._handleRunGraphify();
-            } else if (data.type === 'stopGeneration') {
-                this._handleStopGeneration();
+            switch (data.type) {
+                case 'sendPrompt':
+                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
+                    break;
+                case 'fetchModels':
+                    await this._sendModelsList();
+                    break;
+                case 'fetchPolicy':
+                    await this._handleFetchPolicy();
+                    break;
+                case 'addAllowedCommand':
+                    await this._handleAddCommandPolicy(data.command);
+                    break;
+                case 'removeAllowedCommand':
+                    await this._handleRemoveCommandPolicy(data.command);
+                    break;
+                case 'executeAction':
+                    await this._handleAction(data.action);
+                    break;
+                case 'saveSettings':
+                    await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
+                    break;
+                case 'saveConnectorUrl':
+                    const config = vscode.workspace.getConfiguration('giskard-sys');
+                    await config.update('connectorUrl', data.url, vscode.ConfigurationTarget.Global);
+                    vscode.window.showInformationMessage(`✓ Giskard-Sys configurado en: ${data.url}`);
+                    await this.refreshState();
+                    break;
+                case 'compressMemory':
+                    await this._handleCompressMemory(data.history);
+                    break;
+                case 'openDiff':
+                    await this._handleOpenDiff(data.code);
+                    break;
+                case 'executeShellCommand':
+                    await this._handleExecuteShellCommand(data.command);
+                    break;
+                case 'checkGraphify':
+                    await this._handleCheckGraphify();
+                    break;
+                case 'runGraphify':
+                    await this._handleRunGraphify();
+                    break;
+                case 'stopGeneration':
+                    this._handleStopGeneration();
+                    break;
+                case 'clearContext':
+                    await this._handleClearContext();
+                    break;
+                case 'openFile':
+                    await this._handleOpenFile(data.relativePath);
+                    break;
             }
         });
 
-        this._sendModelsList();
-        this._handleFetchPolicy();
-        this._handleCheckGraphify();
+        // NO auto-loads here — chat starts empty, user initiates all actions
+    }
+
+    /** Called from extension.ts Ctrl+L handler */
+    public injectCodeContext(block: CodeContextBlock) {
+        if (!this._view) return;
+        this._view.show?.(true);
+        this._view.webview.postMessage({
+            type: 'attachedContext',
+            relativePath: block.relativePath,
+            startLine: block.startLine,
+            endLine: block.endLine,
+            code: block.code,
+            lang: block.lang,
+            prefillPrompt: 'Explica qué hace este código y sugiere mejoras.'
+        });
     }
 
     public async refreshState() {
@@ -73,20 +132,37 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         this._view.webview.postMessage({ type: 'stateRefreshed', url: getConnectorUrl() });
         await this._sendModelsList();
         await this._handleFetchPolicy();
-        await this._handleCheckGraphify();
     }
 
-    public async runLiveDemo() {
-        if (!this._view) return;
-        this._view.show?.(true);
-        setTimeout(() => {
-            if (this._view) {
-                this._view.webview.postMessage({
-                    type: 'runLiveDemo',
-                    prompt: 'Analiza el proyecto pequen-usb y ejecuta la compilación con ./build.sh'
-                });
-            }
-        }, 600);
+    // ── Private Handlers ──────────────────────────────────────────────────────
+
+    private async _handleClearContext() {
+        // Abort any active stream
+        if (this._activeAbortController) {
+            this._activeAbortController.abort();
+            this._activeAbortController = null;
+        }
+        // Reset backend session context (best-effort)
+        await resetSession();
+        // Notify webview to clear UI
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'contextCleared' });
+        }
+    }
+
+    private async _handleOpenFile(relativePath: string) {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) {
+            vscode.window.showWarningMessage('No hay un workspace abierto en VSCode.');
+            return;
+        }
+        try {
+            const resolvedUri = vscode.Uri.joinPath(folders[0].uri, relativePath);
+            const doc = await vscode.workspace.openTextDocument(resolvedUri);
+            await vscode.window.showTextDocument(doc, { preview: false });
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Giskard: No se pudo abrir '${relativePath}': ${err.message}`);
+        }
     }
 
     private async _sendModelsList() {
@@ -99,7 +175,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         try {
             const url = `${getConnectorUrl()}/extensions/graphify/check`;
-            const res = await fetch(url);
+            const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } });
             const data: any = await res.json();
             this._view.webview.postMessage({ type: 'graphifyStatus', status: data });
         } catch {
@@ -110,22 +186,21 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private async _handleRunGraphify() {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) {
-            vscode.window.showWarningMessage("No hay ninguna carpeta de workspace abierta en VSCode para indexar con Graphify.");
+            vscode.window.showWarningMessage('No hay ninguna carpeta de workspace abierta en VSCode para indexar con Graphify.');
             return;
         }
-
         const targetPath = folders[0].uri.fsPath;
         vscode.window.showInformationMessage(`🕸️ Iniciando indexación con Graphify en: ${targetPath}...`);
         try {
             const url = `${getConnectorUrl()}/extensions/graphify/run`;
-            const res = await fetch(url, {
+            const res = await fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
                 body: JSON.stringify({ path: targetPath })
             });
             const data: any = await res.json();
             if (data.success) {
-                vscode.window.showInformationMessage(`✓ Graphify: Grafo de memoria generado exitosamente para ${targetPath}`);
+                vscode.window.showInformationMessage(`✓ Graphify: Grafo generado exitosamente en ${targetPath}`);
                 if (this._view) {
                     this._view.webview.postMessage({ type: 'graphifyResult', result: data.data });
                 }
@@ -141,13 +216,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         try {
             const url = `${getConnectorUrl()}/policy`;
-            const res = await fetch(url);
+            const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } });
             const data: any = await res.json();
             if (data.success) {
                 this._view.webview.postMessage({ type: 'policyLoaded', policy: data.data });
             }
         } catch {
-            // Silencioso
+            // Silent
         }
     }
 
@@ -155,7 +230,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         try {
             const url = `${getConnectorUrl()}/policy/commands/add`;
-            const res = await fetch(url, {
+            const res = await fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
                 body: JSON.stringify({ command })
@@ -174,14 +249,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         try {
             const url = `${getConnectorUrl()}/policy/commands/remove`;
-            const res = await fetch(url, {
+            const res = await fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
                 body: JSON.stringify({ command })
             });
             const data: any = await res.json();
             if (data.success) {
-                vscode.window.showInformationMessage(`🚫 Comando bloqueado/removido en Giskard-Sys: ${command}`);
+                vscode.window.showInformationMessage(`🚫 Comando removido en Giskard-Sys: ${command}`);
                 await this._handleFetchPolicy();
             }
         } catch (err: any) {
@@ -190,55 +265,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleExecuteShellCommand(cmdText: string) {
-        let terminal = vscode.window.activeTerminal;
+        // Find or create a dedicated Giskard Terminal
+        let terminal = vscode.window.terminals.find(t => t.name === 'Giskard Terminal');
         if (!terminal) {
             terminal = vscode.window.createTerminal('Giskard Terminal');
         }
         terminal.show();
         terminal.sendText(cmdText);
-
-        try {
-            const url = `${getConnectorUrl()}/exec`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({ command: 'shell', args: [cmdText] })
-            });
-            const data: any = await res.json();
-            if (data.success) {
-                vscode.window.showInformationMessage(`⚡ Comando Shell ejecutado via Giskard-Sys: ${cmdText}`);
-            } else {
-                vscode.window.showWarningMessage(`Shell enviada a Terminal integrada (${data.error || 'OK'})`);
-            }
-        } catch (err: any) {
-            // Silencioso
-        }
-    }
-
-    private async _handleMountWorkspace() {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            vscode.window.showWarningMessage("No hay ninguna carpeta de workspace abierta en VSCode.");
-            return;
-        }
-
-        const targetPath = folders[0].uri.fsPath;
-        try {
-            const url = `${getConnectorUrl()}/workspace/mount`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({ path: targetPath })
-            });
-            const data: any = await res.json();
-            if (data.success) {
-                vscode.window.showInformationMessage(`✓ Workspace montado en Sandbox Jail: ${targetPath}`);
-            } else {
-                vscode.window.showErrorMessage(`Fallo al montar workspace: ${data.error}`);
-            }
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Error de conexión al conector: ${err.message}`);
-        }
     }
 
     private async _handleOpenDiff(proposedCode: string) {
@@ -253,15 +286,24 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const activeUri = activeDoc.uri;
         const activeText = activeDoc.getText();
 
-        const tempDoc = await vscode.workspace.openTextDocument({ content: proposedCode, language: activeDoc.languageId });
-        await vscode.commands.executeCommand('vscode.diff', activeUri, tempDoc.uri, `Propuesta de Cambios: ${activeDoc.fileName}`);
+        const tempDoc = await vscode.workspace.openTextDocument({
+            content: proposedCode,
+            language: activeDoc.languageId
+        });
 
-        const selection = await vscode.window.showInformationMessage(
-            `Giskard Assistant: ¿Deseas aplicar esta propuesta de cambios a ${activeDoc.fileName}?`,
-            "Aplicar Cambios ✏️", "Descartar"
+        await vscode.commands.executeCommand(
+            'vscode.diff',
+            activeUri,
+            tempDoc.uri,
+            `Giskard Proposed Changes: ${activeDoc.fileName}`
         );
 
-        if (selection === "Aplicar Cambios ✏️") {
+        const selection = await vscode.window.showInformationMessage(
+            `¿Deseas aplicar esta propuesta de cambios a ${activeDoc.fileName}?`,
+            '✓ Accept', '✗ Reject'
+        );
+
+        if (selection === '✓ Accept') {
             const fullRange = new vscode.Range(
                 activeDoc.positionAt(0),
                 activeDoc.positionAt(activeText.length)
@@ -271,6 +313,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await vscode.workspace.applyEdit(edit);
             await activeDoc.save();
             vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${activeDoc.fileName}`);
+
+            // Also persist to giskard-sys sandbox
+            try {
+                await fetchWithTimeout(`${getConnectorUrl()}/write`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                    body: JSON.stringify({ path: activeDoc.uri.fsPath, content: proposedCode })
+                });
+            } catch { /* Silent */ }
         }
     }
 
@@ -279,7 +330,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         try {
             const prompt = `Analiza este historial de chat y genera un resumen comprimido BCF [EN]/[ES] con las decisiones clave y contexto técnico para guardar en memoria soberana:\n\n${history}`;
             const url = `${getConnectorUrl()}/llm/chat`;
-            const res = await fetch(url, {
+            const res = await fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
                 body: JSON.stringify({ model: 'qwimi-k2.6:distill', prompt, inject_sandbox_context: true })
@@ -319,28 +370,23 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async _handlePrompt(prompt: string, model: string, includeActiveFile: boolean, contextType: string) {
+    private async _handlePrompt(
+        prompt: string,
+        model: string,
+        includeActiveFile: boolean,
+        contextType: string
+    ) {
         if (!this._view) return;
 
         let fullPrompt = prompt;
 
-        // Auto-detect Active VSCode Workspace Project
+        // Passive workspace context injection (no auto-mount)
         const folders = vscode.workspace.workspaceFolders;
         if (folders && folders.length > 0) {
             const activeFolder = folders[0];
             const folderPath = activeFolder.uri.fsPath;
             const folderName = activeFolder.name;
-
-            fullPrompt = `[Proyecto Abierto en VSCode: ${folderName} (${folderPath})]\n${fullPrompt}`;
-
-            // Auto-mount active workspace folder in giskard-sys backend
-            try {
-                await fetch(`${getConnectorUrl()}/workspace/mount`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                    body: JSON.stringify({ path: folderPath })
-                });
-            } catch {}
+            fullPrompt = `[Proyecto Activo VSCode: ${folderName} (${folderPath})]\n${fullPrompt}`;
         }
 
         if (includeActiveFile) {
@@ -356,6 +402,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             fullPrompt = `[Contexto Adjunto (${contextType})]\n${fullPrompt}`;
         }
 
+        // CLI model path
         if (model.startsWith('cli:')) {
             const cliName = model.replace('cli:', '');
             try {
@@ -369,13 +416,27 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
+        // Abort any previous stream
         if (this._activeAbortController) {
             this._activeAbortController.abort();
         }
         this._activeAbortController = new AbortController();
 
+        // Check giskard-sys health before streaming; fallback to direct Ollama if offline
+        const connectorUrl = getConnectorUrl();
+        const isOnline = await checkHealth(connectorUrl);
+
+        if (!isOnline) {
+            // Offline fallback: direct Ollama
+            this._view.webview.postMessage({ type: 'offlineMode', active: true });
+            await this._streamFromOllamaFallback(fullPrompt, model);
+            return;
+        }
+
+        this._view.webview.postMessage({ type: 'offlineMode', active: false });
+
         try {
-            const url = `${getConnectorUrl()}/llm/stream`;
+            const url = `${connectorUrl}/llm/stream`;
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
@@ -383,8 +444,22 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 signal: this._activeAbortController.signal
             });
 
+            // Handle policy rejection errors explicitly
+            if (res.status === 403) {
+                const errBody = await res.json().catch(() => ({}));
+                this._view.webview.postMessage({
+                    type: 'policyError',
+                    statusCode: 403,
+                    payload: errBody
+                });
+                return;
+            }
+
             if (!res.ok || !res.body) {
-                this._view.webview.postMessage({ type: 'streamError', error: `No se pudo conectar a ${url} (HTTP ${res.status})` });
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `No se pudo conectar a ${url} (HTTP ${res.status})`
+                });
                 return;
             }
 
@@ -403,7 +478,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 for (const line of lines) {
                     const trimmed = line.trim();
                     if (trimmed.startsWith('data:')) {
-                        let dataToken = line.startsWith('data: ') ? line.substring(6) : line.substring(5);
+                        const dataToken = line.startsWith('data: ')
+                            ? line.substring(6)
+                            : line.substring(5);
                         if (dataToken === '[DONE]' || dataToken.trim() === '[DONE]') {
                             this._view.webview.postMessage({ type: 'streamComplete' });
                             return;
@@ -415,7 +492,60 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({ type: 'streamComplete' });
         } catch (err: any) {
             if (err.name !== 'AbortError') {
-                this._view.webview.postMessage({ type: 'streamError', error: `Error conectando al conector soberano: ${err.message}` });
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `Error conectando al conector soberano: ${err.message}`
+                });
+            }
+        } finally {
+            this._activeAbortController = null;
+        }
+    }
+
+    /** Offline fallback: stream directly from local Ollama */
+    private async _streamFromOllamaFallback(prompt: string, model: string) {
+        if (!this._view) return;
+        try {
+            const res = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model, prompt, stream: true }),
+                signal: this._activeAbortController?.signal
+            });
+
+            if (!res.ok || !res.body) {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `Giskard-Sys offline. Ollama fallback también falló (HTTP ${res.status}).`
+                });
+                return;
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                try {
+                    const json = JSON.parse(chunk);
+                    if (json.response) {
+                        this._view.webview.postMessage({ type: 'streamToken', token: json.response, model });
+                    }
+                    if (json.done) {
+                        this._view.webview.postMessage({ type: 'streamComplete' });
+                        return;
+                    }
+                } catch { /* Partial chunk, continue */ }
+            }
+            this._view.webview.postMessage({ type: 'streamComplete' });
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `Giskard-Sys y Ollama fallback inaccesibles: ${err.message}`
+                });
             }
         } finally {
             this._activeAbortController = null;
@@ -432,6 +562,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    // ── HTML Shell (CSS & layout only, NO system prompts, NO business logic) ──
+
     private _getHtmlForWebview(webview: vscode.Webview): string {
         const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'marked.min.js'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chatView.js'));
@@ -446,40 +578,31 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .chat-container { display: flex; flex-direction: column; height: 100%; padding: 8px; box-sizing: border-box; }
         .header { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; flex-shrink: 0; }
         .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 10px; opacity: 0.8; margin-bottom: 6px; padding: 2px 4px; background: var(--vscode-editor-inactiveSelectionBackground); border-radius: 4px; }
+        .offline-badge { display: none; font-size: 9px; font-weight: bold; background: rgba(251,146,60,0.2); color: #fb923c; border: 1px solid rgba(251,146,60,0.4); padding: 1px 5px; border-radius: 3px; }
+        .offline-badge.visible { display: inline-block; }
         select, button, input, textarea { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 5px; border-radius: 4px; font-size: 11px; }
         select { flex: 1; }
         .messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding-right: 4px; }
         .msg { padding: 8px 12px; border-radius: 8px; font-size: 11px; word-break: break-word; line-height: 1.5; }
         .msg.user { background: var(--user-msg-bg); color: #ffffff; align-self: flex-end; white-space: pre-wrap; }
         .msg.bot { background: var(--bot-msg-bg); align-self: flex-start; width: 96%; box-sizing: border-box; }
-        
+        .msg.error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; align-self: flex-start; width: 96%; font-family: monospace; font-size: 10px; white-space: pre-wrap; }
+        .msg.context-block { background: rgba(56,189,248,0.08); border: 1px dashed rgba(56,189,248,0.35); align-self: flex-start; width: 96%; font-size: 10px; }
         .model-tag { display: inline-block; font-size: 9px; font-weight: bold; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; }
         details.think-box { background: var(--think-box-bg); border: 1px dashed var(--vscode-input-border); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; font-size: 10px; }
         details.think-box summary { cursor: pointer; font-weight: bold; opacity: 0.85; user-select: none; }
         details.think-box summary:hover { opacity: 1; }
         .think-content { font-style: italic; opacity: 0.85; border-left: 2px solid var(--vscode-button-background); padding: 4px 8px; margin-top: 6px; font-size: 10px; line-height: 1.5; max-height: 200px; overflow-y: auto; word-break: break-word; }
-        .think-content h1, .think-content h2, .think-content h3, .think-content h4 { font-size: 11px; font-weight: bold; margin: 4px 0; border: none; padding: 0; color: inherit; }
-        .think-content p { margin: 4px 0; }
-        .think-content ol, .think-content ul { margin: 4px 0; padding-left: 16px; }
-        
-        details.code-box { margin: 8px 0; border-radius: 6px; }
-        details.code-box summary::-webkit-details-marker { display: none; }
-        
-        /* Markdown Renderer Styles */
-        :root {
-            --user-font-color: #f8fafc;
-            --user-header-color: #ffffff;
-            --user-header-border: rgba(255, 255, 255, 0.15);
-            --user-msg-bg: var(--vscode-button-background);
-            --bot-msg-bg: var(--vscode-editor-inactiveSelectionBackground);
-            --think-box-bg: rgba(0, 0, 0, 0.25);
-        }
+        .code-block-wrapper { position: relative; margin: 8px 0; }
+        .code-actions { display: flex; gap: 4px; position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity 0.15s; }
+        .code-block-wrapper:hover .code-actions { opacity: 1; }
+        .code-action-btn { font-size: 9px; padding: 2px 6px; background: var(--vscode-button-secondaryBackground, rgba(255,255,255,0.1)); color: var(--vscode-button-secondaryForeground, #fff); border: 1px solid var(--vscode-input-border); border-radius: 3px; cursor: pointer; font-weight: bold; }
+        .file-link { color: #38bdf8; cursor: pointer; text-decoration: underline; font-family: monospace; font-size: 10px; }
+        :root { --user-font-color: #f8fafc; --user-header-color: #ffffff; --user-header-border: rgba(255,255,255,0.15); --user-msg-bg: var(--vscode-button-background); --bot-msg-bg: var(--vscode-editor-inactiveSelectionBackground); --think-box-bg: rgba(0,0,0,0.25); }
         .answer-content { font-size: 11px; line-height: 1.6; word-break: break-word; margin-top: 4px; color: var(--user-font-color); }
         .answer-content p { margin: 6px 0; }
         .answer-content h1, .answer-content h2, .answer-content h3, .answer-content h4 { color: var(--user-header-color); font-weight: bold; margin: 12px 0 6px 0; border-bottom: 1px solid var(--user-header-border); padding-bottom: 3px; }
-        .answer-content h1 { font-size: 14px; }
-        .answer-content h2 { font-size: 13px; }
-        .answer-content h3 { font-size: 12px; }
+        .answer-content h1 { font-size: 14px; } .answer-content h2 { font-size: 13px; } .answer-content h3 { font-size: 12px; }
         .answer-content pre { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 10px; overflow: auto; margin: 0; font-family: var(--vscode-editor-font-family, monospace); white-space: pre; word-break: normal; }
         .answer-content code { background: rgba(255,255,255,0.08); color: #f8fafc; padding: 2px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; }
         .answer-content pre code { background: transparent; padding: 0; color: inherit; }
@@ -490,31 +613,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         .answer-content ul, .answer-content ol { margin: 6px 0; padding-left: 20px; }
         .answer-content li { margin: 3px 0; }
         .answer-content blockquote { border-left: 3px solid var(--user-header-color); margin: 8px 0; padding-left: 10px; opacity: 0.9; font-style: italic; }
-
-        /* Modal Tabs */
         .tab-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--vscode-input-border); margin-bottom: 8px; padding-bottom: 4px; }
         .tab-btn { flex: 1; background: transparent; border: none; padding: 6px 4px; font-size: 10px; font-weight: bold; cursor: pointer; opacity: 0.6; border-radius: 4px; color: var(--vscode-foreground); }
         .tab-btn.active { opacity: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
         .tab-content { display: none; flex-direction: column; gap: 8px; }
         .tab-content.active { display: flex; }
-
-        .filter-group-title { font-weight: bold; font-size: 10px; color: #38bdf8; margin: 4px 0 4px 0; padding-bottom: 2px; border-bottom: 1px solid rgba(56,189,248,0.2); }
         .filter-tag { font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
-        .filter-tag.ollama { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
-        .filter-tag.cli { background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.4); }
+        .filter-tag.ollama { background: rgba(56,189,248,0.2); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); }
         .cmd-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; background: rgba(255,255,255,0.08); border: 1px solid var(--vscode-input-border); padding: 1px 5px; border-radius: 4px; }
         .cmd-badge button { background: transparent; border: none; color: #f87171; font-weight: bold; cursor: pointer; padding: 0 2px; }
-
         .input-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; background: transparent; position: relative; }
         textarea { resize: none; width: 100%; box-sizing: border-box; }
         .toolbar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
         .menu-dropdown { position: absolute; bottom: 35px; left: 0; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border); border-radius: 6px; display: none; flex-direction: column; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 220px; }
         .menu-item { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--vscode-menu-foreground); }
         .menu-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
-        .btn-add, .btn-compress { background: transparent; border: 1px solid var(--vscode-input-border); cursor: pointer; padding: 4px 6px; border-radius: 4px; font-size: 10px; }
+        .btn-add, .btn-compress, .btn-clear { background: transparent; border: 1px solid var(--vscode-input-border); cursor: pointer; padding: 4px 6px; border-radius: 4px; font-size: 10px; }
+        .btn-clear { color: #f87171; border-color: rgba(248,113,113,0.4); }
         .btn-send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; cursor: pointer; padding: 5px 12px; font-weight: bold; }
         .btn-settings { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; }
-        
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; justify-content: center; align-items: center; }
         .modal-card { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 12px; border-radius: 8px; width: 90%; max-width: 320px; display: flex; flex-direction: column; gap: 8px; }
         .modal-card h4 { margin: 0 0 4px 0; font-size: 12px; }
@@ -527,28 +644,27 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             <button class="btn-settings" id="open-settings-btn" title="Ajustes de Conector / API">⚙️</button>
             <select id="model-select">
                 <optgroup label="Enjambre Local (Ollama)">
-                    <option value="qwimi-k2.6:distill">qwimi-k2.6:distill (128K)</option>
+                    <option value="">— Selecciona un modelo —</option>
                 </optgroup>
             </select>
+            <button class="btn-clear" id="clear-ctx-btn" title="Limpiar historial y resetear contexto de sesión">🗑️</button>
         </div>
 
         <div class="status-bar">
-            <span id="token-counter">Tokens: 0 / 32,768</span>
+            <span id="token-counter">Tokens: 0</span>
+            <span class="offline-badge" id="offline-badge">📴 OFFLINE MODE</span>
             <button class="btn-compress" id="compress-btn" title="Guardar resumen en memoria soberana y limpiar ventana">Comprimir Memoria</button>
         </div>
 
-        <div class="messages" id="messages">
-            <div class="msg bot">Giskard Assistant listo. Contexto de Sandbox activado.</div>
-        </div>
+        <!-- Messages area — starts empty, no auto-welcome message -->
+        <div class="messages" id="messages"></div>
+
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
                 <div class="menu-item" id="ctx-graphify">Graphify: Grafo Memoria</div>
-                <div class="menu-item" id="ctx-media">Media / Captura</div>
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
-                <div class="menu-item" id="ctx-action-check">Action: rtk cargo check</div>
-                <div class="menu-item" id="ctx-action-python">Action: rtk python3 test</div>
             </div>
-            <textarea id="prompt" rows="2" placeholder="Pregunta a la IA... (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
+            <textarea id="prompt" rows="2" placeholder="Pregunta a la IA… (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
             <div class="toolbar">
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>
                 <label><input type="checkbox" id="inc-file" checked> Archivo activo</label>
@@ -558,26 +674,21 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
-    <!-- Modal Ajustes Conector / API con Pestañas (Tabs) -->
+    <!-- Modal Ajustes -->
     <div class="modal" id="settings-modal">
         <div class="modal-card">
             <h4>⚙️ Ajustes de Giskard Assistant</h4>
-            
             <div class="tab-nav">
                 <button type="button" class="tab-btn active" id="tab-btn-local">Local & Visibilidad</button>
                 <button type="button" class="tab-btn" id="tab-btn-remote">API Remota & Keys</button>
-                <button type="button" class="tab-btn" id="tab-btn-palette">🎨 Paleta & Estilos</button>
+                <button type="button" class="tab-btn" id="tab-btn-palette">🎨 Paleta</button>
             </div>
 
-            <!-- Tab 1: Local & Models & Command Policy & Graphify -->
+            <!-- Tab 1: Local -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field">
                     <label>URL Servidor Giskard-Sys:</label>
                     <input type="text" id="cfg-connector-url" value="http://localhost:3500">
-                </div>
-                <div style="display: flex; gap: 4px; margin: 2px 0;">
-                    <button type="button" id="mount-workspace-btn" style="flex: 1; background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer;">Montar Workspace</button>
-                    <button type="button" id="run-graphify-btn" style="flex: 1; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold;">Generar Grafo Graphify</button>
                 </div>
                 <div class="field">
                     <label>Proveedor Activo Backend:</label>
@@ -590,7 +701,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="field">
                     <label>🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando modelos...</div>
+                    <div id="model-filter-list" style="max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Carga modelos con el botón de refresco →</div>
                 </div>
                 <div class="field" style="margin-top: 4px;">
                     <label>🛡️ Comandos Permitidos (Shell / Tools):</label>
@@ -614,7 +725,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
             </div>
 
-            <!-- Tab 3: Configurable Color Palette -->
+            <!-- Tab 3: Color Palette -->
             <div class="tab-content" id="tab-content-palette">
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 10px; font-weight: bold;">⚡ Presets de 1 Clic:</label>
@@ -624,31 +735,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         <button type="button" id="preset-emerald" style="font-size: 9px; padding: 4px 6px; background: #064e3b; color: #34d399; border: 1px solid #34d399; border-radius: 4px; cursor: pointer;">🟢 Matrix Emerald</button>
                         <button type="button" id="preset-purple" style="font-size: 9px; padding: 4px 6px; background: #3b0764; color: #c084fc; border: 1px solid #c084fc; border-radius: 4px; cursor: pointer;">🟣 Cyberpunk</button>
                     </div>
-
-                    <div class="field">
-                        <label>Color de Texto Principal:</label>
-                        <input type="color" id="palette-text-color" value="#f8fafc" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
-                    <div class="field">
-                        <label>Color de Encabezados (H1, H2, H3):</label>
-                        <input type="color" id="palette-header-color" value="#ffffff" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
-                    <div class="field">
-                        <label>Color de Acento (Etiquetas y Botones):</label>
-                        <input type="color" id="palette-accent-color" value="#38bdf8" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
-                    <div class="field">
-                        <label>💬 Burbuja de Usuario (Fondo):</label>
-                        <input type="color" id="palette-user-bg" value="#0284c7" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
-                    <div class="field">
-                        <label>🤖 Burbuja de IA (Fondo):</label>
-                        <input type="color" id="palette-bot-bg" value="#1e293b" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
-                    <div class="field">
-                        <label>💡 Caja de Razonamiento (Fondo):</label>
-                        <input type="color" id="palette-think-bg" value="#0f172a" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;">
-                    </div>
+                    <div class="field"><label>Color de Texto Principal:</label><input type="color" id="palette-text-color" value="#f8fafc" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>Color de Encabezados:</label><input type="color" id="palette-header-color" value="#ffffff" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>Color de Acento:</label><input type="color" id="palette-accent-color" value="#38bdf8" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>💬 Burbuja Usuario (Fondo):</label><input type="color" id="palette-user-bg" value="#0284c7" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>🤖 Burbuja IA (Fondo):</label><input type="color" id="palette-bot-bg" value="#1e293b" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>💡 Caja de Razonamiento:</label><input type="color" id="palette-think-bg" value="#0f172a" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
                 </div>
             </div>
 

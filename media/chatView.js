@@ -15,9 +15,9 @@
     const settingsModal = document.getElementById('settings-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const saveCfgBtn = document.getElementById('save-cfg-btn');
-    const mountWorkspaceBtn = document.getElementById('mount-workspace-btn');
-    const runGraphifyBtn = document.getElementById('run-graphify-btn');
     const ctxGraphify = document.getElementById('ctx-graphify');
+    const clearCtxBtn = document.getElementById('clear-ctx-btn');
+    const offlineBadge = document.getElementById('offline-badge');
 
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const modelFilterList = document.getElementById('model-filter-list');
@@ -478,22 +478,17 @@
         }
     } catch {}
 
-    if (mountWorkspaceBtn) {
-        mountWorkspaceBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'mountWorkspace' });
-        });
-    }
-
-    if (runGraphifyBtn) {
-        runGraphifyBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'runGraphify' });
-        });
-    }
-
     if (ctxGraphify) {
         ctxGraphify.addEventListener('click', () => {
             vscode.postMessage({ type: 'runGraphify' });
             if (ctxMenu) ctxMenu.style.display = 'none';
+        });
+    }
+
+    // 🗑️ Clear Context button
+    if (clearCtxBtn) {
+        clearCtxBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'clearContext' });
         });
     }
 
@@ -648,12 +643,7 @@
         const message = event.data;
         switch (message.type) {
             case 'runLiveDemo':
-                if (promptInput) {
-                    promptInput.value = message.prompt || 'Analiza el proyecto pequen-usb y ejecuta la compilación con ./build.sh';
-                    setTimeout(() => {
-                        send();
-                    }, 800);
-                }
+                // Removed: no auto-demo execution
                 break;
             case 'modelsList':
                 if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
@@ -716,14 +706,76 @@
                 }
                 setGenerationState(false);
                 break;
+            case 'contextCleared':
+                // Clear all messages from DOM
+                if (messagesDiv) messagesDiv.innerHTML = '';
+                currentBotMsgDiv = null;
+                currentBotRawText = '';
+                currentActiveModel = '';
+                if (tokenCounter) tokenCounter.textContent = 'Tokens: 0';
+                setGenerationState(false);
+                break;
+
+            case 'attachedContext':
+                // Ctrl+L: show code context block above textarea and pre-fill prompt
+                if (messagesDiv) {
+                    const ctxDiv = document.createElement('div');
+                    ctxDiv.className = 'msg context-block';
+                    ctxDiv.innerHTML = `<span style="font-size:9px; color:#38bdf8; font-weight:bold;">📎 Contexto adjunto (Ctrl+L)</span><br>` +
+                        `<span style="opacity:0.7; font-size:9px;">${escapeHtml(message.relativePath)} · Línea ${message.startLine}–${message.endLine}</span><br>` +
+                        `<pre style="margin:4px 0 0 0; font-size:10px; max-height:80px; overflow:auto;"><code>${escapeHtml(message.code)}</code></pre>`;
+                    messagesDiv.appendChild(ctxDiv);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+                if (promptInput && message.prefillPrompt) {
+                    promptInput.value = message.prefillPrompt;
+                    promptInput.focus();
+                }
+                break;
+
+            case 'policyError':
+                // Show policy rejection details as styled error message
+                if (messagesDiv) {
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'msg error';
+                    const payload = message.payload || {};
+                    const detail = payload.error || payload.message || JSON.stringify(payload, null, 2);
+                    errDiv.innerHTML = `<b>⛔ Bloqueado por Política de Giskard-Sys (HTTP 403)</b>\n` +
+                        `<span style="opacity:0.8; font-size:9px;">El conector rechazó esta operación.</span>\n\n` +
+                        escapeHtml(detail);
+                    messagesDiv.appendChild(errDiv);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+                if (currentBotMsgDiv) {
+                    currentBotMsgDiv.remove();
+                    currentBotMsgDiv = null;
+                }
+                setGenerationState(false);
+                break;
+
+            case 'offlineMode':
+                // Show/hide the offline badge in status bar
+                if (offlineBadge) {
+                    if (message.active) {
+                        offlineBadge.classList.add('visible');
+                    } else {
+                        offlineBadge.classList.remove('visible');
+                    }
+                }
+                break;
+
+            case 'stateRefreshed':
+                if (message.url && cfgConnectorUrl) cfgConnectorUrl.value = message.url;
+                break;
+
             case 'streamError':
             case 'settingsError':
                 if (currentBotMsgDiv) {
                     let errText = message.error || 'Error desconocido';
                     if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
-                        errText = `⚠️ La herramienta CLI '${currentActiveModel.replace('cli:', '')}' no está instalada en el PATH de tu sistema.\n\n💡 Usa los modelos del Enjambre Local (Ollama como qwimi-k2.6:distill) o configura una API Remota en ⚙️ Ajustes.`;
+                        errText = `⚠️ La herramienta CLI '${currentActiveModel.replace('cli:', '')}' no está instalada.\n\n💡 Usa modelos del Enjambre Local (Ollama) o configura una API Remota en ⚙️ Ajustes.`;
                     } else {
-                        errText = '❌ Error: ' + errText;
+                        errText = '❌ ' + errText;
                     }
                     currentBotMsgDiv.textContent = errText;
                 }
