@@ -28,17 +28,17 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 3. Comandos de apertura de Chat Sidebar
     context.subscriptions.push(
-        vscode.commands.registerCommand('giskard-sys.openChat', () => {
+        vscode.commands.registerCommand('giskard-assistant.openChat', () => {
             vscode.commands.executeCommand('workbench.view.extension.giskard-sidebar');
         }),
-        vscode.commands.registerCommand('giskard-sys.openChatRight', () => {
+        vscode.commands.registerCommand('giskard-assistant.openChatRight', () => {
             vscode.commands.executeCommand('workbench.action.focusSecondarySideBar');
         })
     );
 
     // 4. Comando de Sincronización de Estado
     context.subscriptions.push(
-        vscode.commands.registerCommand('giskard-sys.syncState', async () => {
+        vscode.commands.registerCommand('giskard-assistant.syncState', async () => {
             await provider.refreshState();
             vscode.window.showInformationMessage('✓ Estado del conector soberano sincronizado en Giskard Assistant.');
         })
@@ -46,7 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 5. Ctrl+L — Adjuntar código seleccionado al chat
     context.subscriptions.push(
-        vscode.commands.registerCommand('giskard-sys.attachCodeToChat', async () => {
+        vscode.commands.registerCommand('giskard-assistant.attachCodeToChat', async () => {
             const editor = vscode.window.activeTextEditor;
             if (!editor) {
                 vscode.window.showWarningMessage('Giskard: Abre un archivo de código para adjuntar al chat.');

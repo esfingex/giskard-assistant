@@ -77,7 +77,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
                     break;
                 case 'saveConnectorUrl':
-                    const config = vscode.workspace.getConfiguration('giskard-sys');
+                    const config = vscode.workspace.getConfiguration('giskard-assistant');
                     await config.update('connectorUrl', data.url, vscode.ConfigurationTarget.Global);
                     vscode.window.showInformationMessage(`✓ Giskard-Sys configurado en: ${data.url}`);
                     await this.refreshState();
@@ -314,7 +314,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await activeDoc.save();
             vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${activeDoc.fileName}`);
 
-            // Also persist to giskard-sys sandbox
+            // Also persist to giskard-assistant sandbox
             try {
                 await fetchWithTimeout(`${getConnectorUrl()}/write`, {
                     method: 'POST',
@@ -422,7 +422,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         this._activeAbortController = new AbortController();
 
-        // Check giskard-sys health before streaming; fallback to direct Ollama if offline
+        // Check giskard-assistant backend health before streaming; fallback to direct Ollama if offline
         const connectorUrl = getConnectorUrl();
         const isOnline = await checkHealth(connectorUrl);
 

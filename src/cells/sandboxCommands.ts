@@ -1,12 +1,13 @@
 /**
- * Giskard-Sys VSCode Extension — Cell: Sandbox Commands
+ * Giskard Assistant VSCode Extension — Cell: Sandbox Commands
+ * Copyright (C) 2025  Giskard Project — GPL-3.0
  */
 
 import * as vscode from 'vscode';
 import { fetchSandboxList, fetchSandboxRead } from '../core/api';
 
 export function registerSandboxCommands(context: vscode.ExtensionContext) {
-    let listCmd = vscode.commands.registerCommand('giskard-sys.listSandbox', async () => {
+    let listCmd = vscode.commands.registerCommand('giskard-assistant.listSandbox', async () => {
         try {
             const data: any = await fetchSandboxList('.');
             if (data.success) {
@@ -20,7 +21,7 @@ export function registerSandboxCommands(context: vscode.ExtensionContext) {
         }
     });
 
-    let readCmd = vscode.commands.registerCommand('giskard-sys.readSandboxFile', async () => {
+    let readCmd = vscode.commands.registerCommand('giskard-assistant.readSandboxFile', async () => {
         const filePath = await vscode.window.showInputBox({ prompt: 'Ruta relativa en el sandbox:' });
         if (!filePath) return;
 

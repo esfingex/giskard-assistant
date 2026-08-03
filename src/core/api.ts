@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 export const CLIENT_ID = 'vscode-assistant';
 
 export function getConnectorUrl(): string {
-    const config = vscode.workspace.getConfiguration('giskard-sys');
+    const config = vscode.workspace.getConfiguration('giskard-assistant');
     return config.get<string>('connectorUrl') || 'http://localhost:3500';
 }
 
@@ -55,7 +55,7 @@ export async function checkHealth(baseUrl?: string): Promise<boolean> {
     }
 }
 
-/** Reset LLM session context in giskard-sys backend */
+/** Reset LLM session context in giskard-assistant backend */
 export async function resetSession(): Promise<void> {
     try {
         await fetchWithTimeout(`${getConnectorUrl()}/llm/reset`, {

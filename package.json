@@ -45,36 +45,36 @@
     },
     "commands": [
       {
-        "command": "giskard-sys.openChat",
+        "command": "giskard-assistant.openChat",
         "title": "Giskard Assistant: Abrir Chat en Barra Principal (Izquierda)",
         "icon": "$(robot)"
       },
       {
-        "command": "giskard-sys.openChatRight",
+        "command": "giskard-assistant.openChatRight",
         "title": "Giskard Assistant: Abrir Chat en Barra Secundaria (Derecha)",
         "icon": "$(robot)"
       },
       {
-        "command": "giskard-sys.syncState",
+        "command": "giskard-assistant.syncState",
         "title": "Giskard Assistant: Sincronizar Estado con Conector Soberano"
       },
       {
-        "command": "giskard-sys.listSandbox",
+        "command": "giskard-assistant.listSandbox",
         "title": "Giskard-Sys: List Sandbox Files"
       },
       {
-        "command": "giskard-sys.readSandboxFile",
+        "command": "giskard-assistant.readSandboxFile",
         "title": "Giskard-Sys: Read File from Sandbox"
       },
       {
-        "command": "giskard-sys.attachCodeToChat",
+        "command": "giskard-assistant.attachCodeToChat",
         "title": "Giskard Assistant: Adjuntar Código Seleccionado al Chat (Ctrl+L)",
         "icon": "$(code)"
       }
     ],
     "keybindings": [
       {
-        "command": "giskard-sys.attachCodeToChat",
+        "command": "giskard-assistant.attachCodeToChat",
         "key": "ctrl+l",
         "when": "editorTextFocus"
       }
@@ -82,22 +82,22 @@
     "configuration": {
       "title": "Giskard Assistant",
       "properties": {
-        "giskard-sys.connectorUrl": {
+        "giskard-assistant.connectorUrl": {
           "type": "string",
           "default": "http://localhost:3500",
           "description": "URL del backend del conector soberano Giskard-Sys."
         },
-        "giskard-sys.clientId": {
+        "giskard-assistant.clientId": {
           "type": "string",
           "default": "VSCode-Copilot",
           "description": "Identificador de cliente enviado en X-Client-Id."
         },
-        "giskard-sys.defaultModel": {
+        "giskard-assistant.defaultModel": {
           "type": "string",
           "default": "qwimi-k2.6:distill",
           "description": "Modelo por defecto seleccionado en el chat."
         },
-        "giskard-sys.autoSync": {
+        "giskard-assistant.autoSync": {
           "type": "boolean",
           "default": true,
           "description": "Sincronización automática de estado y modelos."
