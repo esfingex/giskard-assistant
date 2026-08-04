@@ -495,7 +495,7 @@
     if (openSettingsBtn) {
         openSettingsBtn.addEventListener('click', () => { 
             if (settingsModal) settingsModal.style.display = 'flex';
-            vscode.postMessage({ type: 'fetchPolicy' });
+            vscode.postMessage({ type: 'loadConnections' });
             vscode.postMessage({ type: 'fetchModels' });
         });
     }
@@ -506,31 +506,110 @@
         });
     }
 
-    if (saveCfgBtn) {
-        saveCfgBtn.addEventListener('click', () => {
-            const connectorUrl = cfgConnectorUrl ? cfgConnectorUrl.value.trim() : '';
-            const provider = document.getElementById('cfg-provider').value;
-            const baseUrl = document.getElementById('cfg-base-url').value.trim();
-            const apiKey = document.getElementById('cfg-api-key').value.trim();
+    // ── Connection Manager UI Bindings ─────────────────────────────────────
+    const connTypeLocal = document.getElementById('conn-type-local');
+    const connTypeRemote = document.getElementById('conn-type-remote');
+    const connTokenField = document.getElementById('conn-token-field');
+    const connNameInp = document.getElementById('conn-name');
+    const connUrlInp = document.getElementById('conn-url');
+    const connTagSel = document.getElementById('conn-tag');
+    const connTokenInp = document.getElementById('conn-token');
+    const testConnBtn = document.getElementById('test-connection-btn');
+    const addConnBtn = document.getElementById('add-connection-btn');
+    const connStatusDiv = document.getElementById('connection-status');
+    const connectionsListDiv = document.getElementById('connections-list');
 
-            const checkedModels = [];
-            document.querySelectorAll('.model-filter-cb').forEach(cb => {
-                if (cb.checked) checkedModels.push(cb.value);
-            });
-            setEnabledModels(checkedModels);
-            updateModelDropdown(lastDetectedModels);
+    function updateConnTypeVisibility() {
+        if (!connTokenField) return;
+        const isRemote = connTypeRemote && connTypeRemote.checked;
+        connTokenField.style.display = isRemote ? 'flex' : 'none';
+    }
 
-            if (connectorUrl) {
-                vscode.postMessage({ type: 'saveConnectorUrl', url: connectorUrl });
+    if (connTypeLocal) connTypeLocal.addEventListener('change', updateConnTypeVisibility);
+    if (connTypeRemote) connTypeRemote.addEventListener('change', updateConnTypeVisibility);
+
+    if (testConnBtn) {
+        testConnBtn.addEventListener('click', () => {
+            const url = connUrlInp ? connUrlInp.value.trim() : '';
+            if (!url) {
+                if (connStatusDiv) connStatusDiv.innerHTML = '<span style="color:#f87171;">Escribe una URL primero</span>';
+                return;
+            }
+            if (connStatusDiv) connStatusDiv.innerHTML = '<span style="color:#38bdf8;">⏳ Probando conexión...</span>';
+            vscode.postMessage({ type: 'testConnectionUrl', url });
+        });
+    }
+
+    if (addConnBtn) {
+        addConnBtn.addEventListener('click', () => {
+            const name = connNameInp ? connNameInp.value.trim() : '';
+            const url = connUrlInp ? connUrlInp.value.trim() : '';
+            const tag = connTagSel ? connTagSel.value : 'custom';
+            const isRemote = connTypeRemote && connTypeRemote.checked;
+            const apiKey = connTokenInp ? connTokenInp.value.trim() : '';
+
+            if (!name || !url) {
+                alert('Ingresa al menos un Nombre y una URL para la conexión.');
+                return;
             }
 
             vscode.postMessage({
-                type: 'saveSettings',
-                provider: provider,
-                baseUrl: baseUrl,
-                apiKey: apiKey
+                type: 'addConnection',
+                name,
+                connType: isRemote ? 'remote' : 'local',
+                url,
+                tag,
+                apiKey
             });
-            if (settingsModal) settingsModal.style.display = 'none';
+
+            if (connNameInp) connNameInp.value = '';
+            if (connUrlInp) connUrlInp.value = '';
+            if (connTokenInp) connTokenInp.value = '';
+        });
+    }
+
+    function renderConnectionsList(connections) {
+        if (!connectionsListDiv) return;
+        if (!connections || connections.length === 0) {
+            connectionsListDiv.innerHTML = '<span style="font-size:9px;opacity:0.5;">Sin conexiones guardadas</span>';
+            return;
+        }
+
+        let html = '';
+        connections.forEach(c => {
+            const activeBadge = c.isActive
+                ? '<span style="color:#4ade80;font-weight:bold;font-size:9px;">★ Activa</span>'
+                : `<button type="button" class="btn-act-conn" data-id="${c.id}" style="padding:1px 5px;font-size:9px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:3px;cursor:pointer;">Activar</button>`;
+
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1px solid var(--vscode-input-border);padding:4px 6px;border-radius:4px;font-size:10px;">
+                <div style="display:flex;flex-direction:column;gap:1px;overflow:hidden;flex:1;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <span class="filter-tag ${c.type === 'local' ? 'ollama' : 'cli'}">${escapeHtml(c.tag.toUpperCase())}</span>
+                        <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name)}</strong>
+                    </div>
+                    <span style="opacity:0.6;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.url)}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-left:6px;">
+                    ${activeBadge}
+                    <button type="button" class="btn-del-conn" data-id="${c.id}" style="background:transparent;border:none;color:#f87171;font-weight:bold;cursor:pointer;padding:0 2px;" title="Eliminar">✖</button>
+                </div>
+            </div>`;
+        });
+
+        connectionsListDiv.innerHTML = html;
+
+        connectionsListDiv.querySelectorAll('.btn-act-conn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseInt(btn.getAttribute('data-id'), 10);
+                if (id) vscode.postMessage({ type: 'activateConnection', id });
+            });
+        });
+
+        connectionsListDiv.querySelectorAll('.btn-del-conn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseInt(btn.getAttribute('data-id'), 10);
+                if (id) vscode.postMessage({ type: 'removeConnection', id });
+            });
         });
     }
 
@@ -764,8 +843,22 @@
                 }
                 break;
 
+            case 'connectionsLoaded':
+                renderConnectionsList(message.connections);
+                break;
+
+            case 'connectionTested':
+                if (connStatusDiv) {
+                    if (message.ok) {
+                        connStatusDiv.innerHTML = `<span style="color:#4ade80;font-weight:bold;">✓ Conectado (${message.ms}ms) — HTTP ${message.status}</span>`;
+                    } else {
+                        connStatusDiv.innerHTML = `<span style="color:#f87171;font-weight:bold;">❌ Falló (${message.ms}ms): ${escapeHtml(message.error)}</span>`;
+                    }
+                }
+                break;
+
             case 'stateRefreshed':
-                if (message.url && cfgConnectorUrl) cfgConnectorUrl.value = message.url;
+                if (message.url && connUrlInp) connUrlInp.value = message.url;
                 break;
 
             case 'streamError':

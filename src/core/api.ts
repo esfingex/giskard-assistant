@@ -14,11 +14,25 @@
  */
 
 import * as vscode from 'vscode';
+import type { ConnectionStore } from './connectionStore';
 
 /** Mandatory client identifier per Giskard architecture spec */
 export const CLIENT_ID = 'vscode-assistant';
 
+// Active ConnectionStore instance (set on extension activation)
+let _store: ConnectionStore | null = null;
+
+/** Inject the ConnectionStore so getConnectorUrl() resolves the active profile */
+export function setConnectionStore(store: ConnectionStore): void {
+    _store = store;
+}
+
+/** Returns the active backend URL — from ConnectionStore if set, else VS Code config fallback */
 export function getConnectorUrl(): string {
+    if (_store) {
+        const active = _store.getActive();
+        if (active) return active.url.replace(/\/$/, '');
+    }
     const config = vscode.workspace.getConfiguration('giskard-assistant');
     return config.get<string>('connectorUrl') || 'http://localhost:3500';
 }

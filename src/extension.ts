@@ -11,13 +11,24 @@
 import * as vscode from 'vscode';
 import { GiskardChatWebviewProvider } from './cells/chatWebview';
 import { registerSandboxCommands } from './cells/sandboxCommands';
-import { checkHealth, fetchWorkspaceList, fetchWaveCurrent } from './core/api';
+import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore } from './core/api';
+import { ConnectionStore } from './core/connectionStore';
 
-export function activate(context: vscode.ExtensionContext) {
-    console.log('🚀 Giskard Assistant v4.0 activada (GPL-3.0)');
+export async function activate(context: vscode.ExtensionContext) {
+    console.log('🚀 Giskard Assistant v4.1.0 activada (GPL-3.0)');
+
+    // 0. Initialize SQLite Connection Store
+    const store = new ConnectionStore(context);
+    try {
+        await store.init();
+        setConnectionStore(store);
+    } catch (err: any) {
+        vscode.window.showWarningMessage(`Giskard: Connection store init failed: ${err.message}`);
+    }
+    context.subscriptions.push({ dispose: () => store.dispose() });
 
     // 1. Célula Webview Sidebar Chat
-    const provider = new GiskardChatWebviewProvider(context.extensionUri);
+    const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('giskard.chatView', provider),
         vscode.window.registerWebviewViewProvider('giskard.chatViewExplorer', provider)

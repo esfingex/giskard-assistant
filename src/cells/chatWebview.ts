@@ -23,6 +23,7 @@ import {
     checkHealth,
     resetSession
 } from '../core/api';
+import { ConnectionStore } from '../core/connectionStore';
 
 interface CodeContextBlock {
     relativePath: string;
@@ -36,7 +37,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(
+        private readonly _extensionUri: vscode.Uri,
+        private readonly _store: ConnectionStore
+    ) {}
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -60,15 +64,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'fetchModels':
                     await this._sendModelsList();
-                    break;
-                case 'fetchPolicy':
-                    await this._handleFetchPolicy();
-                    break;
-                case 'addAllowedCommand':
-                    await this._handleAddCommandPolicy(data.command);
-                    break;
-                case 'removeAllowedCommand':
-                    await this._handleRemoveCommandPolicy(data.command);
                     break;
                 case 'executeAction':
                     await this._handleAction(data.action);
@@ -106,6 +101,22 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'openFile':
                     await this._handleOpenFile(data.relativePath);
                     break;
+                // ── Connection Manager ──────────────────────────────────
+                case 'addConnection':
+                    await this._handleAddConnection(data);
+                    break;
+                case 'removeConnection':
+                    await this._handleRemoveConnection(data.id);
+                    break;
+                case 'activateConnection':
+                    await this._handleActivateConnection(data.id);
+                    break;
+                case 'loadConnections':
+                    await this._sendConnectionsList();
+                    break;
+                case 'testConnectionUrl':
+                    await this._handleTestConnectionUrl(data.url);
+                    break;
             }
         });
 
@@ -131,7 +142,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         this._view.webview.postMessage({ type: 'stateRefreshed', url: getConnectorUrl() });
         await this._sendModelsList();
-        await this._handleFetchPolicy();
+        await this._sendConnectionsList();
     }
 
     // ── Private Handlers ──────────────────────────────────────────────────────
@@ -149,6 +160,102 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({ type: 'contextCleared' });
         }
     }
+
+    // ── Connection Manager Handlers ───────────────────────────────────────────
+
+    private async _sendConnectionsList() {
+        if (!this._view) return;
+        const connections = this._store.getAll();
+        this._view.webview.postMessage({ type: 'connectionsLoaded', connections });
+    }
+
+    private async _handleAddConnection(data: any) {
+        if (!this._view) return;
+        try {
+            const id = await this._store.addConnection(
+                data.name,
+                data.connType,
+                data.url,
+                data.tag,
+                data.apiKey
+            );
+            vscode.window.showInformationMessage(`✓ Conexión "${data.name}" guardada.`);
+            await this._sendConnectionsList();
+        } catch (err: any) {
+            this._view.webview.postMessage({ type: 'connectionError', error: err.message });
+            vscode.window.showErrorMessage(`Error guardando conexión: ${err.message}`);
+        }
+    }
+
+    private async _handleRemoveConnection(id: number) {
+        if (!this._view) return;
+        try {
+            await this._store.removeConnection(id);
+            vscode.window.showInformationMessage(`✓ Conexión eliminada.`);
+            await this._sendConnectionsList();
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error eliminando conexión: ${err.message}`);
+        }
+    }
+
+    private async _handleActivateConnection(id: number) {
+        if (!this._view) return;
+        try {
+            this._store.setActive(id);
+            const active = this._store.getActive();
+            const url = active?.url || 'desconocida';
+            vscode.window.showInformationMessage(`✓ Conexión activa: ${url}`);
+            await this._sendConnectionsList();
+            this._view.webview.postMessage({ type: 'stateRefreshed', url });
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error activando conexión: ${err.message}`);
+        }
+    }
+
+    private async _handleTestConnectionUrl(url: string) {
+        if (!this._view) return;
+        const start = Date.now();
+        try {
+            const res = await fetchWithTimeout(`${url.replace(/\/$/, '')}/health`, {
+                headers: { 'X-Client-Id': getClientId() }
+            }, 8000);
+            const ms = Date.now() - start;
+            if (res.ok) {
+                this._view.webview.postMessage({
+                    type: 'connectionTested',
+                    ok: true,
+                    status: res.status,
+                    ms
+                });
+            } else {
+                this._view.webview.postMessage({
+                    type: 'connectionTested',
+                    ok: false,
+                    status: res.status,
+                    error: `HTTP ${res.status}`,
+                    ms
+                });
+            }
+        } catch (err: any) {
+            const ms = Date.now() - start;
+            let reason = err.message;
+            if (err.name === 'AbortError') {
+                reason = 'Timeout — sin respuesta en 8 segundos';
+            } else if (err.message.includes('ECONNREFUSED')) {
+                reason = 'Conexión rechazada — el servidor no está activo en esa URL';
+            } else if (err.message.includes('ENOTFOUND')) {
+                reason = 'Host no encontrado — verifica la URL';
+            }
+            this._view.webview.postMessage({
+                type: 'connectionTested',
+                ok: false,
+                error: reason,
+                ms
+            });
+        }
+    }
+
+
 
     private async _handleOpenFile(relativePath: string) {
         const folders = vscode.workspace.workspaceFolders;
@@ -684,44 +791,63 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 <button type="button" class="tab-btn" id="tab-btn-palette">🎨 Paleta</button>
             </div>
 
-            <!-- Tab 1: Local -->
+            <!-- Tab 1: Local & Visibilidad -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field">
-                    <label>URL del Backend Soberano:</label>
-                    <input type="text" id="cfg-connector-url" value="http://localhost:3500">
-                </div>
-                <div class="field">
-                    <label>Proveedor Activo Backend:</label>
-                    <select id="cfg-provider">
-                        <option value="ollama">Ollama (Local)</option>
-                        <option value="openai_compat">OpenAI / Compatible / Remoto</option>
-                        <option value="gemini">Gemini CLI</option>
-                        <option value="claude">Claude CLI</option>
-                    </select>
-                </div>
-                <div class="field">
                     <label>🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="max-height: 70px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Carga modelos con el botón de refresco →</div>
-                </div>
-                <div class="field" style="margin-top: 4px;">
-                    <label>🛡️ Comandos Permitidos (Shell / Tools):</label>
-                    <div id="cmd-policy-list" style="display: flex; flex-wrap: wrap; gap: 4px; max-height: 60px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Cargando permisos...</div>
-                    <div style="display: flex; gap: 4px; margin-top: 4px;">
-                        <input type="text" id="add-cmd-input" placeholder="ej. docker, npm..." style="flex: 1; font-size: 10px;">
-                        <button type="button" id="add-cmd-btn" style="padding: 2px 6px; font-size: 10px;">+ Permitir</button>
-                    </div>
+                    <div id="model-filter-list" style="max-height: 80px; overflow-y: auto; border: 1px solid var(--vscode-input-border); padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.15);">Carga modelos con el botón de refresco →</div>
                 </div>
             </div>
 
-            <!-- Tab 2: Remote & Keys -->
+            <!-- Tab 2: Conexiones -->
             <div class="tab-content" id="tab-content-remote">
-                <div class="field">
-                    <label>Base URL Remota (OpenAI/Compatible):</label>
-                    <input type="text" id="cfg-base-url" placeholder="https://api.openai.com/v1">
+
+                <!-- Add Connection Form -->
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; gap:8px; align-items:center; font-size:10px;">
+                        <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+                            <input type="radio" name="conn-type" id="conn-type-local" value="local" checked> Local URL
+                        </label>
+                        <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+                            <input type="radio" name="conn-type" id="conn-type-remote" value="remote"> Remote URL + Token
+                        </label>
+                    </div>
+                    <div class="field">
+                        <label>Nombre:</label>
+                        <input type="text" id="conn-name" placeholder="mi-giskard-local">
+                    </div>
+                    <div class="field">
+                        <label>URL:</label>
+                        <div style="display:flex;gap:4px;align-items:center;">
+                            <input type="text" id="conn-url" placeholder="http://localhost:3500" style="flex:1;">
+                            <button type="button" id="test-connection-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">🔌 Probar</button>
+                        </div>
+                        <div id="connection-status" style="font-size:9px;margin-top:3px;min-height:14px;display:flex;align-items:center;gap:4px;"></div>
+                    </div>
+                    <div class="field">
+                        <label>Tag / Proveedor:</label>
+                        <select id="conn-tag">
+                            <option value="giskard-sys">giskard-sys</option>
+                            <option value="ollama">ollama</option>
+                            <option value="lm-studio">lm-studio</option>
+                            <option value="openai">openai</option>
+                            <option value="deepseek">deepseek</option>
+                            <option value="anthropic">anthropic</option>
+                            <option value="gemini">gemini</option>
+                            <option value="custom">✅ custom…</option>
+                        </select>
+                    </div>
+                    <div class="field" id="conn-token-field" style="display:none;">
+                        <label>Token / API Key:</label>
+                        <input type="password" id="conn-token" placeholder="sk-… / Bearer token">
+                    </div>
+                    <button type="button" id="add-connection-btn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;">+ Agregar Conexión</button>
                 </div>
-                <div class="field">
-                    <label>API Key Remota (OpenAI / DeepSeek / External):</label>
-                    <input type="password" id="cfg-api-key" placeholder="sk-...">
+
+                <!-- Saved Connections Table -->
+                <div style="margin-top:8px;">
+                    <div style="font-size:9px;font-weight:bold;color:#38bdf8;margin-bottom:4px;border-bottom:1px solid rgba(56,189,248,0.2);padding-bottom:2px;">Conexiones Guardadas</div>
+                    <div id="connections-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;"><span style="font-size:9px;opacity:0.5;">Sin conexiones guardadas</span></div>
                 </div>
             </div>
 
