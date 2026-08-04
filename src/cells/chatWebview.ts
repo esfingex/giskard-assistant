@@ -257,18 +257,51 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
 
 
-    private async _handleOpenFile(relativePath: string) {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            vscode.window.showWarningMessage('No hay un workspace abierto en VSCode.');
-            return;
+    private async _resolveWorkspaceFile(targetPath: string): Promise<vscode.TextDocument | null> {
+        if (!targetPath || !targetPath.trim()) return null;
+        let cleanPath = targetPath.trim();
+
+        // 1. Absolute path check
+        if (cleanPath.startsWith('/')) {
+            try {
+                const uri = vscode.Uri.file(cleanPath);
+                return await vscode.workspace.openTextDocument(uri);
+            } catch {}
         }
+
+        cleanPath = cleanPath.replace(/^\.\//, '').replace(/^\//, '');
+
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) return null;
+
+        // 2. Direct joinPath relative to workspace root
         try {
-            const resolvedUri = vscode.Uri.joinPath(folders[0].uri, relativePath);
-            const doc = await vscode.workspace.openTextDocument(resolvedUri);
-            await vscode.window.showTextDocument(doc, { preview: false });
+            const uri = vscode.Uri.joinPath(folders[0].uri, cleanPath);
+            return await vscode.workspace.openTextDocument(uri);
+        } catch {}
+
+        // 3. Fallback search via findFiles (e.g., if targetPath was "chatWebview.ts" instead of "src/cells/chatWebview.ts")
+        try {
+            const fileName = cleanPath.split('/').pop() || cleanPath;
+            const matches = await vscode.workspace.findFiles(`**/${fileName}`, '**/node_modules/**', 5);
+            if (matches && matches.length > 0) {
+                return await vscode.workspace.openTextDocument(matches[0]);
+            }
+        } catch {}
+
+        return null;
+    }
+
+    private async _handleOpenFile(relativePath: string) {
+        try {
+            const doc = await this._resolveWorkspaceFile(relativePath);
+            if (doc) {
+                await vscode.window.showTextDocument(doc, { preview: false });
+            } else {
+                vscode.window.showErrorMessage(`Giskard: No se encontró el archivo '${relativePath}' en el workspace.`);
+            }
         } catch (err: any) {
-            vscode.window.showErrorMessage(`Giskard: No se pudo abrir '${relativePath}': ${err.message}`);
+            vscode.window.showErrorMessage(`Giskard: Error al abrir '${relativePath}': ${err.message}`);
         }
     }
 
@@ -384,28 +417,20 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private async _handleOpenDiff(proposedCode: string, targetFilePath?: string) {
         let activeDoc: vscode.TextDocument | undefined;
 
-        // 1. Try resolving target file path if provided
-        if (targetFilePath && targetFilePath.trim()) {
-            const folders = vscode.workspace.workspaceFolders;
-            if (folders && folders.length > 0) {
-                try {
-                    const resolvedUri = vscode.Uri.joinPath(folders[0].uri, targetFilePath.trim());
-                    activeDoc = await vscode.workspace.openTextDocument(resolvedUri);
-                } catch {
-                    // Path not found, fallback to active editor
-                }
-            }
+        // 1. Resolve explicit target file if provided
+        if (targetFilePath) {
+            activeDoc = (await this._resolveWorkspaceFile(targetFilePath)) || undefined;
         }
 
-        // 2. Fallback to current active editor
+        // 2. Fallback to active text editor in VS Code
         if (!activeDoc) {
             const editor = vscode.window.activeTextEditor;
-            if (editor) {
+            if (editor && editor.document) {
                 activeDoc = editor.document;
             }
         }
 
-        // 3. Fallback to any visible text editor in VS Code
+        // 3. Fallback to any visible editor tab
         if (!activeDoc) {
             const visible = vscode.window.visibleTextEditors;
             if (visible && visible.length > 0) {
@@ -413,7 +438,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         }
 
-        // 4. If still no active document, open new untitled file with proposed code
+        // 4. Fallback to currently open documents list in workspace
+        if (!activeDoc) {
+            const docs = vscode.workspace.textDocuments.filter(d => !d.isUntitled);
+            if (docs.length > 0) {
+                activeDoc = docs[0];
+            }
+        }
+
+        // 5. If still no file in workspace, open untitled file with proposed code
         if (!activeDoc) {
             const doc = await vscode.workspace.openTextDocument({ content: proposedCode, language: 'typescript' });
             await vscode.window.showTextDocument(doc);
@@ -424,25 +457,26 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const activeText = activeDoc.getText();
         const baseName = activeDoc.fileName.split('/').pop() || activeDoc.fileName;
 
-        // Ensure active document is displayed in editor tab
-        await vscode.window.showTextDocument(activeDoc, { preview: false });
+        // Ensure target document is visible in editor
+        await vscode.window.showTextDocument(activeDoc, { preview: false, viewColumn: vscode.ViewColumn.One });
 
+        // Create in-memory document with proposed code
         const tempDoc = await vscode.workspace.openTextDocument({
             content: proposedCode,
             language: activeDoc.languageId
         });
 
-        // Open native VS Code side-by-side Diff view
+        // Open native VS Code side-by-side diff view
         await vscode.commands.executeCommand(
             'vscode.diff',
             activeUri,
             tempDoc.uri,
-            `Giskard Proposed Changes: ${baseName}`
+            `Diff Propuesto (Giskard): ${baseName}`
         );
 
-        // Prompt user to Accept or Reject changes
+        // Display VS Code notification with Accept / Reject buttons
         const selection = await vscode.window.showInformationMessage(
-            `¿Deseas aplicar esta propuesta de cambios a ${baseName}?`,
+            `Giskard: ¿Deseas aplicar los cambios propuestos a '${baseName}'?`,
             '✓ Aceptar Cambios',
             '✗ Rechazar'
         );
@@ -456,16 +490,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             edit.replace(activeUri, fullRange, proposedCode);
             await vscode.workspace.applyEdit(edit);
             await activeDoc.save();
-            vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${baseName}`);
+            vscode.window.showInformationMessage(`✓ Cambios aplicados a '${baseName}'.`);
 
-            // Also persist file to backend sandbox if connected
             try {
                 await fetchWithTimeout(`${getConnectorUrl()}/write`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
                     body: JSON.stringify({ path: activeDoc.uri.fsPath, content: proposedCode })
                 });
-            } catch { /* Silent */ }
+            } catch {}
         }
     }
 
@@ -522,10 +555,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     ) {
         if (!this._view) return;
 
-        // Auto-open file if prompt explicitly requests opening a file (e.g. "abre src/extension.ts", "open package.json")
-        const openCmdMatch = prompt.match(/(?:abre|open)(?:\s+(?:el\s+)?archivo|\s+file)?\s+([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
-        if (openCmdMatch) {
-            const targetPath = openCmdMatch[1];
+        // Auto-open file if prompt explicitly requests opening or modifying a file
+        const fileMatch = prompt.match(/(?:abre|open|edita|modifica)\s+(?:el\s+archivo\s+|file\s+)?([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
+        if (fileMatch && fileMatch[1]) {
+            const targetPath = fileMatch[1];
             await this._handleOpenFile(targetPath);
         }
 
