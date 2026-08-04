@@ -885,35 +885,34 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    /** Auto-trigger diff view if prompt has edit intent and response contains code blocks */
+    /** Auto-trigger diff view when AI response contains a code block with a file path.
+     *  Fires automatically — no edit-intent check needed if a filePath is detected.
+     *  Falls back to edit-intent check for blocks without explicit file paths. */
     private async _maybeAutoTriggerDiff(
         userPrompt: string,
         responseText: string,
         extractedPath?: string,
         includeActiveFile?: boolean
     ) {
-        // Broad intent detection covering Spanish and English edit/programming requests
-        const hasEditIntent = /(?:modifica|edita|cambia|actualiza|agrega|escribe|crea|programa|implementa|a\u00f1ade|mejora|arregla|corrija|refactoriza|create|update|edit|modify|add|fix|improve|refactor|implement|write|generate|make)/i.test(userPrompt);
-        if (!hasEditIntent && !includeActiveFile) return;
-
         const codeBlocks = extractCodeBlocks(responseText);
         if (codeBlocks.length === 0) return;
 
-        // Find the best block: prefer one with a file path hint, or use the largest block
-        let bestBlock = codeBlocks[0];
-        for (const block of codeBlocks) {
-            if (block.filePath) {
-                bestBlock = block;
-                break;
-            }
-            if (block.code.length > bestBlock.code.length) {
-                bestBlock = block;
-            }
+        // Priority 1: Any block that has an explicit file path → auto-open diff
+        const blockWithPath = codeBlocks.find(b => b.filePath);
+        if (blockWithPath) {
+            await this._handleOpenDiff(blockWithPath.code, blockWithPath.filePath);
+            return;
         }
 
-        const targetPath = bestBlock.filePath || extractedPath;
-        await this._handleOpenDiff(bestBlock.code, targetPath);
+        // Priority 2: No explicit path — only trigger if prompt has edit intent OR includeActiveFile
+        const hasEditIntent = /(?:modifica|edita|cambia|actualiza|agrega|escribe|crea|programa|implementa|añade|mejora|arregla|corrija|refactoriza|create|update|edit|modify|add|fix|improve|refactor|implement|write|generate|make)/i.test(userPrompt);
+        if (!hasEditIntent && !includeActiveFile) return;
+
+        // Use the largest code block as best guess
+        const bestBlock = codeBlocks.reduce((a, b) => b.code.length > a.code.length ? b : a, codeBlocks[0]);
+        await this._handleOpenDiff(bestBlock.code, extractedPath);
     }
+
 
     /** Offline fallback: stream directly from local Ollama */
     private async _streamFromOllamaFallback(
