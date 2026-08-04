@@ -456,91 +456,141 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const cleanCode = cleanCodeFence(proposedCode);
         if (!cleanCode) return;
 
-        let activeDoc: vscode.TextDocument | undefined;
+        let targetDoc: vscode.TextDocument | undefined;
 
-        // 1. Resolve explicit target file if provided
+        // 1. Explicit file path hint (from code comment or prompt)
         if (targetFilePath) {
-            activeDoc = (await this._resolveWorkspaceFile(targetFilePath)) || undefined;
+            targetDoc = (await this._resolveWorkspaceFile(targetFilePath)) || undefined;
         }
 
-        // 2. Fallback to active text editor in VS Code
-        if (!activeDoc) {
+        // 2. Active text editor — but SKIP if it's the webview panel or untitled
+        if (!targetDoc) {
             const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document) {
-                activeDoc = editor.document;
+            if (editor && editor.document && !editor.document.isUntitled &&
+                editor.document.uri.scheme === 'file') {
+                targetDoc = editor.document;
             }
         }
 
-        // 3. Fallback to any visible editor tab
-        if (!activeDoc) {
-            const visible = vscode.window.visibleTextEditors;
-            if (visible && visible.length > 0) {
-                activeDoc = visible[0].document;
+        // 3. Any visible real file editor tab (skip untitled/webview)
+        if (!targetDoc) {
+            const visible = vscode.window.visibleTextEditors.filter(
+                e => e.document && !e.document.isUntitled && e.document.uri.scheme === 'file'
+            );
+            if (visible.length > 0) {
+                targetDoc = visible[0].document;
             }
         }
 
-        // 4. Fallback to currently open documents list in workspace
-        if (!activeDoc) {
-            const docs = vscode.workspace.textDocuments.filter(d => !d.isUntitled);
-            if (docs.length > 0) {
-                activeDoc = docs[0];
+        // 4. Open documents list — real files only
+        if (!targetDoc) {
+            const openDocs = vscode.workspace.textDocuments.filter(
+                d => !d.isUntitled && d.uri.scheme === 'file'
+            );
+            if (openDocs.length === 0) {
+                // No file open — prompt user to pick a file from workspace
+                const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 100);
+                if (!files || files.length === 0) {
+                    vscode.window.showWarningMessage('Giskard: No hay archivos abiertos en el workspace para aplicar el diff.');
+                    return;
+                }
+                const picked = await vscode.window.showQuickPick(
+                    files.map(f => ({ label: vscode.workspace.asRelativePath(f), uri: f })),
+                    { placeHolder: 'Selecciona el archivo al que aplicar los cambios propuestos' }
+                );
+                if (!picked) return;
+                targetDoc = await vscode.workspace.openTextDocument(picked.uri);
+            } else if (openDocs.length === 1) {
+                targetDoc = openDocs[0];
+            } else {
+                // Multiple files open — ask user to pick
+                const picked = await vscode.window.showQuickPick(
+                    openDocs.map(d => ({
+                        label: vscode.workspace.asRelativePath(d.uri),
+                        uri: d.uri,
+                        doc: d
+                    })),
+                    { placeHolder: 'Selecciona el archivo al que aplicar los cambios propuestos' }
+                );
+                if (!picked) return;
+                targetDoc = picked.doc;
             }
         }
 
-        // 5. If still no file in workspace, open untitled file with proposed code
-        if (!activeDoc) {
-            const doc = await vscode.workspace.openTextDocument({ content: cleanCode, language: 'typescript' });
-            await vscode.window.showTextDocument(doc);
+        if (!targetDoc) {
+            vscode.window.showWarningMessage('Giskard: No se pudo determinar el archivo destino para el diff.');
             return;
         }
 
-        const activeUri = activeDoc.uri;
-        const activeText = activeDoc.getText();
-        const baseName = activeDoc.fileName.split('/').pop() || activeDoc.fileName;
+        const targetUri = targetDoc.uri;
+        const targetText = targetDoc.getText();
+        const baseName = vscode.workspace.asRelativePath(targetUri);
 
-        // Ensure target document is visible in editor
-        await vscode.window.showTextDocument(activeDoc, { preview: false, viewColumn: vscode.ViewColumn.One });
-
-        // Create in-memory document with proposed code
-        const tempDoc = await vscode.workspace.openTextDocument({
-            content: cleanCode,
-            language: activeDoc.languageId
+        // Show target file in column 1 first
+        await vscode.window.showTextDocument(targetDoc, {
+            preview: false,
+            viewColumn: vscode.ViewColumn.One
         });
 
-        // Open native VS Code side-by-side diff view
+        // Create in-memory document with proposed code in column 2
+        const tempDoc = await vscode.workspace.openTextDocument({
+            content: cleanCode,
+            language: targetDoc.languageId
+        });
+
+        // Open the native VS Code diff view
         await vscode.commands.executeCommand(
             'vscode.diff',
-            activeUri,
+            targetUri,
             tempDoc.uri,
-            `Diff Propuesto (Giskard): ${baseName}`
+            `⚡ Giskard Diff: ${baseName}`,
+            { viewColumn: vscode.ViewColumn.One }
         );
 
-        // Display VS Code notification with Accept / Reject buttons
-        const selection = await vscode.window.showInformationMessage(
-            `Giskard: ¿Deseas aplicar los cambios propuestos a '${baseName}'?`,
-            '✓ Aceptar Cambios',
-            '✗ Rechazar'
+        // Show modal-style QuickPick for Accept/Reject (stays visible, doesn't auto-dismiss)
+        const action = await vscode.window.showQuickPick(
+            [
+                { label: '$(check) Aceptar Cambios', description: `Sobrescribir ${baseName} con la propuesta de la IA`, value: 'accept' },
+                { label: '$(close) Rechazar', description: 'Mantener el archivo original sin cambios', value: 'reject' }
+            ],
+            {
+                placeHolder: `Giskard — ¿Aplicar los cambios propuestos a '${baseName}'?`,
+                ignoreFocusOut: true  // keeps it open even if focus shifts
+            }
         );
 
-        if (selection === '✓ Aceptar Cambios') {
-            const fullRange = new vscode.Range(
-                activeDoc.positionAt(0),
-                activeDoc.positionAt(activeText.length)
-            );
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(activeUri, fullRange, cleanCode);
-            await vscode.workspace.applyEdit(edit);
-            await activeDoc.save();
-            vscode.window.showInformationMessage(`✓ Cambios aplicados a '${baseName}'.`);
-
-            try {
-                await fetchWithTimeout(`${getConnectorUrl()}/write`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                    body: JSON.stringify({ path: activeDoc.uri.fsPath, content: cleanCode })
-                });
-            } catch {}
+        if (!action || action.value !== 'accept') {
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'actionResult', text: `✗ Diff rechazado — '${baseName}' sin cambios.` });
+            }
+            return;
         }
+
+        // Apply changes
+        const fullRange = new vscode.Range(
+            targetDoc.positionAt(0),
+            targetDoc.positionAt(targetText.length)
+        );
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(targetUri, fullRange, cleanCode);
+        await vscode.workspace.applyEdit(edit);
+        await targetDoc.save();
+
+        vscode.window.showInformationMessage(`✓ Cambios de Giskard aplicados a '${baseName}'.`);
+        if (this._view) {
+            this._view.webview.postMessage({
+                type: 'actionResult',
+                text: `✓ Cambios aplicados exitosamente a '${baseName}'.`
+            });
+        }
+
+        try {
+            await fetchWithTimeout(`${getConnectorUrl()}/write`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ path: targetDoc.uri.fsPath, content: cleanCode })
+            });
+        } catch {}
     }
 
     private async _handleCompressMemory(history: string) {
