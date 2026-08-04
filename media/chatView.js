@@ -127,6 +127,43 @@
         return htmlText;
     }
 
+    function extractFilePathFromCode(codeText, pre) {
+        if (!codeText) return null;
+        const lines = codeText.split('\n').slice(0, 4);
+        for (const line of lines) {
+            const match = line.match(/(?:\/\/|#|\/\*|<!--)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
+            if (match && match[1]) return match[1];
+        }
+        if (pre && pre.previousElementSibling) {
+            const text = pre.previousElementSibling.innerText || '';
+            const match = text.match(/([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
+            if (match && match[1]) return match[1];
+        }
+        return null;
+    }
+
+    function attachFileClickHandlers(container) {
+        if (!container) return;
+        const codeEls = container.querySelectorAll('code');
+        codeEls.forEach(el => {
+            if (el.parentNode && el.parentNode.tagName && el.parentNode.tagName.toLowerCase() === 'pre') return;
+            const text = el.innerText ? el.innerText.trim() : '';
+            // Match relative or absolute file paths like src/extension.ts, ./package.json, file.py, etc.
+            const isFilePath = /^(\.|\/|[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(ts|js|json|py|rs|md|html|css|tsx|jsx|c|cpp|h|go|yaml|yml|toml|sh)$/i.test(text);
+
+            if (isFilePath) {
+                el.classList.add('file-link');
+                el.title = `📄 Clic para abrir ${text} en VSCode`;
+                el.style.cssText = 'color: #38bdf8; cursor: pointer; text-decoration: underline; background: rgba(56, 189, 248, 0.12); padding: 2px 6px; border-radius: 4px; font-weight: bold; display: inline-flex; align-items: center; gap: 3px;';
+                el.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    vscode.postMessage({ type: 'openFile', relativePath: text });
+                };
+            }
+        });
+    }
+
     function attachCodeBlockActions(container) {
         if (!container) return;
         const pres = container.querySelectorAll('pre');
@@ -142,6 +179,8 @@
             }
             pre.style.display = 'block';
 
+            const detectedPath = extractFilePathFromCode(codeText, pre);
+
             // Create collapsible <details class="code-box" open>
             const details = document.createElement('details');
             details.className = 'code-box';
@@ -154,7 +193,7 @@
             const langLabel = document.createElement('span');
             langLabel.style.color = '#38bdf8';
             langLabel.style.fontWeight = 'bold';
-            langLabel.textContent = '▶ 💻 Código / Shell (Ocultar/Mostrar)';
+            langLabel.textContent = detectedPath ? `▶ 📄 ${detectedPath}` : '▶ 💻 Código / Shell';
 
             const btnGroup = document.createElement('div');
             btnGroup.style.display = 'flex';
@@ -186,12 +225,25 @@
             diffBtn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                vscode.postMessage({ type: 'openDiff', code: codeText });
+                vscode.postMessage({ type: 'openDiff', code: codeText, filePath: detectedPath });
             };
 
             btnGroup.appendChild(copyBtn);
             btnGroup.appendChild(runBtn);
             btnGroup.appendChild(diffBtn);
+
+            if (detectedPath) {
+                const openBtn = document.createElement('button');
+                openBtn.textContent = '📄 Abrir Archivo';
+                openBtn.style.cssText = 'background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+                openBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    vscode.postMessage({ type: 'openFile', relativePath: detectedPath });
+                };
+                btnGroup.appendChild(openBtn);
+            }
+
             summary.appendChild(langLabel);
             summary.appendChild(btnGroup);
 
@@ -207,6 +259,7 @@
             details.appendChild(pre);
         });
     }
+
 
     function renderCommandPolicyList(cmds) {
         if (!cmdPolicyList) return;
@@ -375,6 +428,7 @@
         }
 
         attachCodeBlockActions(div);
+        attachFileClickHandlers(div);
     }
 
     function updateTokenCounter() {

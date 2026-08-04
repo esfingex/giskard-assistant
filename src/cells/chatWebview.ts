@@ -81,7 +81,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     await this._handleCompressMemory(data.history);
                     break;
                 case 'openDiff':
-                    await this._handleOpenDiff(data.code);
+                    await this._handleOpenDiff(data.code, data.filePath);
                     break;
                 case 'executeShellCommand':
                     await this._handleExecuteShellCommand(data.command);
@@ -381,36 +381,73 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         terminal.sendText(cmdText);
     }
 
-    private async _handleOpenDiff(proposedCode: string) {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
+    private async _handleOpenDiff(proposedCode: string, targetFilePath?: string) {
+        let activeDoc: vscode.TextDocument | undefined;
+
+        // 1. Try resolving target file path if provided
+        if (targetFilePath && targetFilePath.trim()) {
+            const folders = vscode.workspace.workspaceFolders;
+            if (folders && folders.length > 0) {
+                try {
+                    const resolvedUri = vscode.Uri.joinPath(folders[0].uri, targetFilePath.trim());
+                    activeDoc = await vscode.workspace.openTextDocument(resolvedUri);
+                } catch {
+                    // Path not found, fallback to active editor
+                }
+            }
+        }
+
+        // 2. Fallback to current active editor
+        if (!activeDoc) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor) {
+                activeDoc = editor.document;
+            }
+        }
+
+        // 3. Fallback to any visible text editor in VS Code
+        if (!activeDoc) {
+            const visible = vscode.window.visibleTextEditors;
+            if (visible && visible.length > 0) {
+                activeDoc = visible[0].document;
+            }
+        }
+
+        // 4. If still no active document, open new untitled file with proposed code
+        if (!activeDoc) {
             const doc = await vscode.workspace.openTextDocument({ content: proposedCode, language: 'typescript' });
             await vscode.window.showTextDocument(doc);
             return;
         }
 
-        const activeDoc = editor.document;
         const activeUri = activeDoc.uri;
         const activeText = activeDoc.getText();
+        const baseName = activeDoc.fileName.split('/').pop() || activeDoc.fileName;
+
+        // Ensure active document is displayed in editor tab
+        await vscode.window.showTextDocument(activeDoc, { preview: false });
 
         const tempDoc = await vscode.workspace.openTextDocument({
             content: proposedCode,
             language: activeDoc.languageId
         });
 
+        // Open native VS Code side-by-side Diff view
         await vscode.commands.executeCommand(
             'vscode.diff',
             activeUri,
             tempDoc.uri,
-            `Giskard Proposed Changes: ${activeDoc.fileName}`
+            `Giskard Proposed Changes: ${baseName}`
         );
 
+        // Prompt user to Accept or Reject changes
         const selection = await vscode.window.showInformationMessage(
-            `¿Deseas aplicar esta propuesta de cambios a ${activeDoc.fileName}?`,
-            '✓ Accept', '✗ Reject'
+            `¿Deseas aplicar esta propuesta de cambios a ${baseName}?`,
+            '✓ Aceptar Cambios',
+            '✗ Rechazar'
         );
 
-        if (selection === '✓ Accept') {
+        if (selection === '✓ Aceptar Cambios') {
             const fullRange = new vscode.Range(
                 activeDoc.positionAt(0),
                 activeDoc.positionAt(activeText.length)
@@ -419,9 +456,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             edit.replace(activeUri, fullRange, proposedCode);
             await vscode.workspace.applyEdit(edit);
             await activeDoc.save();
-            vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${activeDoc.fileName}`);
+            vscode.window.showInformationMessage(`✓ Cambios aplicados exitosamente a ${baseName}`);
 
-            // Also persist file to backend sandbox
+            // Also persist file to backend sandbox if connected
             try {
                 await fetchWithTimeout(`${getConnectorUrl()}/write`, {
                     method: 'POST',
@@ -484,6 +521,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         contextType: string
     ) {
         if (!this._view) return;
+
+        // Auto-open file if prompt explicitly requests opening a file (e.g. "abre src/extension.ts", "open package.json")
+        const openCmdMatch = prompt.match(/(?:abre|open)(?:\s+(?:el\s+)?archivo|\s+file)?\s+([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
+        if (openCmdMatch) {
+            const targetPath = openCmdMatch[1];
+            await this._handleOpenFile(targetPath);
+        }
 
         let fullPrompt = prompt;
 
