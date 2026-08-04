@@ -666,10 +666,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         if (includeActiveFile) {
             const editor = vscode.window.activeTextEditor;
-            if (editor) {
+            if (editor && editor.document.uri.scheme === 'file') {
                 const docText = editor.document.getText();
                 const fileName = editor.document.fileName;
+                const relPath = vscode.workspace.asRelativePath(editor.document.uri);
                 fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${fullPrompt}`;
+                // Inject instruction so AI always labels code blocks with file path
+                fullPrompt += `\n\n[INSTRUCCION PARA LA IA]: Cuando propongas cambios de codigo, incluye SIEMPRE en la primera linea del bloque de codigo un comentario con la ruta relativa del archivo, por ejemplo: // ${relPath}`;
             }
         }
 
@@ -790,13 +793,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         extractedPath?: string,
         includeActiveFile?: boolean
     ) {
-        const hasEditIntent = /(?:modifica|edita|cambia|actualiza|agrega|escribe|create|update|edit|modify|add)/i.test(userPrompt);
+        // Broad intent detection covering Spanish and English edit/programming requests
+        const hasEditIntent = /(?:modifica|edita|cambia|actualiza|agrega|escribe|crea|programa|implementa|a\u00f1ade|mejora|arregla|corrija|refactoriza|create|update|edit|modify|add|fix|improve|refactor|implement|write|generate|make)/i.test(userPrompt);
         if (!hasEditIntent && !includeActiveFile) return;
 
         const codeBlocks = extractCodeBlocks(responseText);
         if (codeBlocks.length === 0) return;
 
-        const bestBlock = codeBlocks[0];
+        // Find the best block: prefer one with a file path hint, or use the largest block
+        let bestBlock = codeBlocks[0];
+        for (const block of codeBlocks) {
+            if (block.filePath) {
+                bestBlock = block;
+                break;
+            }
+            if (block.code.length > bestBlock.code.length) {
+                bestBlock = block;
+            }
+        }
+
         const targetPath = bestBlock.filePath || extractedPath;
         await this._handleOpenDiff(bestBlock.code, targetPath);
     }
