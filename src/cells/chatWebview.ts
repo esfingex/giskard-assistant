@@ -157,6 +157,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'testConnectionUrl':
                     await this._handleTestConnectionUrl(data.url);
                     break;
+                // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
+                case 'toolReadFile':
+                    await this._handleToolReadFile(data.path, data.id);
+                    break;
+                case 'toolWriteFile':
+                    await this._handleToolWriteFile(data.path, data.content, data.id);
+                    break;
+                case 'toolExec':
+                    await this._handleToolExec(data.command, data.args || [], data.id);
+                    break;
             }
         });
 
@@ -593,6 +603,75 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 body: JSON.stringify({ path: targetDoc.uri.fsPath, content: cleanCode })
             });
         } catch {}
+    }
+
+    // ── Tool Call Handlers ────────────────────────────────────────────────────
+
+    /** AI requested: read a workspace file and return its content to the webview */
+    private async _handleToolReadFile(relativePath: string, id: number) {
+        if (!this._view) return;
+        try {
+            const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+            if (!root) throw new Error('No hay workspace abierto.');
+
+            // Try exact path first, then findFiles fallback
+            let fileUri: vscode.Uri;
+            const exactUri = vscode.Uri.joinPath(root, relativePath);
+            try {
+                await vscode.workspace.fs.stat(exactUri);
+                fileUri = exactUri;
+            } catch {
+                const found = await vscode.workspace.findFiles(`**/${relativePath.split('/').pop()}`, '**/node_modules/**', 1);
+                if (!found || found.length === 0) throw new Error(`Archivo no encontrado: ${relativePath}`);
+                fileUri = found[0];
+            }
+
+            const bytes = await vscode.workspace.fs.readFile(fileUri);
+            const content = new TextDecoder().decode(bytes);
+            this._view.webview.postMessage({
+                type: 'toolReadFileResult',
+                id,
+                path: relativePath,
+                content
+            });
+        } catch (err: any) {
+            this._view.webview.postMessage({
+                type: 'toolReadFileResult',
+                id,
+                path: relativePath,
+                error: err.message
+            });
+        }
+    }
+
+    /** AI requested: write/modify a file — routes to the diff flow for user approval */
+    private async _handleToolWriteFile(relativePath: string, content: string, id: number) {
+        if (!this._view) return;
+        try {
+            if (!content || !content.trim()) throw new Error('Contenido vacío recibido de la IA.');
+            // Route through diff view so user can Accept / Reject
+            await this._handleOpenDiff(content, relativePath);
+            this._view.webview.postMessage({ type: 'toolWriteFileResult', id, path: relativePath, diffOpened: true });
+        } catch (err: any) {
+            this._view.webview.postMessage({ type: 'toolWriteFileResult', id, path: relativePath, error: err.message });
+        }
+    }
+
+    /** AI requested: execute a whitelisted shell command via giskard-sys /exec */
+    private async _handleToolExec(command: string, args: string[], id: number) {
+        if (!this._view) return;
+        try {
+            const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command, args })
+            });
+            const data: any = await res.json();
+            if (!data.success) throw new Error(data.error || 'Error ejecutando comando');
+            this._view.webview.postMessage({ type: 'toolExecResult', id, output: data.data });
+        } catch (err: any) {
+            this._view.webview.postMessage({ type: 'toolExecResult', id, error: err.message });
+        }
     }
 
     private async _handleCompressMemory(history: string) {

@@ -43,6 +43,61 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    // ─── Tool Call Interceptor ──────────────────────────────────────────────────
+    // The AI emits [TOOL_CALL]{...}[/END_TOOL] blocks.
+    // We parse them after stream ends, strip them from display, route to host.
+
+    let _lastUserPrompt = '';   // saved to allow re-injection after file reads
+    let _toolCallDepth = 0;     // anti-loop: limit re-injection to 1 level
+
+    function parseToolCalls(text) {
+        const toolCalls = [];
+        const regex = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/g;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            try {
+                const call = JSON.parse(match[1].trim());
+                toolCalls.push(call);
+            } catch (e) {
+                console.warn('[Giskard] Error parseando JSON de tool call:', e, match[1]);
+            }
+        }
+        const cleanText = text.replace(/\[TOOL_CALL\]\s*[\s\S]*?\s*\[\/END_TOOL\]/g, '').trim();
+        return { cleanText, toolCalls };
+    }
+
+    function appendSystemMessage(html, icon) {
+        if (!messagesDiv) return;
+        const div = document.createElement('div');
+        div.className = 'msg bot system-tool-msg';
+        div.style.cssText = 'opacity:0.85;border-left:3px solid #38bdf8;padding-left:8px;font-size:10px;';
+        div.innerHTML = '<span style="color:#38bdf8;font-weight:bold;">' + (icon || '🔧') + ' Sistema</span><br>' + html;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function dispatchToolCalls(toolCalls) {
+        for (const call of toolCalls) {
+            switch (call.action) {
+                case 'read_file':
+                    appendSystemMessage('📖 Leyendo <code>' + escapeHtml(call.path) + '</code>...', '📂');
+                    vscode.postMessage({ type: 'toolReadFile', path: call.path, id: Date.now() });
+                    break;
+                case 'write_file':
+                    appendSystemMessage('✏️ Preparando diff para <code>' + escapeHtml(call.path) + '</code>...', '📝');
+                    vscode.postMessage({ type: 'toolWriteFile', path: call.path, content: call.content, id: Date.now() });
+                    break;
+                case 'exec':
+                    var cmdStr = call.command + ' ' + (call.args || []).join(' ');
+                    appendSystemMessage('⚡ Ejecutando: <code>' + escapeHtml(cmdStr) + '</code>', '💻');
+                    vscode.postMessage({ type: 'toolExec', command: call.command, args: call.args || [], id: Date.now() });
+                    break;
+                default:
+                    appendSystemMessage('⚠️ Acción desconocida: <code>' + escapeHtml(call.action) + '</code>', '⚠️');
+            }
+        }
+    }
+
     function applyTheme(theme) {
         const root = document.documentElement;
         if (theme === 'cyan_accent') {
@@ -741,6 +796,10 @@
         const prompt = promptInput.value.trim();
         if (!prompt) return;
 
+        // Track for tool-call re-injection flow
+        _lastUserPrompt = prompt;
+        _toolCallDepth = 0;
+
         const uMsg = document.createElement('div');
         uMsg.className = 'msg user';
         uMsg.textContent = prompt;
@@ -814,15 +873,29 @@
                 }
                 updateTokenCounter();
                 break;
-            case 'streamComplete':
+            case 'streamComplete': {
+                var rawFull = currentBotRawText;
+                var parsed = parseToolCalls(rawFull);
+                var hadTools = parsed.toolCalls.length > 0;
+                var displayText = hadTools ? parsed.cleanText : rawFull;
+
+                // Re-render without [TOOL_CALL] blocks
                 if (currentBotMsgDiv) {
-                    updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel, false);
+                    updateBotMessageDisplay(currentBotMsgDiv, displayText, message.model || currentActiveModel, false);
                 }
+
                 currentBotMsgDiv = null;
                 currentBotRawText = '';
                 updateTokenCounter();
                 setGenerationState(false);
+
+                // Dispatch any tool calls after UI settles
+                if (hadTools) {
+                    setTimeout(function() { dispatchToolCalls(parsed.toolCalls); }, 80);
+                }
                 break;
+            }
+
             case 'memoryCompressed':
                 if (messagesDiv) {
                     const bDiv = document.createElement('div');
@@ -914,6 +987,49 @@
             case 'stateRefreshed':
                 if (message.url && connUrlInp) connUrlInp.value = message.url;
                 break;
+
+            // ─── Tool Call Results ────────────────────────────────────────────
+            case 'toolReadFileResult':
+                if (message.error) {
+                    appendSystemMessage('❌ Error leyendo <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                } else {
+                    appendSystemMessage(
+                        '✅ Archivo leído: <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
+                        '📂'
+                    );
+                    // Re-inject file content into AI (max 1 level to avoid loops)
+                    if (_toolCallDepth < 1 && _lastUserPrompt) {
+                        _toolCallDepth++;
+                        var followUp = 'El contenido del archivo `' + message.path + '` es:\n```\n' + message.content + '\n```\n\nAhora responde basándote en este contenido: ' + _lastUserPrompt;
+                        if (promptInput) {
+                            promptInput.value = followUp;
+                            setTimeout(function() { send(); }, 300);
+                        }
+                    }
+                }
+                break;
+
+            case 'toolWriteFileResult':
+                if (message.error) {
+                    appendSystemMessage('❌ Error aplicando diff a <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                } else if (message.diffOpened) {
+                    appendSystemMessage('📝 Diff abierto para <code>' + escapeHtml(message.path) + '</code> — Acepta o rechaza los cambios.', '📝');
+                } else if (message.success) {
+                    appendSystemMessage('✅ Cambios aplicados a <code>' + escapeHtml(message.path) + '</code>.', '✅');
+                }
+                break;
+
+            case 'toolExecResult':
+                if (message.error) {
+                    appendSystemMessage('❌ Error ejecutando: ' + escapeHtml(message.error), '❌');
+                } else {
+                    appendSystemMessage(
+                        '💻 Salida:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' + escapeHtml(message.output || '(sin salida)') + '</pre>',
+                        '💻'
+                    );
+                }
+                break;
+
 
             case 'streamError':
             case 'settingsError':
