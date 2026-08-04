@@ -470,62 +470,56 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         let targetDoc: vscode.TextDocument | undefined;
 
-        // 1. Explicit file path hint (from code comment or prompt)
+        // 1. Explicit file path hint — resolve and open it
         if (targetFilePath) {
             targetDoc = (await this._resolveWorkspaceFile(targetFilePath)) || undefined;
         }
 
-        // 2. Active text editor — but SKIP if it's the webview panel or untitled
+        // 2. If STILL no target — always show the workspace file picker
+        //    (do NOT rely on activeTextEditor: webview is always "active")
         if (!targetDoc) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document && !editor.document.isUntitled &&
-                editor.document.uri.scheme === 'file') {
-                targetDoc = editor.document;
-            }
-        }
-
-        // 3. Any visible real file editor tab (skip untitled/webview)
-        if (!targetDoc) {
-            const visible = vscode.window.visibleTextEditors.filter(
+            // Gather real open editors (scheme === 'file', not untitled/webview)
+            const realEditors = vscode.window.visibleTextEditors.filter(
                 e => e.document && !e.document.isUntitled && e.document.uri.scheme === 'file'
             );
-            if (visible.length > 0) {
-                targetDoc = visible[0].document;
-            }
-        }
 
-        // 4. Open documents list — real files only
-        if (!targetDoc) {
-            const openDocs = vscode.workspace.textDocuments.filter(
-                d => !d.isUntitled && d.uri.scheme === 'file'
-            );
-            if (openDocs.length === 0) {
-                // No file open — prompt user to pick a file from workspace
-                const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 100);
-                if (!files || files.length === 0) {
-                    vscode.window.showWarningMessage('Giskard: No hay archivos abiertos en el workspace para aplicar el diff.');
+            if (realEditors.length === 1) {
+                // Only one real file open — use it directly
+                targetDoc = realEditors[0].document;
+            } else {
+                // Show QuickPick — workspace files first, then recently opened
+                const workspaceFiles = await vscode.workspace.findFiles(
+                    '**/*.{ts,js,py,rs,go,java,cpp,c,h,cs,rb,php,md,json,toml,yaml,yml,sh,html,css}',
+                    '**/node_modules/**',
+                    200
+                );
+
+                // Put currently visible files at the top
+                const visiblePaths = new Set(realEditors.map(e => e.document.uri.fsPath));
+                const sorted = [
+                    ...workspaceFiles.filter(f => visiblePaths.has(f.fsPath)),
+                    ...workspaceFiles.filter(f => !visiblePaths.has(f.fsPath))
+                ];
+
+                if (sorted.length === 0) {
+                    vscode.window.showWarningMessage('Giskard: No hay archivos en el workspace. Abre un archivo primero.');
                     return;
                 }
+
                 const picked = await vscode.window.showQuickPick(
-                    files.map(f => ({ label: vscode.workspace.asRelativePath(f), uri: f })),
-                    { placeHolder: 'Selecciona el archivo al que aplicar los cambios propuestos' }
+                    sorted.map(f => ({
+                        label: vscode.workspace.asRelativePath(f),
+                        description: visiblePaths.has(f.fsPath) ? '$(eye) Abierto' : '',
+                        uri: f
+                    })),
+                    {
+                        placeHolder: '📝 Selecciona el archivo al que aplicar los cambios de la IA',
+                        ignoreFocusOut: true,
+                        matchOnDescription: true
+                    }
                 );
                 if (!picked) return;
                 targetDoc = await vscode.workspace.openTextDocument(picked.uri);
-            } else if (openDocs.length === 1) {
-                targetDoc = openDocs[0];
-            } else {
-                // Multiple files open — ask user to pick
-                const picked = await vscode.window.showQuickPick(
-                    openDocs.map(d => ({
-                        label: vscode.workspace.asRelativePath(d.uri),
-                        uri: d.uri,
-                        doc: d
-                    })),
-                    { placeHolder: 'Selecciona el archivo al que aplicar los cambios propuestos' }
-                );
-                if (!picked) return;
-                targetDoc = picked.doc;
             }
         }
 

@@ -222,6 +222,10 @@
     function attachCodeBlockActions(container) {
         if (!container) return;
         const pres = container.querySelectorAll('pre');
+        let codeBlockCount = 0;
+        let lastCodeText = '';
+        let lastDetectedPath = null;
+
         pres.forEach(pre => {
             if (pre.parentNode && pre.parentNode.classList && pre.parentNode.classList.contains('code-box')) return;
 
@@ -235,6 +239,14 @@
             pre.style.display = 'block';
 
             const detectedPath = extractFilePathFromCode(codeText, pre);
+            const lineCount = codeText.trim().split('\n').length;
+
+            // Track for the post-message apply button
+            if (lineCount >= 3) {
+                codeBlockCount++;
+                lastCodeText = codeText;
+                lastDetectedPath = detectedPath;
+            }
 
             // Create collapsible <details class="code-box" open>
             const details = document.createElement('details');
@@ -253,34 +265,57 @@
             const btnGroup = document.createElement('div');
             btnGroup.style.display = 'flex';
             btnGroup.style.gap = '6px';
+            btnGroup.style.alignItems = 'center';
 
             const copyBtn = document.createElement('button');
-            copyBtn.textContent = '📋 Copiar';
-            copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;';
+            copyBtn.textContent = '📋';
+            copyBtn.title = 'Copiar código';
+            copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
             copyBtn.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 navigator.clipboard.writeText(codeText);
-                copyBtn.textContent = '✓ Copiado';
-                setTimeout(() => { copyBtn.textContent = '📋 Copiar'; }, 2000);
+                copyBtn.textContent = '✓';
+                setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
             };
 
             const runBtn = document.createElement('button');
-            runBtn.textContent = '⚡ Ejecutar en Shell';
-            runBtn.style.cssText = 'background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+            runBtn.textContent = '⚡ Shell';
+            runBtn.title = 'Ejecutar en terminal';
+            runBtn.style.cssText = 'background: rgba(56,189,248,0.2); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
             runBtn.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
             };
 
+            // ── DIFF BUTTON (prominent green) ──────────────────────────────
             const diffBtn = document.createElement('button');
-            diffBtn.textContent = '📝 Ver Diff en VSCode';
-            diffBtn.style.cssText = 'background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+            diffBtn.textContent = '📝 Aplicar Diff';
+            diffBtn.title = detectedPath ? `Abrir diff y aplicar a ${detectedPath}` : 'Seleccionar archivo y aplicar diff';
+            diffBtn.style.cssText = 'background: #16a34a; color: #fff; border: none; padding: 3px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold; box-shadow: 0 0 6px rgba(22,163,74,0.5);';
             diffBtn.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                vscode.postMessage({ type: 'openDiff', code: codeText, filePath: detectedPath });
+                e.preventDefault(); e.stopPropagation();
+                if (detectedPath) {
+                    vscode.postMessage({ type: 'openDiff', code: codeText, filePath: detectedPath });
+                } else {
+                    // Inline file path picker
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.placeholder = 'ruta/al/archivo.ts';
+                    inp.style.cssText = 'font-size:9px;padding:2px 4px;border-radius:3px;border:1px solid #16a34a;background:#0f172a;color:#f8fafc;width:140px;';
+                    const okBtn = document.createElement('button');
+                    okBtn.textContent = '→';
+                    okBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;padding:2px 5px;border-radius:3px;font-size:9px;cursor:pointer;margin-left:3px;';
+                    okBtn.onclick = (ev) => {
+                        ev.stopPropagation();
+                        const p = inp.value.trim();
+                        vscode.postMessage({ type: 'openDiff', code: codeText, filePath: p || undefined });
+                        inp.remove(); okBtn.remove();
+                    };
+                    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') okBtn.click(); });
+                    btnGroup.appendChild(inp);
+                    btnGroup.appendChild(okBtn);
+                    inp.focus();
+                }
             };
 
             btnGroup.appendChild(copyBtn);
@@ -289,11 +324,11 @@
 
             if (detectedPath) {
                 const openBtn = document.createElement('button');
-                openBtn.textContent = '📄 Abrir Archivo';
-                openBtn.style.cssText = 'background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+                openBtn.textContent = '📄';
+                openBtn.title = `Abrir ${detectedPath}`;
+                openBtn.style.cssText = 'background: transparent; border: 1px solid #38bdf8; color: #38bdf8; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
                 openBtn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    e.preventDefault(); e.stopPropagation();
                     vscode.postMessage({ type: 'openFile', relativePath: detectedPath });
                 };
                 btnGroup.appendChild(openBtn);
@@ -313,7 +348,29 @@
             details.appendChild(summary);
             details.appendChild(pre);
         });
+
+        // ── Post-message "Aplicar cambios" bar (if message has code blocks) ──
+        if (codeBlockCount > 0) {
+            const applyBar = document.createElement('div');
+            applyBar.style.cssText = 'margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
+
+            const applyBtn = document.createElement('button');
+            applyBtn.textContent = '🚀 Aplicar último bloque de código';
+            applyBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:bold;box-shadow:0 0 8px rgba(22,163,74,0.6);flex-shrink:0;';
+            applyBtn.onclick = () => {
+                vscode.postMessage({ type: 'openDiff', code: lastCodeText, filePath: lastDetectedPath || undefined });
+            };
+
+            const hint = document.createElement('span');
+            hint.style.cssText = 'opacity:0.5;font-size:9px;';
+            hint.textContent = lastDetectedPath ? `→ ${lastDetectedPath}` : '(selecciona archivo en el picker)';
+
+            applyBar.appendChild(applyBtn);
+            applyBar.appendChild(hint);
+            container.appendChild(applyBar);
+        }
     }
+
 
 
     function renderCommandPolicyList(cmds) {
