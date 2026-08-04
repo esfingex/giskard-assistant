@@ -33,6 +33,44 @@ interface CodeContextBlock {
     lang: string;
 }
 
+/** Strip markdown code fences (```lang\n...\n```) from a code string, returning just the code. */
+function cleanCodeFence(code: string): string {
+    if (!code) return '';
+    let clean = code.trim();
+    const match = clean.match(/^```[a-zA-Z0-9_\-\+\.#]*\n([\s\S]*?)\n?```$/);
+    if (match && match[1]) {
+        return match[1].trim();
+    }
+    if (clean.startsWith('```')) {
+        const firstNL = clean.indexOf('\n');
+        if (firstNL !== -1) clean = clean.substring(firstNL + 1);
+    }
+    if (clean.endsWith('```')) {
+        clean = clean.substring(0, clean.length - 3);
+    }
+    return clean.trim();
+}
+
+/** Extract all ```lang\ncode``` blocks from a markdown string, detecting optional file path hints. */
+function extractCodeBlocks(text: string): { lang: string; code: string; filePath?: string }[] {
+    const blocks: { lang: string; code: string; filePath?: string }[] = [];
+    const regex = /```([a-zA-Z0-9_\-\+\.#]*)\n([\s\S]*?)```/g;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+        const lang = m[1] || '';
+        const raw = m[2] || '';
+        if (!raw.trim()) continue;
+        const firstLines = raw.trim().split('\n').slice(0, 3);
+        let filePath: string | undefined;
+        for (const line of firstLines) {
+            const pm = line.match(/(?:\/\/|#|\/\*|<!--|\/\/ file:|\/\/ filepath:)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
+            if (pm && pm[1]) { filePath = pm[1]; break; }
+        }
+        blocks.push({ lang, code: cleanCodeFence(raw), filePath });
+    }
+    return blocks;
+}
+
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
@@ -415,6 +453,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleOpenDiff(proposedCode: string, targetFilePath?: string) {
+        const cleanCode = cleanCodeFence(proposedCode);
+        if (!cleanCode) return;
+
         let activeDoc: vscode.TextDocument | undefined;
 
         // 1. Resolve explicit target file if provided
@@ -448,7 +489,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // 5. If still no file in workspace, open untitled file with proposed code
         if (!activeDoc) {
-            const doc = await vscode.workspace.openTextDocument({ content: proposedCode, language: 'typescript' });
+            const doc = await vscode.workspace.openTextDocument({ content: cleanCode, language: 'typescript' });
             await vscode.window.showTextDocument(doc);
             return;
         }
@@ -462,7 +503,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Create in-memory document with proposed code
         const tempDoc = await vscode.workspace.openTextDocument({
-            content: proposedCode,
+            content: cleanCode,
             language: activeDoc.languageId
         });
 
@@ -487,7 +528,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 activeDoc.positionAt(activeText.length)
             );
             const edit = new vscode.WorkspaceEdit();
-            edit.replace(activeUri, fullRange, proposedCode);
+            edit.replace(activeUri, fullRange, cleanCode);
             await vscode.workspace.applyEdit(edit);
             await activeDoc.save();
             vscode.window.showInformationMessage(`✓ Cambios aplicados a '${baseName}'.`);
@@ -496,7 +537,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 await fetchWithTimeout(`${getConnectorUrl()}/write`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                    body: JSON.stringify({ path: activeDoc.uri.fsPath, content: proposedCode })
+                    body: JSON.stringify({ path: activeDoc.uri.fsPath, content: cleanCode })
                 });
             } catch {}
         }
@@ -557,9 +598,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Auto-open file if prompt explicitly requests opening or modifying a file
         const fileMatch = prompt.match(/(?:abre|open|edita|modifica)\s+(?:el\s+archivo\s+|file\s+)?([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
-        if (fileMatch && fileMatch[1]) {
-            const targetPath = fileMatch[1];
-            await this._handleOpenFile(targetPath);
+        const targetPathMatch: string | undefined = (fileMatch && fileMatch[1]) ? fileMatch[1] : undefined;
+        if (targetPathMatch) {
+            await this._handleOpenFile(targetPathMatch);
         }
 
         let fullPrompt = prompt;
@@ -594,6 +635,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 const text = resData.success ? resData.data : `Error CLI: ${resData.error}`;
                 this._view.webview.postMessage({ type: 'streamToken', token: text, model });
                 this._view.webview.postMessage({ type: 'streamComplete' });
+                await this._maybeAutoTriggerDiff(prompt, text, targetPathMatch, includeActiveFile);
             } catch (err: any) {
                 this._view.webview.postMessage({ type: 'streamError', error: err.message });
             }
@@ -613,11 +655,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!isOnline) {
             // Offline fallback: direct Ollama
             this._view.webview.postMessage({ type: 'offlineMode', active: true });
-            await this._streamFromOllamaFallback(fullPrompt, model);
+            await this._streamFromOllamaFallback(fullPrompt, model, prompt, targetPathMatch, includeActiveFile);
             return;
         }
 
         this._view.webview.postMessage({ type: 'offlineMode', active: false });
+
+        let accumulatedResponse = '';
 
         try {
             const url = `${connectorUrl}/llm/stream`;
@@ -667,13 +711,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                             : line.substring(5);
                         if (dataToken === '[DONE]' || dataToken.trim() === '[DONE]') {
                             this._view.webview.postMessage({ type: 'streamComplete' });
+                            await this._maybeAutoTriggerDiff(prompt, accumulatedResponse, targetPathMatch, includeActiveFile);
                             return;
                         }
+                        accumulatedResponse += dataToken;
                         this._view.webview.postMessage({ type: 'streamToken', token: dataToken, model });
                     }
                 }
             }
             this._view.webview.postMessage({ type: 'streamComplete' });
+            await this._maybeAutoTriggerDiff(prompt, accumulatedResponse, targetPathMatch, includeActiveFile);
         } catch (err: any) {
             if (err.name !== 'AbortError') {
                 this._view.webview.postMessage({
@@ -686,9 +733,34 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    /** Auto-trigger diff view if prompt has edit intent and response contains code blocks */
+    private async _maybeAutoTriggerDiff(
+        userPrompt: string,
+        responseText: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean
+    ) {
+        const hasEditIntent = /(?:modifica|edita|cambia|actualiza|agrega|escribe|create|update|edit|modify|add)/i.test(userPrompt);
+        if (!hasEditIntent && !includeActiveFile) return;
+
+        const codeBlocks = extractCodeBlocks(responseText);
+        if (codeBlocks.length === 0) return;
+
+        const bestBlock = codeBlocks[0];
+        const targetPath = bestBlock.filePath || extractedPath;
+        await this._handleOpenDiff(bestBlock.code, targetPath);
+    }
+
     /** Offline fallback: stream directly from local Ollama */
-    private async _streamFromOllamaFallback(prompt: string, model: string) {
+    private async _streamFromOllamaFallback(
+        prompt: string,
+        model: string,
+        userPrompt?: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean
+    ) {
         if (!this._view) return;
+        let ollamaAccumulated = '';
         try {
             const res = await fetch('http://localhost:11434/api/generate', {
                 method: 'POST',
@@ -715,15 +787,22 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 try {
                     const json = JSON.parse(chunk);
                     if (json.response) {
+                        ollamaAccumulated += json.response;
                         this._view.webview.postMessage({ type: 'streamToken', token: json.response, model });
                     }
                     if (json.done) {
                         this._view.webview.postMessage({ type: 'streamComplete' });
+                        if (userPrompt !== undefined) {
+                            await this._maybeAutoTriggerDiff(userPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
+                        }
                         return;
                     }
                 } catch { /* Partial chunk, continue */ }
             }
             this._view.webview.postMessage({ type: 'streamComplete' });
+            if (userPrompt !== undefined) {
+                await this._maybeAutoTriggerDiff(userPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
+            }
         } catch (err: any) {
             if (err.name !== 'AbortError') {
                 this._view.webview.postMessage({
