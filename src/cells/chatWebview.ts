@@ -74,6 +74,8 @@ function extractCodeBlocks(text: string): { lang: string; code: string; filePath
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
+    /** Stores the full text of the last AI response for conversational apply flow */
+    private _lastBotResponse: string = '';
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -653,6 +655,28 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await this._handleOpenFile(targetPathMatch);
         }
 
+        // ── Conversational "apply last response" intent ─────────────────────────
+        // If user says "hazla", "aplícala", "sí", "do it", etc. AND last bot
+        // response had code blocks → skip AI call, open diff immediately.
+        const APPLY_LAST_REGEX = /^\s*(?:hazla|hazlo|ap[lí]ca(?:la|lo|r)?|s[ií]|yes|do it|ejecuta(?:lo|la)?|a[pú]ntalo|aplica|perfecto!?|ok!?|dale!?|listo!?|excelente!?|procede|proceed|apply(?:\s+it)?|use(?:\s+it)?|use\s+that|implement(?:\s+it)?)\s*$/i;
+        if (APPLY_LAST_REGEX.test(prompt.trim()) && this._lastBotResponse.trim()) {
+            const blocks = extractCodeBlocks(this._lastBotResponse);
+            if (blocks.length > 0) {
+                if (this._view) {
+                    this._view.webview.postMessage({ type: 'streamToken', token: '📦 Abriendo diff propuesto...', model });
+                    this._view.webview.postMessage({ type: 'streamComplete' });
+                }
+                let best = blocks[0];
+                for (const b of blocks) {
+                    if (b.filePath) { best = b; break; }
+                    if (b.code.length > best.code.length) best = b;
+                }
+                await this._handleOpenDiff(best.code, best.filePath || targetPathMatch);
+                return;
+            }
+        }
+
+
         let fullPrompt = prompt;
 
         // Passive workspace context injection (no auto-mount)
@@ -764,6 +788,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                             : line.substring(5);
                         if (dataToken === '[DONE]' || dataToken.trim() === '[DONE]') {
                             this._view.webview.postMessage({ type: 'streamComplete' });
+                            this._lastBotResponse = accumulatedResponse;
                             await this._maybeAutoTriggerDiff(prompt, accumulatedResponse, targetPathMatch, includeActiveFile);
                             return;
                         }
@@ -773,6 +798,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 }
             }
             this._view.webview.postMessage({ type: 'streamComplete' });
+            this._lastBotResponse = accumulatedResponse;
             await this._maybeAutoTriggerDiff(prompt, accumulatedResponse, targetPathMatch, includeActiveFile);
         } catch (err: any) {
             if (err.name !== 'AbortError') {
