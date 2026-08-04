@@ -2,13 +2,11 @@
  * Giskard Assistant VSCode Extension — Core: Connection Store
  * Copyright (C) 2025  Giskard Project — GPL-3.0
  *
- * Manages persistent connection profiles in SQLite (via sql.js WASM).
- * API keys are stored in vscode.SecretStorage (OS keychain), never in SQLite.
+ * Manages persistent connection profiles using VS Code's built-in globalState
+ * (backed by VS Code's internal SQLite database) and SecretStorage (OS Keychain).
  */
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export interface Connection {
     id: number;
@@ -21,82 +19,41 @@ export interface Connection {
     createdAt: string;
 }
 
-export class ConnectionStore {
-    private db: any = null;
-    private SQL: any = null;
-    private readonly dbPath: string;
+const STORAGE_KEY = 'giskard_connections_v1';
 
-    constructor(private readonly context: vscode.ExtensionContext) {
-        // Use VS Code's globalStorageUri for cross-platform safe path
-        this.dbPath = path.join(context.globalStorageUri.fsPath, 'connections.db');
-    }
+export class ConnectionStore {
+    constructor(private readonly context: vscode.ExtensionContext) {}
 
     async init(): Promise<void> {
-        // Ensure storage directory exists
-        const dir = path.dirname(this.dbPath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+        // Check if there are saved connections. If empty, seed default local backend.
+        const connections = this._getRawList();
+        if (connections.length === 0) {
+            const defaultConn: Connection = {
+                id: 1,
+                name: 'Backend Local (Default)',
+                type: 'local',
+                url: 'http://localhost:3500',
+                tag: 'giskard-sys',
+                secretRef: null,
+                isActive: true,
+                createdAt: new Date().toISOString()
+            };
+            await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
         }
-
-        // Init sql.js — point WASM at extension's node_modules
-        const initSqlJs = require('sql.js');
-        this.SQL = await initSqlJs({
-            locateFile: (filename: string) =>
-                path.join(this.context.extensionPath, 'node_modules', 'sql.js', 'dist', filename)
-        });
-
-        // Load existing DB or create fresh
-        if (fs.existsSync(this.dbPath)) {
-            const fileBuffer = fs.readFileSync(this.dbPath);
-            this.db = new this.SQL.Database(fileBuffer);
-        } else {
-            this.db = new this.SQL.Database();
-        }
-
-        this.db.run(`
-            CREATE TABLE IF NOT EXISTS connections (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                name       TEXT NOT NULL,
-                type       TEXT NOT NULL CHECK(type IN ('local','remote')),
-                url        TEXT NOT NULL,
-                tag        TEXT NOT NULL,
-                secret_ref TEXT,
-                is_active  INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        `);
-        this._persist();
     }
 
-    /** Flush in-memory DB to disk */
-    private _persist(): void {
-        if (!this.db) return;
-        const data = this.db.export();
-        fs.writeFileSync(this.dbPath, Buffer.from(data));
+    private _getRawList(): Connection[] {
+        return this.context.globalState.get<Connection[]>(STORAGE_KEY, []);
+    }
+
+    private async _saveRawList(connections: Connection[]): Promise<void> {
+        await this.context.globalState.update(STORAGE_KEY, connections);
     }
 
     /** Return all saved connections, active first */
     getAll(): Connection[] {
-        if (!this.db) return [];
-        const stmt = this.db.prepare(
-            'SELECT * FROM connections ORDER BY is_active DESC, id ASC'
-        );
-        const rows: Connection[] = [];
-        while (stmt.step()) {
-            const r = stmt.getAsObject();
-            rows.push({
-                id: r.id as number,
-                name: r.name as string,
-                type: r.type as 'local' | 'remote',
-                url: r.url as string,
-                tag: r.tag as string,
-                secretRef: (r.secret_ref as string) || null,
-                isActive: (r.is_active as number) === 1,
-                createdAt: r.created_at as string,
-            });
-        }
-        stmt.free();
-        return rows;
+        const list = this._getRawList();
+        return list.slice().sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
     }
 
     /** Add a new connection profile */
@@ -107,71 +64,79 @@ export class ConnectionStore {
         tag: string,
         apiKey?: string
     ): Promise<number> {
-        if (!this.db) throw new Error('ConnectionStore not initialized');
-
         let secretRef: string | null = null;
         if (type === 'remote' && apiKey && apiKey.trim()) {
             secretRef = `conn_${Date.now()}_token`;
             await this.context.secrets.store(secretRef, apiKey.trim());
         }
 
-        this.db.run(
-            'INSERT INTO connections (name, type, url, tag, secret_ref) VALUES (?, ?, ?, ?, ?)',
-            [name, type.trim(), url.trim(), tag.trim(), secretRef]
-        );
-        this._persist();
+        const list = this._getRawList();
+        const newId = Date.now();
+        const isFirst = list.length === 0;
 
-        const result = this.db.exec('SELECT last_insert_rowid() AS id');
-        return result[0].values[0][0] as number;
+        const newConn: Connection = {
+            id: newId,
+            name: name.trim(),
+            type,
+            url: url.trim().replace(/\/$/, ''),
+            tag: tag.trim(),
+            secretRef,
+            isActive: isFirst, // Automatically activate if it's the first connection
+            createdAt: new Date().toISOString()
+        };
+
+        list.push(newConn);
+        await this._saveRawList(list);
+        return newId;
     }
 
     /** Remove a connection profile and its stored secret */
     async removeConnection(id: number): Promise<void> {
-        if (!this.db) return;
-        const stmt = this.db.prepare('SELECT secret_ref FROM connections WHERE id = ?');
-        stmt.bind([id]);
-        if (stmt.step()) {
-            const r = stmt.getAsObject();
-            if (r.secret_ref) {
-                await this.context.secrets.delete(r.secret_ref as string);
-            }
-        }
-        stmt.free();
+        let list = this._getRawList();
+        const target = list.find(c => c.id === id);
+        if (!target) return;
 
-        this.db.run('DELETE FROM connections WHERE id = ?', [id]);
-        this._persist();
+        if (target.secretRef) {
+            try {
+                await this.context.secrets.delete(target.secretRef);
+            } catch {}
+        }
+
+        const wasActive = target.isActive;
+        list = list.filter(c => c.id !== id);
+
+        // If removed connection was active, activate the first remaining connection
+        if (wasActive && list.length > 0) {
+            list[0].isActive = true;
+        }
+
+        await this._saveRawList(list);
     }
 
     /** Mark a connection as active (only one active at a time) */
-    setActive(id: number): void {
-        if (!this.db) return;
-        this.db.run('UPDATE connections SET is_active = 0');
-        this.db.run('UPDATE connections SET is_active = 1 WHERE id = ?', [id]);
-        this._persist();
+    async setActive(id: number): Promise<void> {
+        const list = this._getRawList();
+        let updated = false;
+        for (const c of list) {
+            if (c.id === id) {
+                c.isActive = true;
+                updated = true;
+            } else {
+                c.isActive = false;
+            }
+        }
+        if (updated) {
+            await this._saveRawList(list);
+        }
     }
 
     /** Get the currently active connection, or null */
     getActive(): Connection | null {
-        if (!this.db) return null;
-        const stmt = this.db.prepare(
-            'SELECT * FROM connections WHERE is_active = 1 LIMIT 1'
-        );
-        let result: Connection | null = null;
-        if (stmt.step()) {
-            const r = stmt.getAsObject();
-            result = {
-                id: r.id as number,
-                name: r.name as string,
-                type: r.type as 'local' | 'remote',
-                url: r.url as string,
-                tag: r.tag as string,
-                secretRef: (r.secret_ref as string) || null,
-                isActive: true,
-                createdAt: r.created_at as string,
-            };
-        }
-        stmt.free();
-        return result;
+        const list = this._getRawList();
+        const active = list.find(c => c.isActive);
+        if (active) return active;
+        if (list.length > 0) return list[0];
+        return null;
     }
 
     /** Retrieve the API token for the active connection, if any */
@@ -182,9 +147,6 @@ export class ConnectionStore {
     }
 
     dispose(): void {
-        if (this.db) {
-            this.db.close();
-            this.db = null;
-        }
+        // No teardown needed for globalState
     }
 }

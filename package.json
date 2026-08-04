@@ -107,11 +107,7 @@
   },
   "devDependencies": {
     "@types/node": "^18.0.0",
-    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.80.0",
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "sql.js": "^1.14.1"
   }
 }
