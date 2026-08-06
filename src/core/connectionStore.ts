@@ -129,6 +129,16 @@ export class ConnectionStore {
         return newId;
     }
 
+    /** Retrieve stored API key secret for a connection */
+    async getApiKey(id: number): Promise<string | undefined> {
+        const list = this._getRawList();
+        const conn = list.find(c => c.id === id);
+        if (conn && conn.secretRef) {
+            return await this.context.secrets.get(conn.secretRef);
+        }
+        return undefined;
+    }
+
     /** Remove a connection profile and its stored secret */
     async removeConnection(id: number): Promise<void> {
         let list = this._getRawList();

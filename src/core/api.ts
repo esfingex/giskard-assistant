@@ -1,16 +1,6 @@
 /**
  * Giskard Assistant VSCode Extension — Core API & Backend Client
- * Copyright (C) 2025  Giskard Project
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+ * Copyright (C) 2025-2026 Giskard Project
  */
 
 import * as vscode from 'vscode';
@@ -126,14 +116,48 @@ export async function fetchSandboxRead(path: string) {
     return res.json();
 }
 
+/** Dynamically fetches available LLM models according to the connected active profile (giskard-sys, NVIDIA NIM, OpenAI, Ollama) */
 export async function fetchLlmModels(): Promise<string[]> {
     try {
-        const res = await fetchWithTimeout(`${getConnectorUrl()}/llm/models`, {
-            headers: { 'X-Client-Id': CLIENT_ID }
-        }, 5000);
-        const data: any = await res.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-            return data.data.map((m: any) => m.name || m.id || String(m));
+        const baseUrl = getConnectorUrl();
+        const activeConn = _store?.getActive();
+        let apiKey = '';
+        if (_store && activeConn) {
+            apiKey = (await _store.getApiKey(activeConn.id)) || '';
+        }
+
+        const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        let res = await fetchWithTimeout(`${baseUrl}/llm/models`, { headers }, 5000).catch(() => null);
+        if (!res || !res.ok) {
+            res = await fetchWithTimeout(`${baseUrl}/v1/models`, { headers }, 5000).catch(() => null);
+        }
+        if (!res || !res.ok) {
+            res = await fetchWithTimeout(`${baseUrl}/models`, { headers }, 5000).catch(() => null);
+        }
+        if (!res || !res.ok) {
+            res = await fetchWithTimeout(`${baseUrl}/api/tags`, { headers }, 5000).catch(() => null);
+        }
+
+        if (res && res.ok) {
+            const data: any = await res.json().catch(() => null);
+            if (data) {
+                // Format A: { success: true, data: [...] } (giskard-sys format)
+                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                    return data.data.map((m: any) => m.name || m.id || String(m));
+                }
+                // Format B: { data: [{ id: "..." }, ...] } (OpenAI / NVIDIA NIM format)
+                if (Array.isArray(data.data) && data.data.length > 0) {
+                    return data.data.map((m: any) => m.id || m.name || String(m));
+                }
+                // Format C: { models: [{ name: "..." }, ...] } (Ollama / vLLM format)
+                if (Array.isArray(data.models) && data.models.length > 0) {
+                    return data.models.map((m: any) => m.name || m.id || String(m));
+                }
+            }
         }
     } catch {}
 
@@ -164,11 +188,16 @@ export async function updateProviderConfig(activeProvider: string, openaiBaseUrl
     return res.json();
 }
 
-export async function execCliCommand(command: string, ...args: string[]) {
-    const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
-        body: JSON.stringify({ command, args })
-    });
-    return res.json();
+/** Execute a CLI command through the backend server */
+export async function execCliCommand(command: string, ...args: string[]): Promise<any> {
+    try {
+        const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
+            body: JSON.stringify({ command, args })
+        });
+        return res.json();
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
 }
