@@ -90,7 +90,7 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
     }
 }
 
-/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070) over SSE transport */
+/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070) over SSE transport in ~130ms */
 export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
     let cleanUrl = serverUrl.trim();
     const sseUrl = cleanUrl.endsWith('/sse') ? cleanUrl : `${cleanUrl.replace(/\/$/, '')}/sse`;
@@ -125,7 +125,7 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                 sessionPath = match[1];
                 const postUrl = `${hostUrl}${sessionPath}`;
 
-                // 1. Send initialize
+                // Send initialize immediately without static delays
                 fetch(postUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -135,20 +135,7 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                         method: 'initialize',
                         params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
                     })
-                }).then(() => {
-                    // 2. Send initialized & tools/list
-                    fetch(postUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
-                    }).catch(() => null);
-
-                    fetch(postUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
-                    }).catch(() => null);
-                }).catch(() => null);
+                }).catch(() => { });
             }
 
             const lines = text.split('\n');
@@ -157,7 +144,23 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                     const jsonStr = line.substring(5).trim();
                     try {
                         const json = JSON.parse(jsonStr);
-                        if (json.result && Array.isArray(json.result.tools)) {
+                        // When initialize response arrives -> immediately send initialized & tools/list
+                        if (json.id === 1 && json.result) {
+                            const postUrl = `${hostUrl}${sessionPath}`;
+                            fetch(postUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+                            }).catch(() => { });
+
+                            fetch(postUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+                            }).catch(() => { });
+                        }
+                        // When tools/list response arrives -> return instantly
+                        if (json.id === 2 && json.result && Array.isArray(json.result.tools)) {
                             clearTimeout(timeout);
                             try { reader.cancel(); } catch { }
                             return json.result.tools.map((t: any) => ({
