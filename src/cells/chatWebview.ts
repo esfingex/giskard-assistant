@@ -302,11 +302,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const maxContext = getModelMaxContextWindow(targetModel);
 
         const isRemoteConnection = (activeConn && activeConn.type === 'remote') ||
-                                    ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
-                                    targetModel.includes('/') ||
-                                    targetModel.startsWith('deepseek') ||
-                                    targetModel.startsWith('moonshot') ||
-                                    targetModel.startsWith('qwen');
+            ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
+            targetModel.includes('/') ||
+            targetModel.startsWith('deepseek') ||
+            targetModel.startsWith('moonshot') ||
+            targetModel.startsWith('qwen');
 
         let apiKey = '';
         const allConns = this._store.getAll();
@@ -314,17 +314,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (isRemoteConnection) {
             const modelPrefix = targetModel.split('/')[0].toLowerCase();
             
-            let targetConn = (activeConn && activeConn.secretRef) ? activeConn : null;
+            // Dynamic Connection Resolution:
+            // 1. Check if active connection is remote
+            // 2. Find connection matching model tag or type === 'remote'
+            let targetConn = (activeConn && activeConn.type === 'remote') ? activeConn : null;
             if (!targetConn) {
-                targetConn = allConns.find(c => (c.tag.toLowerCase().includes('nvidia') || c.tag.toLowerCase().includes(modelPrefix) || c.type === 'remote') && Boolean(c.secretRef)) || null;
-            }
-            if (!targetConn) {
-                targetConn = allConns.find(c => Boolean(c.secretRef)) || null;
+                targetConn = allConns.find(c => (c.tag.toLowerCase() === modelPrefix || c.tag.toLowerCase().includes('nvidia') || c.type === 'remote')) || null;
             }
 
             if (targetConn) {
                 activeConn = targetConn;
-                activeTag = (targetConn.tag || 'nvidia').toLowerCase();
+                activeTag = (targetConn.tag || 'remote').toLowerCase();
                 apiKey = (await this._store.getApiKey(targetConn.id)) || '';
             }
         } else if (activeConn && activeConn.id) {
@@ -365,18 +365,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 });
                 return;
             }
-
-            let remoteUrl = 'https://integrate.api.nvidia.com/v1';
-            if (targetModel.includes('deepseek')) {
-                remoteUrl = 'https://api.deepseek.com/v1';
-            } else if (targetModel.includes('kimi') || targetModel.includes('moonshot')) {
-                remoteUrl = 'https://api.moonshot.cn/v1';
-            } else if (targetModel.includes('qwen') || targetModel.includes('dashscope')) {
-                remoteUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-            } else if (activeConn && activeConn.type === 'remote' && activeConn.url && !activeConn.url.includes('localhost') && !activeConn.url.includes('127.0.0.1')) {
-                remoteUrl = activeConn.url;
-            }
-
+            const remoteUrl = activeConn?.url || getConnectorUrl();
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
