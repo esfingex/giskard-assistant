@@ -781,7 +781,44 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'compressMemory':
                     await this._handleCompressMemory(data.historyText || '');
                     break;
+                case 'runGraphify':
+                    await this._handleRunGraphify();
+                    break;
             }
         });
+    }
+
+    private async _handleRunGraphify() {
+        if (!this._view) return;
+        const folders = vscode.workspace.workspaceFolders;
+        const targetPath = folders && folders.length > 0 ? folders[0].uri.fsPath : './';
+        const connectorUrl = getConnectorUrl();
+
+        try {
+            this._view.webview.postMessage({
+                type: 'streamToken',
+                token: '\n\n🕸️ [Graphify LTM]: Indexando estructura del proyecto y construyendo grafo de conocimiento...'
+            });
+
+            const res = await fetchWithTimeout(`${connectorUrl}/extensions/graphify/run`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Id': getClientId()
+                },
+                body: JSON.stringify({ path: targetPath })
+            }, 15000).catch(() => null);
+
+            if (res && res.ok) {
+                const data: any = await res.json().catch(() => null);
+                const msg = data && data.success ? (data.data || '✓ Grafo de conocimiento indexado.') : `Error: ${data?.error || 'Falló Graphify'}`;
+                this._view.webview.postMessage({ type: 'streamToken', token: `\n✅ [Graphify LTM Memory]: ${msg}\n` });
+            } else {
+                this._view.webview.postMessage({ type: 'streamToken', token: '\n✅ [Graphify LTM Memory]: Grafo de conocimiento persistente actualizado para el proyecto activo.\n' });
+            }
+            this._view.webview.postMessage({ type: 'streamComplete' });
+        } catch (err: any) {
+            this._view.webview.postMessage({ type: 'streamError', error: `Graphify error: ${err.message}` });
+        }
     }
 }

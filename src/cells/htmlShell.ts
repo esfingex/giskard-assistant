@@ -108,6 +108,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
+                <div class="menu-item" id="ctx-graphify">🕸️ Indexar Grafo LTM (Graphify)</div>
             </div>
             <textarea id="prompt" rows="2" placeholder="${i18n.chat.placeholder}"></textarea>
             <div class="toolbar">

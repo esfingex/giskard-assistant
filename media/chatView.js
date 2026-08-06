@@ -184,6 +184,14 @@
     
     const ctxMentions = document.getElementById('ctx-mentions');
     if (ctxMentions) ctxMentions.addEventListener('click', () => { selectedContextType = 'mentions'; addCtxBtn.textContent = '✓ +mentions'; if (ctxMenu) ctxMenu.style.display = 'none'; });
+
+    const ctxGraphify = document.getElementById('ctx-graphify');
+    if (ctxGraphify) {
+        ctxGraphify.addEventListener('click', () => {
+            vscode.postMessage({ type: 'runGraphify' });
+            if (ctxMenu) ctxMenu.style.display = 'none';
+        });
+    }
     
     const ctxCheck = document.getElementById('ctx-action-check');
     if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
