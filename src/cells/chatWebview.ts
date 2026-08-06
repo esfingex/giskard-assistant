@@ -257,22 +257,29 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         const start = Date.now();
         try {
-            const res = await fetchWithTimeout(`${url.replace(/\/$/, '')}/health`, {
+            const cleanUrl = url.trim().replace(/\/$/, '');
+            let res = await fetchWithTimeout(`${cleanUrl}/health`, {
                 headers: { 'X-Client-Id': getClientId() }
-            }, 8000);
+            }, 5000).catch(() => null);
+
+            if (!res || !res.ok) {
+                res = await fetchWithTimeout(cleanUrl, {}, 5000).catch(() => null);
+            }
+
             const ms = Date.now() - start;
+            const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 404));
             this._view.webview.postMessage({
                 type: 'connectionTested',
-                ok: res.ok,
-                status: res.status,
+                ok,
+                status: res?.status,
                 ms,
-                error: res.ok ? undefined : `HTTP ${res.status}`
+                error: ok ? undefined : (res ? `HTTP ${res.status}` : 'Servidor giskard-sys no responde en esa URL')
             });
         } catch (err: any) {
             const ms = Date.now() - start;
             let reason = err.message;
-            if (err.name === 'AbortError') reason = 'Timeout — sin respuesta en 8 segundos';
-            else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — el servidor no está activo en esa URL';
+            if (err.name === 'AbortError') reason = 'Timeout — sin respuesta en 5 segundos';
+            else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que giskard-sys esté iniciado en ese puerto';
             else if (err.message.includes('ENOTFOUND')) reason = 'Host no encontrado — verifica la URL';
 
             this._view.webview.postMessage({
