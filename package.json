@@ -101,6 +101,11 @@
           "type": "boolean",
           "default": true,
           "description": "Sincronización automática de estado y modelos."
+        },
+        "giskard-assistant.mcpConfigPath": {
+          "type": "string",
+          "default": "/home/esfingex/workspace/mcpo_config/config.json",
+          "description": "Ruta al archivo de configuración de servidores MCP (config.json o mcp_conf.js)."
         }
       }
     }

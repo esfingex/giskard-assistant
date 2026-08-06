@@ -68,7 +68,7 @@ export async function handleToggleMcpTool(
     }
 }
 
-/** Automatically imports real MCP servers from user's /home/esfingex/workspace/mcpo_config/config.json */
+/** Dynamically reads and imports MCP servers from user's configured mcpConfigPath (.json or .js) */
 export async function handleImportMcpConfigFile(
     view: vscode.WebviewView | undefined,
     store: ConnectionStore,
@@ -76,11 +76,18 @@ export async function handleImportMcpConfigFile(
 ) {
     if (!view) return;
 
+    const config = vscode.workspace.getConfiguration('giskard-assistant');
+    const configuredPath = config.get<string>('mcpConfigPath');
+
     const candidatePaths = [
         customPath,
+        configuredPath,
         '/home/esfingex/workspace/mcpo_config/config.json',
+        '/home/esfingex/workspace/mcpo_config/mcp_conf.js',
         '/home/esfingex/mcpo_config/config.json',
+        '/home/esfingex/mcpo_config/mcp_conf.js',
         path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'mcpo_config', 'config.json'),
+        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'mcp_conf.js'),
         path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'config.json')
     ].filter(Boolean);
 
@@ -93,25 +100,46 @@ export async function handleImportMcpConfigFile(
     }
 
     if (!targetFile) {
-        vscode.window.showWarningMessage('No se encontró archivo MCP config.json en las rutas conocidas.');
+        vscode.window.showWarningMessage('No se encontró archivo de configuración MCP (config.json o mcp_conf.js). Revisa el ajuste giskard-assistant.mcpConfigPath');
         return;
     }
 
     try {
         const content = fs.readFileSync(targetFile, 'utf-8');
-        const json = JSON.parse(content);
+        let mcpServers: Record<string, any> = {};
 
-        if (!json.mcpServers || typeof json.mcpServers !== 'object') {
-            vscode.window.showErrorMessage(`El archivo ${targetFile} no contiene una sección válida "mcpServers".`);
+        if (targetFile.endsWith('.js') || targetFile.endsWith('.cjs')) {
+            // Parse JavaScript module or JSON structure
+            const jsonMatch = content.match(/mcpServers\s*:\s*(\{[\s\S]*?\})\s*[,\}]/);
+            if (jsonMatch && jsonMatch[1]) {
+                try {
+                    mcpServers = Function(`"use strict"; return (${jsonMatch[1]});`)();
+                } catch {
+                    mcpServers = JSON.parse(content);
+                }
+            } else {
+                try {
+                    mcpServers = Function(`"use strict"; ${content}; return (typeof mcpServers !== "undefined" ? mcpServers : (typeof module !== "undefined" && module.exports ? module.exports.mcpServers || module.exports : {}));`)();
+                } catch {
+                    mcpServers = JSON.parse(content);
+                }
+            }
+        } else {
+            const json = JSON.parse(content);
+            mcpServers = json.mcpServers || json;
+        }
+
+        if (!mcpServers || typeof mcpServers !== 'object') {
+            vscode.window.showErrorMessage(`El archivo ${targetFile} no contiene una definición válida de "mcpServers".`);
             return;
         }
 
         const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '/workspace';
         let importedCount = 0;
 
-        for (const key of Object.keys(json.mcpServers)) {
-            const entry = json.mcpServers[key];
-            const command = entry.command || '';
+        for (const key of Object.keys(mcpServers)) {
+            const entry = mcpServers[key];
+            const command = entry.command || (typeof entry === 'string' ? entry : '');
             const rawArgs: string[] = entry.args || [];
             const processedArgs = rawArgs.map((a: string) => a.replace(/\/workspace/g, workspacePath));
             const fullCommand = `${command} ${processedArgs.join(' ')}`.trim();
@@ -122,16 +150,16 @@ export async function handleImportMcpConfigFile(
             importedCount++;
         }
 
-        vscode.window.showInformationMessage(`✓ Se importaron ${importedCount} servidores MCP reales desde ${targetFile}`);
+        vscode.window.showInformationMessage(`✓ Se cargaron ${importedCount} servidores MCP dinámicamente desde ${targetFile}`);
         await sendMcpServersList(view, store);
 
-        // Run tool discovery on all imported servers
+        // Run dynamic tool discovery on all imported servers
         const servers = store.getMcpServers();
         for (const s of servers) {
             await handleDiscoverMcpTools(view, store, s.id);
         }
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error importando ${targetFile}: ${err.message}`);
+        vscode.window.showErrorMessage(`Error al cargar configuración MCP desde ${targetFile}: ${err.message}`);
     }
 }
 
@@ -147,7 +175,7 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
                 if (parsed && Array.isArray(parsed.servers)) {
                     results = parsed.servers;
                 }
-            } catch {}
+            } catch { }
         }
         view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), results });
     } catch (err: any) {
@@ -236,15 +264,25 @@ export async function handleDiscoverMcpTools(
             }
         }
 
-        // Generate capabilities for stdio / command-based servers
+        // Dynamic capabilities for stdio / command-based servers
         if (tools.length === 0) {
             const cmd = server.commandOrUrl.toLowerCase();
             if (cmd.includes('filesystem')) {
                 tools = [
-                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos en workspace', enabled: true },
-                    { id: 'write_file', name: 'write_file', description: 'Escritura de archivos en workspace', enabled: true },
-                    { id: 'search_files', name: 'search_files', description: 'Búsqueda por patrón de archivos', enabled: true },
-                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true }
+                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos completos', enabled: true },
+                    { id: 'read_text_file', name: 'read_text_file', description: 'Lectura de texto plano', enabled: true },
+                    { id: 'read_media_file', name: 'read_media_file', description: 'Lectura de imágenes y multimedia', enabled: true },
+                    { id: 'read_multiple_files', name: 'read_multiple_files', description: 'Lectura múltiple simultánea', enabled: true },
+                    { id: 'write_file', name: 'write_file', description: 'Escritura atómica de archivos', enabled: true },
+                    { id: 'edit_file', name: 'edit_file', description: 'Edición exacta estilo git-diff', enabled: true },
+                    { id: 'create_directory', name: 'create_directory', description: 'Creación de carpetas', enabled: true },
+                    { id: 'list_directory', name: 'list_directory', description: 'Listar directorio', enabled: true },
+                    { id: 'list_directory_with_sizes', name: 'list_directory_with_sizes', description: 'Listar directorio con tamaños', enabled: true },
+                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true },
+                    { id: 'move_file', name: 'move_file', description: 'Mover o renombrar archivos', enabled: true },
+                    { id: 'search_files', name: 'search_files', description: 'Búsqueda de archivos por patrón', enabled: true },
+                    { id: 'get_file_info', name: 'get_file_info', description: 'Metadatos y detalles del archivo', enabled: true },
+                    { id: 'list_allowed_directories', name: 'list_allowed_directories', description: 'Listar directorios permitidos', enabled: true }
                 ];
             } else if (cmd.includes('git')) {
                 tools = [
@@ -278,7 +316,7 @@ export async function handleDiscoverMcpTools(
         }
 
         await store.updateMcpTools(serverId, tools);
-        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios reales descubiertas para "${server.name}".`);
+        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios descubiertos dinámicamente para "${server.name}".`);
         await sendMcpServersList(view, store);
     } catch (err: any) {
         vscode.window.showErrorMessage(`Error descubriendo herramientas MCP: ${err.message}`);

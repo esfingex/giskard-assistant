@@ -40,7 +40,7 @@ const STORAGE_KEY = 'giskard_connections_v1';
 const MCP_STORAGE_KEY = 'giskard_mcp_servers_v1';
 
 export class ConnectionStore {
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(private readonly context: vscode.ExtensionContext) { }
 
     async init(): Promise<void> {
         // Check if there are saved connections. If empty, seed default local backend.
@@ -137,7 +137,7 @@ export class ConnectionStore {
         if (target.secretRef) {
             try {
                 await this.context.secrets.delete(target.secretRef);
-            } catch {}
+            } catch { }
         }
 
         const wasActive = target.isActive;
