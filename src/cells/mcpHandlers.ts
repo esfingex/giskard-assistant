@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
 
@@ -109,7 +110,6 @@ export async function handleImportMcpConfigFile(
         let mcpServers: Record<string, any> = {};
 
         if (targetFile.endsWith('.js') || targetFile.endsWith('.cjs')) {
-            // Parse JavaScript module or JSON structure
             const jsonMatch = content.match(/mcpServers\s*:\s*(\{[\s\S]*?\})\s*[,\}]/);
             if (jsonMatch && jsonMatch[1]) {
                 try {
@@ -181,6 +181,78 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
     } catch (err: any) {
         view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), error: err.message, results: [] });
     }
+}
+
+/** Queries live STDIO MCP process via JSON-RPC tools/list to dynamically autogenerate tools list */
+export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[]> {
+    return new Promise((resolve) => {
+        const parts = commandOrUrl.trim().split(/\s+/);
+        if (parts.length === 0) return resolve([]);
+
+        let proc: any;
+        try {
+            proc = cp.spawn(commandOrUrl.trim(), [], { shell: true });
+        } catch {
+            return resolve([]);
+        }
+
+        let output = '';
+        let timeout = setTimeout(() => {
+            try { proc.kill(); } catch { }
+            resolve([]);
+        }, 5000);
+
+        proc.stdout?.on('data', (data: Buffer) => {
+            output += data.toString('utf-8');
+            const lines = output.split('\n');
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                    const json = JSON.parse(line.trim());
+                    if (json.result && Array.isArray(json.result.tools)) {
+                        clearTimeout(timeout);
+                        try { proc.kill(); } catch { }
+                        const tools: McpTool[] = json.result.tools.map((t: any) => ({
+                            id: t.name || t.id,
+                            name: t.name || 'tool',
+                            description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
+                            enabled: true
+                        }));
+                        return resolve(tools);
+                    }
+                } catch { }
+            }
+        });
+
+        proc.on('error', () => {
+            clearTimeout(timeout);
+            resolve([]);
+        });
+
+        try {
+            // 1. Send initialize
+            const initReq = JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'initialize',
+                params: {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: { name: 'giskard-assistant', version: '4.2.0' }
+                }
+            }) + '\n';
+
+            proc.stdin.write(initReq);
+
+            // 2. Send initialized notification and tools/list request
+            setTimeout(() => {
+                try {
+                    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+                    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) + '\n');
+                } catch { }
+            }, 400);
+        } catch { }
+    });
 }
 
 export async function handleDiscoverMcpTools(
@@ -264,74 +336,13 @@ export async function handleDiscoverMcpTools(
             }
         }
 
-        // Dynamic capabilities for stdio / command-based servers
+        // 100% Dynamic STDIO JSON-RPC autogeneration: Query the live running MCP process over stdin/stdout
         if (tools.length === 0) {
-            const cmd = server.commandOrUrl.toLowerCase();
-            if (cmd.includes('filesystem')) {
-                tools = [
-                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos completos', enabled: true },
-                    { id: 'read_text_file', name: 'read_text_file', description: 'Lectura de texto plano', enabled: true },
-                    { id: 'read_media_file', name: 'read_media_file', description: 'Lectura de imágenes y multimedia', enabled: true },
-                    { id: 'read_multiple_files', name: 'read_multiple_files', description: 'Lectura múltiple simultánea', enabled: true },
-                    { id: 'write_file', name: 'write_file', description: 'Escritura atómica de archivos', enabled: true },
-                    { id: 'edit_file', name: 'edit_file', description: 'Edición exacta estilo git-diff', enabled: true },
-                    { id: 'create_directory', name: 'create_directory', description: 'Creación de carpetas', enabled: true },
-                    { id: 'list_directory', name: 'list_directory', description: 'Listar directorio', enabled: true },
-                    { id: 'list_directory_with_sizes', name: 'list_directory_with_sizes', description: 'Listar directorio con tamaños', enabled: true },
-                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true },
-                    { id: 'move_file', name: 'move_file', description: 'Mover o renombrar archivos', enabled: true },
-                    { id: 'search_files', name: 'search_files', description: 'Búsqueda de archivos por patrón', enabled: true },
-                    { id: 'get_file_info', name: 'get_file_info', description: 'Metadatos y detalles del archivo', enabled: true },
-                    { id: 'list_allowed_directories', name: 'list_allowed_directories', description: 'Listar directorios permitidos', enabled: true }
-                ];
-            } else if (cmd.includes('git')) {
-                tools = [
-                    { id: 'git_status', name: 'git_status', description: 'Estado del repositorio Git', enabled: true },
-                    { id: 'git_diff', name: 'git_diff', description: 'Diff de cambios pendientes', enabled: true },
-                    { id: 'git_log', name: 'git_log', description: 'Historial de commits', enabled: true }
-                ];
-            } else if (cmd.includes('ripgrep')) {
-                tools = [
-                    { id: 'ripgrep_search', name: 'ripgrep_search', description: 'Búsqueda ultra-rápida por expresiones regulares', enabled: true }
-                ];
-            } else if (cmd.includes('searxng')) {
-                tools = [
-                    { id: 'searxng_web_search', name: 'searxng_web_search', description: 'Búsqueda web en metabuscador SearXNG (puerto 3090)', enabled: true }
-                ];
-            } else if (cmd.includes('docker')) {
-                tools = [
-                    { id: 'docker_ps', name: 'docker_ps', description: 'Listar contenedores Docker activos', enabled: true },
-                    { id: 'docker_exec', name: 'docker_exec', description: 'Ejecución en contenedor aislado', enabled: true },
-                    { id: 'docker_logs', name: 'docker_logs', description: 'Lectura de logs de contenedor', enabled: true }
-                ];
-            } else if (cmd.includes('bash') || cmd.includes('terminal')) {
-                tools = [
-                    { id: 'bash_exec', name: 'bash_exec', description: 'Ejecución segura de comandos bash', enabled: true }
-                ];
-            } else if (cmd.includes('sqlite')) {
-                tools = [
-                    { id: 'read_query', name: 'read_query', description: 'Ejecutar consultas SELECT en SQLite DB', enabled: true },
-                    { id: 'write_query', name: 'write_query', description: 'Ejecutar consultas INSERT/UPDATE/DELETE', enabled: true },
-                    { id: 'create_table', name: 'create_table', description: 'Creación y actualización de tablas', enabled: true },
-                    { id: 'list_tables', name: 'list_tables', description: 'Listar tablas de la base de datos', enabled: true },
-                    { id: 'describe_table', name: 'describe_table', description: 'Inspeccionar esquema de tabla', enabled: true }
-                ];
-            } else if (cmd.includes('memory')) {
-                tools = [
-                    { id: 'create_entities', name: 'create_entities', description: 'Creación de entidades en grafo de memoria', enabled: true },
-                    { id: 'create_relations', name: 'create_relations', description: 'Creación de relaciones entre entidades', enabled: true },
-                    { id: 'search_nodes', name: 'search_nodes', description: 'Búsqueda por nodos y relaciones', enabled: true },
-                    { id: 'open_nodes', name: 'open_nodes', description: 'Lectura de grafos de memoria persistente', enabled: true }
-                ];
-            } else {
-                tools = [
-                    { id: 'stdio_rpc', name: 'stdio_rpc', description: 'Invocación de script STDIO JSON-RPC', enabled: true }
-                ];
-            }
+            tools = await queryStdioMcpTools(server.commandOrUrl);
         }
 
         await store.updateMcpTools(serverId, tools);
-        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios descubiertos dinámicamente para "${server.name}".`);
+        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios descubiertos dinámicamente en tiempo real para "${server.name}".`);
         await sendMcpServersList(view, store);
     } catch (err: any) {
         vscode.window.showErrorMessage(`Error descubriendo herramientas MCP: ${err.message}`);
