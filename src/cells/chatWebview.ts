@@ -595,21 +595,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         if (!doc) {
-            vscode.window.showInformationMessage('Giskard: No hay archivo abierto/especificado para comparar. Creando archivo borrador...');
+            vscode.window.showInformationMessage('Giskard: No hay archivo abierto u especificado. Creando borrador...');
             const newDoc = await vscode.workspace.openTextDocument({ content: code, language: 'typescript' });
-            await vscode.window.showTextDocument(newDoc);
+            await vscode.window.showTextDocument(newDoc, { preview: false });
             return;
         }
 
-        const leftUri = doc.uri;
-        const rightUri = leftUri.with({ scheme: 'untitled', path: leftUri.path + '.giskard-proposed' });
-
+        // Open the active target document in the editor tab and apply edit directly in-place
+        await vscode.window.showTextDocument(doc, { preview: false });
         const edit = new vscode.WorkspaceEdit();
-        edit.insert(rightUri, new vscode.Position(0, 0), code);
+        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+        edit.replace(doc.uri, fullRange, code);
         await vscode.workspace.applyEdit(edit);
-
-        const title = `Giskard Diff: ${vscode.workspace.asRelativePath(leftUri)} ↔ Propuesta IA`;
-        await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+        vscode.window.showInformationMessage(`✓ Cambios aplicados directamente en el archivo ${vscode.workspace.asRelativePath(doc.uri)}.`);
     }
 
     private async _handleCompressMemory(historyText: string) {
