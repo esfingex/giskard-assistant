@@ -104,7 +104,7 @@ export class ConnectionStore {
         apiKey?: string
     ): Promise<number> {
         let secretRef: string | null = null;
-        if (type === 'remote' && apiKey && apiKey.trim()) {
+        if (apiKey && apiKey.trim()) {
             secretRef = `conn_${Date.now()}_token`;
             await this.context.secrets.store(secretRef, apiKey.trim());
         }

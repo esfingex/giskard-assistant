@@ -308,18 +308,26 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                                     targetModel.startsWith('moonshot') ||
                                     targetModel.startsWith('qwen');
 
-        // Fallback: If current active connection is local but user selected a remote model, search for a saved remote connection profile
-        if (isRemoteConnection && activeConn?.type !== 'remote') {
-            const allConns = this._store.getAll();
-            const remoteConn = allConns.find(c => c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag));
-            if (remoteConn) {
-                activeConn = remoteConn;
-                activeTag = (remoteConn.tag || 'nvidia').toLowerCase();
-            }
-        }
-
         let apiKey = '';
-        if (activeConn && activeConn.id) {
+        const allConns = this._store.getAll();
+
+        if (isRemoteConnection) {
+            const modelPrefix = targetModel.split('/')[0].toLowerCase();
+            
+            let targetConn = (activeConn && activeConn.secretRef) ? activeConn : null;
+            if (!targetConn) {
+                targetConn = allConns.find(c => (c.tag.toLowerCase().includes('nvidia') || c.tag.toLowerCase().includes(modelPrefix) || c.type === 'remote') && Boolean(c.secretRef)) || null;
+            }
+            if (!targetConn) {
+                targetConn = allConns.find(c => Boolean(c.secretRef)) || null;
+            }
+
+            if (targetConn) {
+                activeConn = targetConn;
+                activeTag = (targetConn.tag || 'nvidia').toLowerCase();
+                apiKey = (await this._store.getApiKey(targetConn.id)) || '';
+            }
+        } else if (activeConn && activeConn.id) {
             apiKey = (await this._store.getApiKey(activeConn.id)) || '';
         }
 
