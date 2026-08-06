@@ -60,6 +60,7 @@ function renderModelFilterList(payload) {
     } else if (payload && typeof payload === 'object') {
         lastModelsPayload = {
             models: payload.models || [],
+            groups: payload.groups || [],
             localModels: payload.localModels || [],
             activeTag: payload.activeTag || 'nvidia',
             activeName: payload.activeName || 'AI Connections'
@@ -69,35 +70,55 @@ function renderModelFilterList(payload) {
     const enabled = getEnabledModels();
     let html = '';
 
+    const groups = lastModelsPayload.groups || [];
     const activeModels = lastModelsPayload.models || [];
     const localModels = lastModelsPayload.localModels || [];
 
-    // Group models by authentic provider tag
-    const grouped = {};
-    activeModels.forEach(m => {
-        const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
-        if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
-        grouped[meta.label].items.push(m);
-    });
-
-    // 1. Collapsible Groups by Authentic Provider Tag
-    Object.keys(grouped).forEach(groupLabel => {
-        const grp = grouped[groupLabel];
-        html += `<details open style="margin-bottom:8px;">
-            <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
-                🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} detectados)
-            </summary>
-            <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-        grp.items.forEach(m => {
-            const isChecked = !enabled || enabled.includes(m);
-            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
-                <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
-                <span class="filter-tag ${grp.meta.type}">${escapeHtml(grp.meta.tag)}</span>
-                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
-            </label>`;
+    if (groups.length > 0) {
+        groups.forEach(grp => {
+            const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
+            html += `<details open style="margin-bottom:8px;">
+                <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
+                    🔌 Conexión: ${escapeHtml(grp.connectionName)} [${escapeHtml(tagUpper)}] (${grp.models.length} detectados)
+                </summary>
+                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
+            grp.models.forEach(m => {
+                const meta = getModelProviderMeta(m, grp.connectionTag, grp.connectionName);
+                const isChecked = !enabled || enabled.includes(m);
+                html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
+                    <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
+                    <span class="filter-tag ${meta.type}">${escapeHtml(meta.tag)}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+                </label>`;
+            });
+            html += `</div></details>`;
         });
-        html += `</div></details>`;
-    });
+    } else if (activeModels.length > 0) {
+        const grouped = {};
+        activeModels.forEach(m => {
+            const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
+            if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
+            grouped[meta.label].items.push(m);
+        });
+
+        Object.keys(grouped).forEach(groupLabel => {
+            const grp = grouped[groupLabel];
+            html += `<details open style="margin-bottom:8px;">
+                <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
+                    🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} detectados)
+                </summary>
+                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
+            grp.items.forEach(m => {
+                const isChecked = !enabled || enabled.includes(m);
+                html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
+                    <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
+                    <span class="filter-tag ${grp.meta.type}">${escapeHtml(grp.meta.tag)}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+                </label>`;
+            });
+            html += `</div></details>`;
+        });
+    }
 
     // 2. Collapsible Group for Local System Models (Ollama)
     if (localModels.length > 0) {
@@ -139,6 +160,7 @@ function updateModelDropdown() {
 
     const currentVal = modelSelect.value;
     const enabled = getEnabledModels();
+    const groups = lastModelsPayload.groups || [];
     const activeModels = (lastModelsPayload.models || []).filter(m => !enabled || enabled.includes(m));
     const localModels = (lastModelsPayload.localModels || []).filter(m => !enabled || enabled.includes(`local:${m}`));
     const showGemini = !enabled || enabled.includes('cli:gemini');
@@ -146,24 +168,39 @@ function updateModelDropdown() {
 
     let html = '';
 
-    // Group models by authentic provider
-    const grouped = {};
-    activeModels.forEach(m => {
-        const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
-        if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
-        grouped[meta.label].items.push(m);
-    });
-
-    Object.keys(grouped).forEach(groupLabel => {
-        const grp = grouped[groupLabel];
-        html += `<optgroup label="🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} activos)">`;
-        grp.items.forEach(m => {
-            let label = m;
-            if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
-            html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+    if (groups.length > 0) {
+        groups.forEach(grp => {
+            const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
+            const grpFiltered = grp.models.filter(m => !enabled || enabled.includes(m));
+            if (grpFiltered.length > 0) {
+                html += `<optgroup label="🔌 ${escapeHtml(grp.connectionName)} [${escapeHtml(tagUpper)}] (${grpFiltered.length} activos)">`;
+                grpFiltered.forEach(m => {
+                    let label = m;
+                    if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
+                    html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+                });
+                html += '</optgroup>';
+            }
         });
-        html += '</optgroup>';
-    });
+    } else if (activeModels.length > 0) {
+        const grouped = {};
+        activeModels.forEach(m => {
+            const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
+            if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
+            grouped[meta.label].items.push(m);
+        });
+
+        Object.keys(grouped).forEach(groupLabel => {
+            const grp = grouped[groupLabel];
+            html += `<optgroup label="🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} activos)">`;
+            grp.items.forEach(m => {
+                let label = m;
+                if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
+                html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+            });
+            html += '</optgroup>';
+        });
+    }
 
     if (localModels.length > 0) {
         html += `<optgroup label="🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} activos)">`;

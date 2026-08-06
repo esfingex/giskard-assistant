@@ -13,6 +13,7 @@ import {
     getClientId,
     execCliCommand,
     fetchLlmModels,
+    fetchLlmModelsGrouped,
     fetchWithTimeout,
     checkHealth,
     resetSession
@@ -190,6 +191,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const activeTag = activeConn?.tag || 'giskard-sys';
         const activeName = activeConn?.name || (activeConn?.type === 'remote' ? 'Remote API' : 'Giskard-Sys');
 
+        const groups = await fetchLlmModelsGrouped();
         const remoteModels = await fetchLlmModels();
 
         // Only query local Ollama server if an active connection is explicitly set to Ollama
@@ -199,6 +201,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         this._view.webview.postMessage({
             type: 'modelsList',
             models: remoteModels,
+            groups,
             localModels,
             activeTag,
             activeName,

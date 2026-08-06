@@ -119,7 +119,15 @@ export async function fetchSandboxRead(path: string) {
 /** Dynamically fetches available LLM models according to the connected active profile (giskard-sys, NVIDIA NIM, OpenAI, Ollama) */
 import { fetchModelsForProvider } from './providers';
 
-export async function fetchLlmModels(): Promise<string[]> {
+export interface ConnectionModelsGroup {
+    connectionId: number;
+    connectionName: string;
+    connectionTag: string;
+    connectionUrl: string;
+    models: string[];
+}
+
+export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> {
     try {
         if (!_store) return [];
         const list = _store.getAll();
@@ -129,20 +137,37 @@ export async function fetchLlmModels(): Promise<string[]> {
             ? activeConnections
             : [{ id: 0, name: 'Giskard-Sys', type: 'local' as const, url: getConnectorUrl(), tag: 'giskard-sys', isActive: true }];
 
-        const allModels: string[] = [];
+        const groups: ConnectionModelsGroup[] = [];
 
         for (const conn of connsToQuery) {
             const apiKey = conn.id ? (await _store.getApiKey(conn.id) || '') : '';
             const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey);
-            for (const m of providerModels) {
-                if (!allModels.includes(m)) allModels.push(m);
+            if (providerModels.length > 0) {
+                groups.push({
+                    connectionId: conn.id,
+                    connectionName: conn.name,
+                    connectionTag: conn.tag,
+                    connectionUrl: conn.url,
+                    models: providerModels
+                });
             }
         }
 
-        return allModels;
+        return groups;
     } catch {
         return [];
     }
+}
+
+export async function fetchLlmModels(): Promise<string[]> {
+    const groups = await fetchLlmModelsGrouped();
+    const allModels: string[] = [];
+    groups.forEach(g => {
+        g.models.forEach(m => {
+            if (!allModels.includes(m)) allModels.push(m);
+        });
+    });
+    return allModels;
 }
 
 export async function updateProviderConfig(activeProvider: string, openaiBaseUrl?: string, openaiApiKey?: string) {
