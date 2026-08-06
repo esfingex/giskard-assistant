@@ -95,13 +95,6 @@ function renderMcpServersList(servers) {
     const addMcpBtn = document.getElementById('add-mcp-btn');
     const testMcpBtn = document.getElementById('test-mcp-btn');
     const mcpStatusDiv = document.getElementById('mcp-status');
-    const importMcpConfigBtn = document.getElementById('import-mcp-config-btn');
-
-    if (importMcpConfigBtn) {
-        importMcpConfigBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'importMcpConfig' });
-        });
-    }
 
     if (testMcpBtn) {
         testMcpBtn.addEventListener('click', () => {

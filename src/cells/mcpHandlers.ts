@@ -7,6 +7,9 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as http from 'http';
+import * as https from 'https';
+import * as urlModule from 'url';
 import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
@@ -70,109 +73,6 @@ export async function handleToggleMcpTool(
     }
 }
 
-/** Dynamically reads and imports MCP servers from user's configured mcpConfigPath (.json or .js) */
-export async function handleImportMcpConfigFile(
-    view: vscode.WebviewView | undefined,
-    store: ConnectionStore,
-    customPath?: string
-) {
-    if (!view) return;
-
-    const config = vscode.workspace.getConfiguration('giskard-assistant');
-    const configuredPath = config.get<string>('mcpConfigPath');
-    const homedir = os.homedir();
-    const activeWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-    const expandPath = (p?: string | null) => {
-        if (!p) return null;
-        if (p.startsWith('~')) return path.join(homedir, p.substring(1));
-        return p;
-    };
-
-    const candidatePaths = [
-        expandPath(customPath),
-        expandPath(configuredPath),
-        activeWorkspace ? path.join(activeWorkspace, 'mcpo_config', 'config.json') : null,
-        activeWorkspace ? path.join(activeWorkspace, 'mcpo_config', 'mcp_conf.js') : null,
-        activeWorkspace ? path.join(activeWorkspace, 'mcp_conf.js') : null,
-        activeWorkspace ? path.join(activeWorkspace, 'config.json') : null,
-        path.join(homedir, 'workspace', 'mcpo_config', 'config.json'),
-        path.join(homedir, 'workspace', 'mcpo_config', 'mcp_conf.js'),
-        path.join(homedir, 'mcpo_config', 'config.json'),
-        path.join(homedir, '.config', 'giskard', 'config.json')
-    ].filter((p): p is string => Boolean(p && typeof p === 'string'));
-
-    let targetFile: string | null = null;
-    for (const p of candidatePaths) {
-        if (p && fs.existsSync(p)) {
-            targetFile = p;
-            break;
-        }
-    }
-
-    if (!targetFile) {
-        vscode.window.showWarningMessage('No se encontró archivo de configuración MCP (config.json o mcp_conf.js). Revisa el ajuste giskard-assistant.mcpConfigPath');
-        return;
-    }
-
-    try {
-        const content = fs.readFileSync(targetFile, 'utf-8');
-        let mcpServers: Record<string, any> = {};
-
-        if (targetFile.endsWith('.js') || targetFile.endsWith('.cjs')) {
-            const jsonMatch = content.match(/mcpServers\s*:\s*(\{[\s\S]*?\})\s*[,\}]/);
-            if (jsonMatch && jsonMatch[1]) {
-                try {
-                    mcpServers = Function(`"use strict"; return (${jsonMatch[1]});`)();
-                } catch {
-                    mcpServers = JSON.parse(content);
-                }
-            } else {
-                try {
-                    mcpServers = Function(`"use strict"; ${content}; return (typeof mcpServers !== "undefined" ? mcpServers : (typeof module !== "undefined" && module.exports ? module.exports.mcpServers || module.exports : {}));`)();
-                } catch {
-                    mcpServers = JSON.parse(content);
-                }
-            }
-        } else {
-            const json = JSON.parse(content);
-            mcpServers = json.mcpServers || json;
-        }
-
-        if (!mcpServers || typeof mcpServers !== 'object') {
-            vscode.window.showErrorMessage(`El archivo ${targetFile} no contiene una definición válida de "mcpServers".`);
-            return;
-        }
-
-        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '/workspace';
-        let importedCount = 0;
-
-        for (const key of Object.keys(mcpServers)) {
-            const entry = mcpServers[key];
-            const command = entry.command || (typeof entry === 'string' ? entry : '');
-            const rawArgs: string[] = entry.args || [];
-            const processedArgs = rawArgs.map((a: string) => a.replace(/\/workspace/g, workspacePath));
-            const fullCommand = `${command} ${processedArgs.join(' ')}`.trim();
-
-            const serverType: 'docker' | 'stdio' | 'url' = command.includes('docker') ? 'docker' : (command.includes('uvx') || command.includes('npx') || command.includes('node') || command.includes('python')) ? 'stdio' : 'url';
-
-            await store.addMcpServer(key, serverType, fullCommand);
-            importedCount++;
-        }
-
-        vscode.window.showInformationMessage(`✓ Se cargaron ${importedCount} servidores MCP dinámicamente desde ${targetFile}`);
-        await sendMcpServersList(view, store);
-
-        // Run dynamic tool discovery on all imported servers
-        const servers = store.getMcpServers();
-        for (const s of servers) {
-            await handleDiscoverMcpTools(view, store, s.id);
-        }
-    } catch (err: any) {
-        vscode.window.showErrorMessage(`Error al cargar configuración MCP desde ${targetFile}: ${err.message}`);
-    }
-}
-
 /** Queries Smithery registry API/CLI for MCP servers */
 export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | undefined, query: string) {
     if (!view || !query || !query.trim()) return;
@@ -191,6 +91,106 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
     } catch (err: any) {
         view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), error: err.message, results: [] });
     }
+}
+
+/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070/sse) over SSE transport */
+export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
+    return new Promise((resolve) => {
+        let cleanUrl = serverUrl.trim();
+        if (!cleanUrl.endsWith('/sse') && !cleanUrl.includes('openapi.json') && !cleanUrl.includes('/tools')) {
+            cleanUrl = `${cleanUrl.replace(/\/$/, '')}/sse`;
+        }
+
+        let parsed: any;
+        try {
+            parsed = urlModule.parse(cleanUrl);
+        } catch {
+            return resolve([]);
+        }
+
+        const transport = parsed.protocol === 'https:' ? https : http;
+        let sessionPath = '';
+        let resolvedTools: McpTool[] = [];
+        let req: any;
+
+        const timeout = setTimeout(() => {
+            if (req) { try { req.destroy(); } catch { } }
+            resolve(resolvedTools);
+        }, 5000);
+
+        try {
+            req = transport.get(cleanUrl, { headers: { 'Accept': 'text/event-stream' } }, (res: any) => {
+                let sseBuffer = '';
+                res.on('data', (chunk: Buffer) => {
+                    sseBuffer += chunk.toString('utf-8');
+                    const match = sseBuffer.match(/data:\s*(\/message\?sessionId=[\w-]+)/);
+                    if (match && !sessionPath) {
+                        sessionPath = match[1];
+
+                        const sendJson = (obj: any) => {
+                            const data = JSON.stringify(obj);
+                            const pReq = transport.request({
+                                hostname: parsed.hostname,
+                                port: parsed.port,
+                                path: sessionPath,
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+                            }, () => { });
+                            pReq.on('error', () => { });
+                            pReq.write(data);
+                            pReq.end();
+                        };
+
+                        sendJson({
+                            jsonrpc: '2.0',
+                            id: 1,
+                            method: 'initialize',
+                            params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
+                        });
+
+                        setTimeout(() => {
+                            sendJson({ jsonrpc: '2.0', method: 'notifications/initialized' });
+                            sendJson({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+                        }, 300);
+                    }
+
+                    const lines = sseBuffer.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const jsonStr = line.substring(5).trim();
+                            try {
+                                const json = JSON.parse(jsonStr);
+                                if (json.result && Array.isArray(json.result.tools)) {
+                                    clearTimeout(timeout);
+                                    if (req) { try { req.destroy(); } catch { } }
+                                    resolvedTools = json.result.tools.map((t: any) => ({
+                                        id: t.name || t.id,
+                                        name: t.name || 'tool',
+                                        description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
+                                        enabled: true
+                                    }));
+                                    return resolve(resolvedTools);
+                                }
+                            } catch { }
+                        }
+                    }
+                });
+
+                res.on('error', () => {
+                    clearTimeout(timeout);
+                    resolve(resolvedTools);
+                });
+            });
+
+            req.on('error', () => {
+                clearTimeout(timeout);
+                resolve(resolvedTools);
+            });
+        } catch {
+            clearTimeout(timeout);
+            resolve(resolvedTools);
+        }
+    });
 }
 
 /** Queries live STDIO MCP process via JSON-RPC tools/list to dynamically autogenerate tools list */
@@ -240,7 +240,6 @@ export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[
         });
 
         try {
-            // 1. Send initialize
             const initReq = JSON.stringify({
                 jsonrpc: '2.0',
                 id: 1,
@@ -254,7 +253,6 @@ export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[
 
             proc.stdin.write(initReq);
 
-            // 2. Send initialized notification and tools/list request
             setTimeout(() => {
                 try {
                     proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
@@ -340,9 +338,14 @@ export async function handleDiscoverMcpTools(
                     }
                 }
             }
+
+            // If HTTP endpoints didn't return tools, query via SSE (Supergateway / MCP SSE transport)
+            if (tools.length === 0) {
+                tools = await querySseMcpTools(cleanUrl);
+            }
         }
 
-        // 100% Dynamic STDIO JSON-RPC autogeneration: Query the live running MCP process over stdin/stdout
+        // STDIO JSON-RPC autogeneration: Query live running MCP process over stdin/stdout
         if (tools.length === 0) {
             tools = await queryStdioMcpTools(server.commandOrUrl);
         }
@@ -362,12 +365,22 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
         let testUrl = commandOrUrl.trim();
 
         if (testUrl.startsWith('http')) {
-            const res = await fetchWithTimeout(testUrl, {}, 5000);
+            const sseUrl = testUrl.endsWith('/sse') ? testUrl : `${testUrl.replace(/\/$/, '')}/sse`;
+            const sseRes = await fetchWithTimeout(sseUrl, {}, 4000).catch(() => null);
+            const isSseOk = sseRes && (sseRes.ok || sseRes.status === 200);
+
+            if (isSseOk) {
+                const ms = Date.now() - start;
+                return view.webview.postMessage({ type: 'mcpTested', ok: true, ms });
+            }
+
+            const mainRes = await fetchWithTimeout(testUrl, {}, 4000).catch(() => null);
             const ms = Date.now() - start;
+            const ok = mainRes && (mainRes.ok || mainRes.status === 404 || mainRes.status === 200);
             view.webview.postMessage({
                 type: 'mcpTested',
-                ok: res.ok,
-                error: res.ok ? undefined : `HTTP ${res.status}`,
+                ok: Boolean(ok),
+                error: ok ? undefined : `HTTP ${mainRes?.status || 'Error'}`,
                 ms
             });
         } else if (type === 'docker') {
@@ -399,7 +412,6 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
     }
 }
 
-/** Formats active MCP servers into a prompt context header string for LLM */
 export function getActiveMcpPromptContext(store: ConnectionStore): string {
     const activeMcpServers = store.getMcpServers().filter(s => s.isActive);
     if (activeMcpServers.length === 0) return '';
