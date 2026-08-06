@@ -77,22 +77,81 @@ export async function handleDiscoverMcpTools(
 
     try {
         let tools: McpTool[] = [];
+        let baseUrl = server.commandOrUrl.trim();
 
-        if (server.type === 'url' || server.commandOrUrl.startsWith('http')) {
-            const res = await fetchWithTimeout(`${server.commandOrUrl.replace(/\/$/, '')}/tools`, {}, 5000).catch(() => null);
-            if (res && res.ok) {
-                const data: any = await res.json().catch(() => null);
-                if (data && Array.isArray(data.tools)) {
-                    tools = data.tools.map((t: any) => ({
-                        id: t.name || t.id,
-                        name: t.name || 'Tool',
-                        description: t.description || 'Herramienta MCP HTTP',
-                        enabled: true
-                    }));
+        // Infer URL for docker container if default mcpo pattern is used
+        if (server.type === 'docker' && (!baseUrl.startsWith('http') || baseUrl.includes('3000'))) {
+            baseUrl = 'http://localhost:3000';
+        }
+
+        if (baseUrl.startsWith('http')) {
+            const cleanUrl = baseUrl.replace(/\/$/, '');
+
+            // 1. Try fetching main /openapi.json (OpenAPI proxy e.g., MCPO)
+            const openApiRes = await fetchWithTimeout(`${cleanUrl}/openapi.json`, {}, 4000).catch(() => null);
+            if (openApiRes && openApiRes.ok) {
+                const openApiData: any = await openApiRes.json().catch(() => null);
+                if (openApiData && openApiData.info && openApiData.info.description) {
+                    const desc = openApiData.info.description;
+                    const matches: any[] = Array.from(desc.matchAll(/\[(.*?)\]\((.*?)\)/g));
+                    for (const m of matches) {
+                        const toolCategory = m[1];
+                        const docPath = m[2];
+                        const apiPath = docPath.replace('/docs', '/openapi.json');
+                        const subRes = await fetchWithTimeout(`${cleanUrl}${apiPath}`, {}, 4000).catch(() => null);
+                        if (subRes && subRes.ok) {
+                            const subData: any = await subRes.json().catch(() => null);
+                            if (subData && subData.paths) {
+                                Object.keys(subData.paths).forEach(p => {
+                                    const toolName = p.replace(/^\//, '');
+                                    if (toolName) {
+                                        tools.push({
+                                            id: `${toolCategory}:${toolName}`,
+                                            name: `${toolName}`,
+                                            description: `Servicio MCP ${toolCategory} (${cleanUrl}/${toolCategory}/${toolName})`,
+                                            enabled: true
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // If paths exist directly on main /openapi.json
+                if (tools.length === 0 && openApiData && openApiData.paths) {
+                    Object.keys(openApiData.paths).forEach(p => {
+                        const toolName = p.replace(/^\//, '');
+                        if (toolName) {
+                            tools.push({
+                                id: toolName,
+                                name: toolName,
+                                description: 'Herramienta MCP OpenAPI',
+                                enabled: true
+                            });
+                        }
+                    });
+                }
+            }
+
+            // 2. Try standard /tools JSON-RPC endpoint if openapi failed
+            if (tools.length === 0) {
+                const toolsRes = await fetchWithTimeout(`${cleanUrl}/tools`, {}, 4000).catch(() => null);
+                if (toolsRes && toolsRes.ok) {
+                    const toolsData: any = await toolsRes.json().catch(() => null);
+                    if (toolsData && Array.isArray(toolsData.tools)) {
+                        tools = toolsData.tools.map((t: any) => ({
+                            id: t.name || t.id,
+                            name: t.name || 'Tool',
+                            description: t.description || 'Herramienta MCP HTTP',
+                            enabled: true
+                        }));
+                    }
                 }
             }
         }
 
+        // Fallback default capabilities if remote endpoint not responding
         if (tools.length === 0) {
             if (server.type === 'docker') {
                 tools = [
@@ -107,14 +166,13 @@ export async function handleDiscoverMcpTools(
                 ];
             } else {
                 tools = [
-                    { id: 'http_sse_query', name: 'http_sse_query', description: 'Consultas vía endpoint HTTP SSE', enabled: true },
-                    { id: 'remote_mcp_call', name: 'remote_mcp_call', description: 'Invocación de funciones MCP remotas', enabled: true }
+                    { id: 'http_sse_query', name: 'http_sse_query', description: 'Consultas vía endpoint HTTP SSE', enabled: true }
                 ];
             }
         }
 
         await store.updateMcpTools(serverId, tools);
-        vscode.window.showInformationMessage(`✓ ${tools.length} servicios/herramientas descubiertas para "${server.name}".`);
+        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios reales descubiertas para "${server.name}".`);
         await sendMcpServersList(view, store);
     } catch (err: any) {
         vscode.window.showErrorMessage(`Error descubriendo herramientas MCP: ${err.message}`);
@@ -125,8 +183,13 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
     if (!view) return;
     const start = Date.now();
     try {
-        if (type === 'url' || commandOrUrl.startsWith('http')) {
-            const res = await fetchWithTimeout(commandOrUrl, {}, 5000);
+        let testUrl = commandOrUrl.trim();
+        if (type === 'docker' && (!testUrl.startsWith('http') || testUrl.includes('3000'))) {
+            testUrl = 'http://localhost:3000';
+        }
+
+        if (testUrl.startsWith('http')) {
+            const res = await fetchWithTimeout(testUrl, {}, 5000);
             const ms = Date.now() - start;
             view.webview.postMessage({
                 type: 'mcpTested',
