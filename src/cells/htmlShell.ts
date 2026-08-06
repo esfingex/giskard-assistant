@@ -109,11 +109,11 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             <div class="menu-dropdown" id="context-menu">
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
                 <div class="menu-item" id="ctx-graphify">🕸️ Indexar Grafo LTM (Graphify)</div>
+                <div class="menu-item" id="ctx-skills">🎯 Agent Skills (Habilidades)</div>
             </div>
             <textarea id="prompt" rows="2" placeholder="${i18n.chat.placeholder}"></textarea>
             <div class="toolbar">
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>
-                <label><input type="checkbox" id="inc-file"> Active File</label>
                 <button id="send-btn" class="btn-send">${i18n.chat.send}</button>
                 <button id="stop-btn" class="btn-send" style="display: none; background: #ef4444; border-color: #ef4444; color: #ffffff;">${i18n.chat.stop}</button>
             </div>

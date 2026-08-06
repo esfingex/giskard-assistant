@@ -192,6 +192,14 @@
             if (ctxMenu) ctxMenu.style.display = 'none';
         });
     }
+
+    const ctxSkills = document.getElementById('ctx-skills');
+    if (ctxSkills) {
+        ctxSkills.addEventListener('click', () => {
+            vscode.postMessage({ type: 'fetchSkills' });
+            if (ctxMenu) ctxMenu.style.display = 'none';
+        });
+    }
     
     const ctxCheck = document.getElementById('ctx-action-check');
     if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });

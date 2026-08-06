@@ -831,8 +831,49 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'runGraphify':
                     await this._handleRunGraphify();
                     break;
+                case 'fetchSkills':
+                    await this._handleFetchSkills();
+                    break;
             }
         });
+    }
+
+    private async _handleFetchSkills() {
+        if (!this._view) return;
+        const connectorUrl = getConnectorUrl();
+        try {
+            this._view.webview.postMessage({
+                type: 'streamToken',
+                token: '\n\n🎯 [Agent Skills]: Consultando habilidades registradas en giskard-sys y workspace...'
+            });
+
+            const res = await fetchWithTimeout(`${connectorUrl}/agents`, {
+                headers: { 'X-Client-Id': getClientId() }
+            }, 10000).catch(() => null);
+
+            let skillsText = '\n✅ [Habilidades Disponibles del Agente]:\n';
+            skillsText += ' • 🛠️ **web_search** (Búsqueda Técnica Web)\n';
+            skillsText += ' • 💻 **exec_shell** (Ejecución Enjaulada RTK)\n';
+            skillsText += ' • 📄 **read_file / write_file** (Lectura/Escritura de Archivos)\n';
+            skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM)\n';
+            skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF)\n';
+            skillsText += ' • 📝 **diff_apply** (Edición In-Place de Código)\n';
+
+            if (res && res.ok) {
+                const agents: any = await res.json().catch(() => null);
+                if (Array.isArray(agents) && agents.length > 0) {
+                    skillsText += '\n🤖 [Agentes Registrados en giskard-sys]:\n';
+                    agents.forEach((ag: any) => {
+                        skillsText += ` • **${ag.name}**: ${(ag.skills || []).join(', ')}\n`;
+                    });
+                }
+            }
+
+            this._view.webview.postMessage({ type: 'streamToken', token: skillsText });
+            this._view.webview.postMessage({ type: 'streamComplete' });
+        } catch (err: any) {
+            this._view.webview.postMessage({ type: 'streamError', error: `Skills error: ${err.message}` });
+        }
     }
 
     private async _handleRunGraphify() {
