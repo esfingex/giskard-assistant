@@ -639,22 +639,33 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let ollamaAccumulated = '';
+            let ollamaBuffer = '';
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                try {
-                    const json = JSON.parse(chunk);
-                    if (json.response) {
-                        ollamaAccumulated += json.response;
-                        this._view.webview.postMessage({ type: 'streamToken', token: json.response, model: targetModel });
-                    }
-                } catch {
-                    if (chunk && !chunk.includes('{')) {
-                        ollamaAccumulated += chunk;
-                        this._view.webview.postMessage({ type: 'streamToken', token: chunk, model: targetModel });
-                    }
+
+                ollamaBuffer += decoder.decode(value, { stream: true });
+                const lines = ollamaBuffer.split('\n');
+                ollamaBuffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    try {
+                        const json = JSON.parse(trimmed);
+                        let token = '';
+                        if (json.response !== undefined) {
+                            token = json.response;
+                        } else if (json.message?.content) {
+                            token = json.message.content;
+                        }
+
+                        if (token) {
+                            ollamaAccumulated += token;
+                            this._view.webview.postMessage({ type: 'streamToken', token, model: targetModel });
+                        }
+                    } catch {}
                 }
             }
 
