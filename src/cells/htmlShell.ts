@@ -206,7 +206,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                     <div class="field">
                         <label>Comando / URL / Endpoint:</label>
                         <div style="display:flex;gap:4px;align-items:center;">
-                            <input type="text" id="mcp-cmd" placeholder="docker run -d -p 3000:8000 ghcr.io/open-webui/mcpo:main" style="flex:1;">
+                            <input type="text" id="mcp-cmd" placeholder="npx -y @modelcontextprotocol/server-filesystem ./ o python3 mcp_server.py" style="flex:1;">
                             <button type="button" id="test-mcp-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #34d399;color:#34d399;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">🔌 Probar MCP</button>
                         </div>
                         <div id="mcp-status" style="font-size:9px;margin-top:3px;min-height:14px;display:flex;align-items:center;gap:4px;"></div>

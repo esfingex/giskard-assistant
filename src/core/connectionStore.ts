@@ -59,15 +59,21 @@ export class ConnectionStore {
             await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
         }
 
-        // Seed default local MCP server if empty
+        // Seed default local sovereign MCP server if empty
         const mcpServers = this.getMcpServers();
         if (mcpServers.length === 0) {
             const defaultMcp: McpServer = {
                 id: 1,
-                name: 'MCPO Docker Server',
-                type: 'docker',
-                commandOrUrl: 'docker run -d -p 3000:8000 ghcr.io/open-webui/mcpo:main',
+                name: 'Servidor MCP Filesystem & Memory',
+                type: 'stdio',
+                commandOrUrl: 'npx -y @modelcontextprotocol/server-filesystem /home/esfingex/workspace',
                 isActive: true,
+                tools: [
+                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos del workspace', enabled: true },
+                    { id: 'write_file', name: 'write_file', description: 'Escritura atómica en workspace', enabled: true },
+                    { id: 'search_files', name: 'search_files', description: 'Búsqueda por patrón en workspace', enabled: true },
+                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true }
+                ],
                 createdAt: new Date().toISOString()
             };
             await this.context.globalState.update(MCP_STORAGE_KEY, [defaultMcp]);
