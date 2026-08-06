@@ -117,6 +117,8 @@ export async function fetchSandboxRead(path: string) {
 }
 
 /** Dynamically fetches available LLM models according to the connected active profile (giskard-sys, NVIDIA NIM, OpenAI, Ollama) */
+import { fetchModelsForProvider } from './providers';
+
 export async function fetchLlmModels(): Promise<string[]> {
     try {
         const baseUrl = getConnectorUrl();
@@ -125,54 +127,10 @@ export async function fetchLlmModels(): Promise<string[]> {
         if (_store && activeConn) {
             apiKey = (await _store.getApiKey(activeConn.id)) || '';
         }
-
-        const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
-        if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-
-        let res = await fetchWithTimeout(`${baseUrl}/llm/models`, { headers }, 5000).catch(() => null);
-        if (!res || !res.ok) {
-            res = await fetchWithTimeout(`${baseUrl}/v1/models`, { headers }, 5000).catch(() => null);
-        }
-        if (!res || !res.ok) {
-            res = await fetchWithTimeout(`${baseUrl}/models`, { headers }, 5000).catch(() => null);
-        }
-        if (!res || !res.ok) {
-            res = await fetchWithTimeout(`${baseUrl}/api/tags`, { headers }, 5000).catch(() => null);
-        }
-
-        if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
-            if (data) {
-                // Format A: { success: true, data: [...] } (giskard-sys format)
-                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-                    return data.data.map((m: any) => m.name || m.id || String(m));
-                }
-                // Format B: { data: [{ id: "..." }, ...] } (OpenAI / NVIDIA NIM format)
-                if (Array.isArray(data.data) && data.data.length > 0) {
-                    return data.data.map((m: any) => m.id || m.name || String(m));
-                }
-                // Format C: { models: [{ name: "..." }, ...] } (Ollama / vLLM format)
-                if (Array.isArray(data.models) && data.models.length > 0) {
-                    return data.models.map((m: any) => m.name || m.id || String(m));
-                }
-            }
-        }
-    } catch {}
-
-    // Fallback: Query local Ollama directly via configured ollamaUrl
-    try {
-        const config = vscode.workspace.getConfiguration('giskard-assistant');
-        const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
-        const resOllama = await fetchWithTimeout(`${ollamaBaseUrl.replace(/\/$/, '')}/api/tags`, {}, 5000);
-        const dataOllama: any = await resOllama.json();
-        if (Array.isArray(dataOllama.models) && dataOllama.models.length > 0) {
-            return dataOllama.models.map((m: any) => m.name);
-        }
-    } catch {}
-
-    return [];
+        return await fetchModelsForProvider(baseUrl, activeConn?.tag, apiKey);
+    } catch {
+        return [];
+    }
 }
 
 export async function updateProviderConfig(activeProvider: string, openaiBaseUrl?: string, openaiApiKey?: string) {
