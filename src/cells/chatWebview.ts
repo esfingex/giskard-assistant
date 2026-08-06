@@ -27,6 +27,7 @@ import {
     handleToggleMcpTool,
     handleDiscoverMcpTools,
     handleTestMcpServer,
+    handleImportMcpConfigFile,
     getActiveMcpPromptContext
 } from './mcpHandlers';
 import {
@@ -151,6 +152,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'testMcpServer':
                     await handleTestMcpServer(this._view, data.serverType, data.commandOrUrl);
+                    break;
+                case 'importMcpConfig':
+                    await handleImportMcpConfigFile(this._view, this._store, data.path);
                     break;
                 // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
                 case 'toolReadFile':

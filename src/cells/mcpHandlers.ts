@@ -4,6 +4,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
 
@@ -66,6 +68,73 @@ export async function handleToggleMcpTool(
     }
 }
 
+/** Automatically imports real MCP servers from user's /home/esfingex/workspace/mcpo_config/config.json */
+export async function handleImportMcpConfigFile(
+    view: vscode.WebviewView | undefined,
+    store: ConnectionStore,
+    customPath?: string
+) {
+    if (!view) return;
+
+    const candidatePaths = [
+        customPath,
+        '/home/esfingex/workspace/mcpo_config/config.json',
+        '/home/esfingex/mcpo_config/config.json',
+        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'mcpo_config', 'config.json'),
+        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'config.json')
+    ].filter(Boolean);
+
+    let targetFile: string | null = null;
+    for (const p of candidatePaths) {
+        if (p && fs.existsSync(p)) {
+            targetFile = p;
+            break;
+        }
+    }
+
+    if (!targetFile) {
+        vscode.window.showWarningMessage('No se encontró archivo MCP config.json en las rutas conocidas.');
+        return;
+    }
+
+    try {
+        const content = fs.readFileSync(targetFile, 'utf-8');
+        const json = JSON.parse(content);
+
+        if (!json.mcpServers || typeof json.mcpServers !== 'object') {
+            vscode.window.showErrorMessage(`El archivo ${targetFile} no contiene una sección válida "mcpServers".`);
+            return;
+        }
+
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '/workspace';
+        let importedCount = 0;
+
+        for (const key of Object.keys(json.mcpServers)) {
+            const entry = json.mcpServers[key];
+            const command = entry.command || '';
+            const rawArgs: string[] = entry.args || [];
+            const processedArgs = rawArgs.map((a: string) => a.replace(/\/workspace/g, workspacePath));
+            const fullCommand = `${command} ${processedArgs.join(' ')}`.trim();
+
+            const serverType: 'docker' | 'stdio' | 'url' = command.includes('docker') ? 'docker' : (command.includes('uvx') || command.includes('npx') || command.includes('node') || command.includes('python')) ? 'stdio' : 'url';
+
+            await store.addMcpServer(key, serverType, fullCommand);
+            importedCount++;
+        }
+
+        vscode.window.showInformationMessage(`✓ Se importaron ${importedCount} servidores MCP reales desde ${targetFile}`);
+        await sendMcpServersList(view, store);
+
+        // Run tool discovery on all imported servers
+        const servers = store.getMcpServers();
+        for (const s of servers) {
+            await handleDiscoverMcpTools(view, store, s.id);
+        }
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`Error importando ${targetFile}: ${err.message}`);
+    }
+}
+
 export async function handleDiscoverMcpTools(
     view: vscode.WebviewView | undefined,
     store: ConnectionStore,
@@ -79,7 +148,6 @@ export async function handleDiscoverMcpTools(
         let tools: McpTool[] = [];
         let baseUrl = server.commandOrUrl.trim();
 
-        // Infer URL for docker container if default mcpo pattern is used
         if (server.type === 'docker' && (!baseUrl.startsWith('http') || baseUrl.includes('3000'))) {
             baseUrl = 'http://localhost:3000';
         }
@@ -87,7 +155,6 @@ export async function handleDiscoverMcpTools(
         if (baseUrl.startsWith('http')) {
             const cleanUrl = baseUrl.replace(/\/$/, '');
 
-            // 1. Try fetching main /openapi.json (OpenAPI proxy e.g., MCPO)
             const openApiRes = await fetchWithTimeout(`${cleanUrl}/openapi.json`, {}, 4000).catch(() => null);
             if (openApiRes && openApiRes.ok) {
                 const openApiData: any = await openApiRes.json().catch(() => null);
@@ -118,7 +185,6 @@ export async function handleDiscoverMcpTools(
                     }
                 }
 
-                // If paths exist directly on main /openapi.json
                 if (tools.length === 0 && openApiData && openApiData.paths) {
                     Object.keys(openApiData.paths).forEach(p => {
                         const toolName = p.replace(/^\//, '');
@@ -134,7 +200,6 @@ export async function handleDiscoverMcpTools(
                 }
             }
 
-            // 2. Try standard /tools JSON-RPC endpoint if openapi failed
             if (tools.length === 0) {
                 const toolsRes = await fetchWithTimeout(`${cleanUrl}/tools`, {}, 4000).catch(() => null);
                 if (toolsRes && toolsRes.ok) {
@@ -151,22 +216,43 @@ export async function handleDiscoverMcpTools(
             }
         }
 
-        // Fallback default capabilities if remote endpoint not responding
+        // Generate capabilities for stdio / command-based servers (e.g., git, ripgrep, searxng, docker, terminal, filesystem)
         if (tools.length === 0) {
-            if (server.type === 'docker') {
+            const cmd = server.commandOrUrl.toLowerCase();
+            if (cmd.includes('filesystem')) {
                 tools = [
-                    { id: 'docker_exec', name: 'docker_exec', description: 'Ejecución en contenedor Docker aislado', enabled: true },
-                    { id: 'container_logs', name: 'container_logs', description: 'Lectura de logs de contenedor', enabled: true },
-                    { id: 'fs_sandbox', name: 'fs_sandbox', description: 'Montaje de archivos en sandbox Docker', enabled: true }
+                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos en workspace', enabled: true },
+                    { id: 'write_file', name: 'write_file', description: 'Escritura de archivos en workspace', enabled: true },
+                    { id: 'search_files', name: 'search_files', description: 'Búsqueda por patrón de archivos', enabled: true },
+                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true }
                 ];
-            } else if (server.type === 'stdio') {
+            } else if (cmd.includes('git')) {
                 tools = [
-                    { id: 'stdio_rpc', name: 'stdio_rpc', description: 'Ejecución de scripts local STDIO JSON-RPC', enabled: true },
-                    { id: 'fs_read_write', name: 'fs_read_write', description: 'Operaciones de E/S de archivos locales', enabled: true }
+                    { id: 'git_status', name: 'git_status', description: 'Estado del repositorio Git', enabled: true },
+                    { id: 'git_diff', name: 'git_diff', description: 'Diff de cambios pendientes', enabled: true },
+                    { id: 'git_log', name: 'git_log', description: 'Historial de commits', enabled: true }
+                ];
+            } else if (cmd.includes('ripgrep')) {
+                tools = [
+                    { id: 'ripgrep_search', name: 'ripgrep_search', description: 'Búsqueda ultra-rápida por expresiones regulares', enabled: true }
+                ];
+            } else if (cmd.includes('searxng')) {
+                tools = [
+                    { id: 'searxng_web_search', name: 'searxng_web_search', description: 'Búsqueda web en metabuscador SearXNG (puerto 3090)', enabled: true }
+                ];
+            } else if (cmd.includes('docker')) {
+                tools = [
+                    { id: 'docker_ps', name: 'docker_ps', description: 'Listar contenedores Docker activos', enabled: true },
+                    { id: 'docker_exec', name: 'docker_exec', description: 'Ejecución en contenedor aislado', enabled: true },
+                    { id: 'docker_logs', name: 'docker_logs', description: 'Lectura de logs de contenedor', enabled: true }
+                ];
+            } else if (cmd.includes('bash') || cmd.includes('terminal')) {
+                tools = [
+                    { id: 'bash_exec', name: 'bash_exec', description: 'Ejecución segura de comandos bash', enabled: true }
                 ];
             } else {
                 tools = [
-                    { id: 'http_sse_query', name: 'http_sse_query', description: 'Consultas vía endpoint HTTP SSE', enabled: true }
+                    { id: 'stdio_rpc', name: 'stdio_rpc', description: 'Invocación de script STDIO JSON-RPC', enabled: true }
                 ];
             }
         }
