@@ -65,7 +65,7 @@ npx @vscode/vsce package --no-dependencies
 
 Si **Giskard Assistant** te ha sido útil y deseas apoyar el desarrollo continuo de esta herramienta soberana y multiproveedor, ¡puedes invitarme un café! ☕❤️
 
-[![Donar con PayPal](https://img.shields.io/badge/Donar%20con-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/esfingex)
+[![Donar con PayPal](https://img.shields.io/badge/Donar%20con-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/imasias)
 
 *Cada aporte ayuda a mantener el proyecto libre, independiente y en constante evolución.*
 
