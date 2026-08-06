@@ -732,13 +732,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const proposedDoc = await vscode.workspace.openTextDocument({
-            content: code,
-            language: doc.languageId
-        });
-
-        const title = `Giskard Diff: ${vscode.workspace.asRelativePath(doc.uri)} (Original ↔ Propuesta de IA)`;
-        await vscode.commands.executeCommand('vscode.diff', doc.uri, proposedDoc.uri, title);
+        // Open target file in 1 single editor window/tab and apply the changes directly in-place
+        await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+        edit.replace(doc.uri, fullRange, code);
+        await vscode.workspace.applyEdit(edit);
+        vscode.window.showInformationMessage(`✓ Cambios de IA aplicados directamente en ${vscode.workspace.asRelativePath(doc.uri)}`);
     }
 
     private async _handleCompressMemory(historyText: string) {
