@@ -278,8 +278,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Build System Capability Context Header
         let systemHeader = `[CAPACIDADES EN VS CODE]: Eres un agente de código integrado en VS Code. Puedes leer, abrir y editar archivos del proyecto.
-• Para LEER o inspeccionar un archivo usa: [TOOL_CALL] {"action": "read_file", "path": "ruta/relativa.ext"} [/END_TOOL] o {"tool": "read_file", "args": {"path": "ruta/relativa.ext"}}.
-• Para PROPONER CAMBIOS o EDITAR, escribe en la primera línea del bloque de código: // ruta/relativa.ext. VS Code abrirá el archivo y mostrará un Diff interactivo.\n\n`;
+• Para LEER o inspeccionar un archivo real del proyecto, usa: [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] o {"tool": "read_file", "args": {"path": "src/extension.ts"}}. (IMPORTANTE: Reemplaza "src/extension.ts" por la ruta real del archivo que necesitas leer. NUNCA uses la palabra literal "ruta/relativa.ext").
+• Para PROPONER CAMBIOS o EDITAR, escribe en la primera línea del bloque de código el comentario con la ruta real: // src/extension.ts.\n\n`;
         if (isGiskardActive) {
             systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
