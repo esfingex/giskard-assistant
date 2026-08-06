@@ -308,6 +308,21 @@ export async function handleDiscoverMcpTools(
                 tools = [
                     { id: 'bash_exec', name: 'bash_exec', description: 'Ejecución segura de comandos bash', enabled: true }
                 ];
+            } else if (cmd.includes('sqlite')) {
+                tools = [
+                    { id: 'read_query', name: 'read_query', description: 'Ejecutar consultas SELECT en SQLite DB', enabled: true },
+                    { id: 'write_query', name: 'write_query', description: 'Ejecutar consultas INSERT/UPDATE/DELETE', enabled: true },
+                    { id: 'create_table', name: 'create_table', description: 'Creación y actualización de tablas', enabled: true },
+                    { id: 'list_tables', name: 'list_tables', description: 'Listar tablas de la base de datos', enabled: true },
+                    { id: 'describe_table', name: 'describe_table', description: 'Inspeccionar esquema de tabla', enabled: true }
+                ];
+            } else if (cmd.includes('memory')) {
+                tools = [
+                    { id: 'create_entities', name: 'create_entities', description: 'Creación de entidades en grafo de memoria', enabled: true },
+                    { id: 'create_relations', name: 'create_relations', description: 'Creación de relaciones entre entidades', enabled: true },
+                    { id: 'search_nodes', name: 'search_nodes', description: 'Búsqueda por nodos y relaciones', enabled: true },
+                    { id: 'open_nodes', name: 'open_nodes', description: 'Lectura de grafos de memoria persistente', enabled: true }
+                ];
             } else {
                 tools = [
                     { id: 'stdio_rpc', name: 'stdio_rpc', description: 'Invocación de script STDIO JSON-RPC', enabled: true }
