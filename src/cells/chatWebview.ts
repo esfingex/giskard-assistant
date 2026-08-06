@@ -277,7 +277,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const mcpContext = getActiveMcpPromptContext(this._store);
 
         // Build System Capability Context Header
-        let systemHeader = '';
+        let systemHeader = `[CAPACIDADES EN VS CODE]: Eres un agente de código integrado en VS Code. Puedes leer, abrir y editar archivos del proyecto.
+• Para LEER o inspeccionar un archivo usa: [TOOL_CALL] {"action": "read_file", "path": "ruta/relativa.ext"} [/END_TOOL] o {"tool": "read_file", "args": {"path": "ruta/relativa.ext"}}.
+• Para PROPONER CAMBIOS o EDITAR, escribe en la primera línea del bloque de código: // ruta/relativa.ext. VS Code abrirá el archivo y mostrará un Diff interactivo.\n\n`;
         if (isGiskardActive) {
             systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
@@ -313,7 +315,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         if (isRemoteConnection) {
             const modelPrefix = targetModel.split('/')[0].toLowerCase();
-            
+
             // Dynamic Connection Resolution:
             // 1. Check if active connection is remote
             // 2. Find connection matching model tag or type === 'remote'
@@ -387,10 +389,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const streamUrl = `${connectorUrl}/llm/stream`;
             const payload = {
                 prompt: fullPrompt,
-                model: targetModel || undefined,
-                inject_sandbox_context: true
+                model: targetModel || undefined
             };
-
             const response = await fetch(streamUrl, {
                 method: 'POST',
                 headers: {
@@ -665,7 +665,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                             ollamaAccumulated += token;
                             this._view.webview.postMessage({ type: 'streamToken', token, model: targetModel });
                         }
-                    } catch {}
+                    } catch { }
                 }
             }
 
