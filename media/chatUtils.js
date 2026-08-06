@@ -116,9 +116,26 @@ function applyTheme(theme) {
 
 function preprocessMarkdown(text) {
     if (!text) return '';
-    const parts = text.split(/(```[\s\S]*?```)/g);
+
+    // 1. Auto-fix un-backticked code patterns like "typescript// relative/path..."
+    let fixedText = text.replace(/([a-zA-Z0-9_-]+)\s*(\/\/\s*[a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)\s*(import|export|const|let|var|class|function|type|interface)/g, '\n```$1\n$2\n$3');
+
+    const parts = fixedText.split(/(```[\s\S]*?```)/g);
     return parts.map(part => {
-        if (part.startsWith('```')) return part;
+        if (part.startsWith('```')) {
+            let codeContent = part;
+            // 2. If code block lacks proper line breaks, format semicolons and braces
+            if ((codeContent.match(/;/g) || []).length > 2 && codeContent.split('\n').length < 5) {
+                codeContent = codeContent
+                    .replace(/(```[a-zA-Z0-9_-]+)(\/\/|\/\*)/i, '$1\n$2')
+                    .replace(/;\s*(import|export|const|let|var|class|function|type|interface|private|public|protected|return|if|try|catch)/g, ';\n$1')
+                    .replace(/;\s*/g, ';\n')
+                    .replace(/\{\s*/g, ' {\n')
+                    .replace(/\}\s*/g, '}\n');
+            }
+            return codeContent;
+        }
+
         let clean = part;
         clean = clean.replace(/([^\n])(\s*##+\s)/g, '$1\n\n$2');
         clean = clean.replace(/([:\.\wáéíóúñA-Z])\s*(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
