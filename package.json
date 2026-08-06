@@ -94,8 +94,8 @@
         },
         "giskard-assistant.defaultModel": {
           "type": "string",
-          "default": "qwimi-k2.6:distill",
-          "description": "Modelo por defecto seleccionado en el chat."
+          "default": "auto",
+          "description": "Modelo por defecto seleccionado en el chat ('auto' detecta el primer modelo activo disponible)."
         },
         "giskard-assistant.autoSync": {
           "type": "boolean",
@@ -104,8 +104,8 @@
         },
         "giskard-assistant.mcpConfigPath": {
           "type": "string",
-          "default": "~/workspace/mcpo_config/config.json",
-          "description": "Ruta al archivo de configuración de servidores MCP (config.json o mcp_conf.js)."
+          "default": "./mcp_conf.js",
+          "description": "Ruta al archivo de configuración de servidores MCP (mcp_conf.js o config.json)."
         },
         "giskard-assistant.ollamaUrl": {
           "type": "string",
