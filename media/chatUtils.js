@@ -15,16 +15,32 @@ let _toolCallDepth = 0;     // anti-loop: limit re-injection to 1 level
 
 function parseToolCalls(text) {
     const toolCalls = [];
-    const regex = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/g;
+    
+    // 1. Standard [TOOL_CALL] ... [/END_TOOL]
+    const regex1 = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/g;
     let match;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = regex1.exec(text)) !== null) {
         try {
             const call = JSON.parse(match[1].trim());
             toolCalls.push(call);
-        } catch (e) {
-            console.warn('[Giskard] Error parseando JSON de tool call:', e, match[1]);
-        }
+        } catch (e) {}
     }
+
+    // 2. Robust JSON tool call matcher for {"tool":"read_file", "args":{"path":"..."}} or {"action":"read_file", ...}
+    const jsonRegex = /\{[^{}]*(?:"tool"|"action")[^{}]*\}/g;
+    while ((match = jsonRegex.exec(text)) !== null) {
+        try {
+            const obj = JSON.parse(match[0]);
+            if (obj && (obj.tool || obj.action)) {
+                const action = obj.tool || obj.action;
+                const pathStr = obj.path || (obj.args ? obj.args.path : null);
+                if (action && pathStr && !toolCalls.some(t => t.path === pathStr && t.action === action)) {
+                    toolCalls.push({ action, path: pathStr, content: obj.content || (obj.args ? obj.args.content : undefined) });
+                }
+            }
+        } catch (e) {}
+    }
+
     const cleanText = text.replace(/\[TOOL_CALL\]\s*[\s\S]*?\s*\[\/END_TOOL\]/g, '').trim();
     return { cleanText, toolCalls };
 }
