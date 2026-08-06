@@ -279,7 +279,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         const activeConn = this._store.getActive();
         const apiKey = (activeConn && activeConn.id) ? (await this._store.getApiKey(activeConn.id) || '') : '';
-        const targetModel = model || 'openai/gpt-oss-120b';
+        const targetModel = model || 'meta/llama-3.3-70b-instruct';
 
         // 1. If explicit Local model selected (starts with "local:") -> Stream from local Ollama
         if (targetModel.startsWith('local:')) {
@@ -288,9 +288,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // 2. If Active Connection is REMOTE (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenAI) -> Stream directly from Remote API
-        if (activeConn && activeConn.type === 'remote') {
-            await this._streamFromRemoteApi(activeConn.url, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
+        // 2. If Active Connection is REMOTE or model is a remote API model (meta/..., nvidia/..., openai/..., deepseek, etc) -> Stream directly from Remote API
+        const isRemoteModel = (activeConn && activeConn.type === 'remote') ||
+                              targetModel.includes('/') ||
+                              targetModel.startsWith('deepseek') ||
+                              targetModel.startsWith('moonshot') ||
+                              targetModel.startsWith('qwen') ||
+                              targetModel.startsWith('openai');
+
+        if (isRemoteModel) {
+            const remoteUrl = (activeConn && activeConn.type === 'remote') ? activeConn.url : 'https://integrate.api.nvidia.com/v1';
+            await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
 
@@ -537,7 +545,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const defaultModel = config.get<string>('defaultModel') || 'qwen3-coder:30b';
         const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
 
-        const targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
+        let targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
+        if (targetModel.includes('/') || targetModel.startsWith('deepseek') || targetModel.startsWith('moonshot')) {
+            const availableLocal = await fetchOllamaModels(ollamaBaseUrl);
+            targetModel = availableLocal.length > 0 ? availableLocal[0] : 'qwen3-coder:30b';
+        }
         const url = `${ollamaBaseUrl.replace(/\/$/, '')}/api/generate`;
 
         try {
