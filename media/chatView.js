@@ -433,7 +433,7 @@
                     );
                     if (_toolCallDepth < 1 && _lastUserPrompt) {
                         _toolCallDepth++;
-                        var followUp = 'El contenido del archivo `' + message.path + '` es:\n```\n' + message.content + '\n```\n\nAhora responde basándote en este contenido: ' + _lastUserPrompt;
+                        var followUp = 'Here is the current content of `' + message.path + '`:\n```\n' + message.content + '\n```\n\nNow, generate the complete updated file code block starting line 1 with `// ' + message.path + '` to implement the requested changes and improvements: ' + _lastUserPrompt;
                         if (promptInput) {
                             promptInput.value = followUp;
                             setTimeout(function() { send(); }, 300);
