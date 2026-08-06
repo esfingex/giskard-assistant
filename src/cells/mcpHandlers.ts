@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
@@ -79,18 +80,27 @@ export async function handleImportMcpConfigFile(
 
     const config = vscode.workspace.getConfiguration('giskard-assistant');
     const configuredPath = config.get<string>('mcpConfigPath');
+    const homedir = os.homedir();
+    const activeWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    const expandPath = (p?: string | null) => {
+        if (!p) return null;
+        if (p.startsWith('~')) return path.join(homedir, p.substring(1));
+        return p;
+    };
 
     const candidatePaths = [
-        customPath,
-        configuredPath,
-        '/home/esfingex/workspace/mcpo_config/config.json',
-        '/home/esfingex/workspace/mcpo_config/mcp_conf.js',
-        '/home/esfingex/mcpo_config/config.json',
-        '/home/esfingex/mcpo_config/mcp_conf.js',
-        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'mcpo_config', 'config.json'),
-        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'mcp_conf.js'),
-        path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'config.json')
-    ].filter(Boolean);
+        expandPath(customPath),
+        expandPath(configuredPath),
+        activeWorkspace ? path.join(activeWorkspace, 'mcpo_config', 'config.json') : null,
+        activeWorkspace ? path.join(activeWorkspace, 'mcpo_config', 'mcp_conf.js') : null,
+        activeWorkspace ? path.join(activeWorkspace, 'mcp_conf.js') : null,
+        activeWorkspace ? path.join(activeWorkspace, 'config.json') : null,
+        path.join(homedir, 'workspace', 'mcpo_config', 'config.json'),
+        path.join(homedir, 'workspace', 'mcpo_config', 'mcp_conf.js'),
+        path.join(homedir, 'mcpo_config', 'config.json'),
+        path.join(homedir, '.config', 'giskard', 'config.json')
+    ].filter((p): p is string => Boolean(p && typeof p === 'string'));
 
     let targetFile: string | null = null;
     for (const p of candidatePaths) {

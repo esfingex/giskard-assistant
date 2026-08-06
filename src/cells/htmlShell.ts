@@ -192,7 +192,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             <div class="tab-content" id="tab-content-mcp">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                     <span style="font-size:10px; font-weight:bold; color:#34d399;">🔌 Configuración de Servidores MCP</span>
-                    <button type="button" id="import-mcp-config-btn" style="padding:3px 7px; font-size:9px; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; border-radius:4px; cursor:pointer; font-weight:bold;" title="Importar desde /home/esfingex/workspace/mcpo_config/config.json">📂 Importar config.json</button>
+                    <button type="button" id="import-mcp-config-btn" style="padding:3px 7px; font-size:9px; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; border-radius:4px; cursor:pointer; font-weight:bold;" title="Cargar dinámicamente configuración MCP (config.json o mcp_conf.js)">📂 Importar config.json / mcp_conf.js</button>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px;">
                     <div class="field">

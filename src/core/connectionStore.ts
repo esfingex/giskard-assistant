@@ -62,11 +62,12 @@ export class ConnectionStore {
         // Seed default local sovereign MCP server if empty
         const mcpServers = this.getMcpServers();
         if (mcpServers.length === 0) {
+            const wsPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || './';
             const defaultMcp: McpServer = {
                 id: 1,
                 name: 'Servidor MCP Filesystem & Memory',
                 type: 'stdio',
-                commandOrUrl: 'npx -y @modelcontextprotocol/server-filesystem /home/esfingex/workspace',
+                commandOrUrl: `npx -y @modelcontextprotocol/server-filesystem ${wsPath}`,
                 isActive: true,
                 tools: [
                     { id: 'read_file', name: 'read_file', description: 'Lectura de archivos del workspace', enabled: true },
