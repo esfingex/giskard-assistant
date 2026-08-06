@@ -137,10 +137,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                 <button type="button" class="tab-btn" id="tab-btn-palette">${i18n.tabs.palette}</button>
             </div>
 
-            <!-- Tab 1: Local AI -->
+            <!-- Tab 1: List AIs -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <label style="font-weight:bold; font-size:11px; margin-bottom:4px;">🎯 Models Visible in Dropdown:</label>
+                    <label style="font-weight:bold; font-size:11px; margin-bottom:4px;">📋 Models Visible in Dropdown (List AIs):</label>
                     <div id="model-filter-list" style="flex:1; min-height:180px; max-height:100%; overflow-y:auto; border: 1px solid var(--vscode-input-border); padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.15);">Loading models...</div>
                 </div>
             </div>

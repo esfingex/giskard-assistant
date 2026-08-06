@@ -121,13 +121,25 @@ import { fetchModelsForProvider } from './providers';
 
 export async function fetchLlmModels(): Promise<string[]> {
     try {
-        const baseUrl = getConnectorUrl();
-        const activeConn = _store?.getActive();
-        let apiKey = '';
-        if (_store && activeConn) {
-            apiKey = (await _store.getApiKey(activeConn.id)) || '';
+        if (!_store) return [];
+        const list = _store.getAll();
+        const activeConnections = list.filter(c => c.isActive);
+
+        const connsToQuery = activeConnections.length > 0
+            ? activeConnections
+            : [{ id: 0, name: 'Giskard-Sys', type: 'local' as const, url: getConnectorUrl(), tag: 'giskard-sys', isActive: true }];
+
+        const allModels: string[] = [];
+
+        for (const conn of connsToQuery) {
+            const apiKey = conn.id ? (await _store.getApiKey(conn.id) || '') : '';
+            const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey);
+            for (const m of providerModels) {
+                if (!allModels.includes(m)) allModels.push(m);
+            }
         }
-        return await fetchModelsForProvider(baseUrl, activeConn?.tag, apiKey);
+
+        return allModels;
     } catch {
         return [];
     }
