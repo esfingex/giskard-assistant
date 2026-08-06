@@ -303,25 +303,30 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         let activeTag = (activeConn?.tag || 'ollama').toLowerCase();
         const maxContext = getModelMaxContextWindow(targetModel);
 
-        const isRemoteConnection = (activeConn && activeConn.type === 'remote') ||
-            ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
-            targetModel.includes('/') ||
-            targetModel.startsWith('deepseek') ||
-            targetModel.startsWith('moonshot') ||
-            targetModel.startsWith('qwen');
+        const isLocalProfile = activeConn && (activeConn.type === 'local' || activeConn.tag === 'ollama' || activeConn.tag === 'giskard-sys');
+        const isRemoteProfile = activeConn && activeConn.type === 'remote';
+
+        // Remote models have a vendor slash prefix (e.g. nvidia/..., meta/..., deepseek/...) or active connection is remote
+        const isRemoteConnection = !targetModel.startsWith('local:') && (
+            isRemoteProfile ||
+            (!isLocalProfile && targetModel.includes('/') && (
+                targetModel.startsWith('nvidia/') ||
+                targetModel.startsWith('meta/') ||
+                targetModel.startsWith('deepseek/') ||
+                targetModel.startsWith('mistral/') ||
+                targetModel.startsWith('anthropic/') ||
+                targetModel.startsWith('google/')
+            ))
+        );
 
         let apiKey = '';
         const allConns = this._store.getAll();
 
         if (isRemoteConnection) {
             const modelPrefix = targetModel.split('/')[0].toLowerCase();
-
-            // Dynamic Connection Resolution:
-            // 1. Check if active connection is remote
-            // 2. Find connection matching model tag or type === 'remote'
             let targetConn = (activeConn && activeConn.type === 'remote') ? activeConn : null;
             if (!targetConn) {
-                targetConn = allConns.find(c => (c.tag.toLowerCase() === modelPrefix || c.tag.toLowerCase().includes('nvidia') || c.type === 'remote')) || null;
+                targetConn = allConns.find(c => c.type === 'remote' && (c.tag.toLowerCase() === modelPrefix || c.tag.toLowerCase().includes('nvidia'))) || null;
             }
 
             if (targetConn) {
