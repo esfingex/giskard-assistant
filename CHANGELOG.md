@@ -2,6 +2,26 @@
 
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
+## [4.2.0] - 2026-08-06
+
+### Agregado & Reestructuración de Arquitectura
+- **Arquitectura Modular Multiproveedor (`src/core/providers/`):**
+  - Creación del ruteador maestro y módulos clientes independientes para **NVIDIA NIM** (`nvidiaProvider.ts`), **DeepSeek** (`deepseekProvider.ts`), **Moonshot Kimi** (`kimiProvider.ts`), **Qwen / DashScope** (`qwenProvider.ts`), **Giskard-Sys** (`giskardSysProvider.ts`) y **Ollama Local** (`ollamaProvider.ts`).
+- **Streaming Directo Autenticado para APIs Remotas (`_streamFromRemoteApi`):**
+  - Transmisión en tiempo real SSE vía `/v1/chat/completions` con soporte nativo de Bearer Tokens en SecretStorage (OS Keychain).
+- **Captura e Integración de Razonamiento Lógico (`reasoning_content`):**
+  - Procesamiento y renderizado fluido de cadenas de pensamiento para modelos de razonamiento avanzado como `openai/gpt-oss-120b` (NVIDIA NIM) y DeepSeek-R1.
+- **Ediciones *In-Place* en el Mismo Archivo Fuente:**
+  - Sustitución de pestañas divididas `vscode.diff` por aplicación directa de cambios dentro de la pestaña activa del editor de VS Code, activando decoraciones nativas de Git/VSCode.
+- **Integración Nativa MCP SSE (Puerto 3070):**
+  - Descubrimiento e inspección de herramientas de filesystem e imágenes en 130ms mediante Handshake SSE evento-respuesta (`initialize` + `tools/list`).
+- **Categorías Colapsables y Tagging Dinámico en Selector de Modelos:**
+  - Listas colapsables `<details>` y `<optgroup>` clasificando modelos según proveedor activo (`NVIDIA`, `DEEPSEEK`, `KIMI`, `GISKARD-SYS`, `OLLAMA`) y permitiendo uso combinado local/remoto.
+- **Daemon Nativo Linux Systemd para `giskard-sys`:**
+  - Registro e integración de `giskard-sys.service` como daemon de usuario nativo en Linux.
+
+---
+
 ## [3.9.0] - 2026-07-31
 
 ### Refactorización de Arquitectura
