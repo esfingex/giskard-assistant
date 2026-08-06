@@ -277,9 +277,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const mcpContext = getActiveMcpPromptContext(this._store);
 
         // Build System Capability Context Header
-        let systemHeader = `[CAPACIDADES EN VS CODE]: Eres un agente de código integrado en VS Code. Puedes leer, abrir y editar archivos del proyecto.
-• Para LEER o inspeccionar un archivo real del proyecto, usa: [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] o {"tool": "read_file", "args": {"path": "src/extension.ts"}}. (IMPORTANTE: Reemplaza "src/extension.ts" por la ruta real del archivo que necesitas leer. NUNCA uses la palabra literal "ruta/relativa.ext").
-• Para PROPONER CAMBIOS o EDITAR, escribe en la primera línea del bloque de código el comentario con la ruta real: // src/extension.ts.\n\n`;
+        let systemHeader = `[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
+• TO READ A FILE: Emit [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] or {"tool": "read_file", "args": {"path": "src/extension.ts"}}. Always use actual relative workspace file paths.
+• TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).\n\n`;
         if (isGiskardActive) {
             systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
