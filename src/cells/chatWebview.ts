@@ -691,9 +691,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         extractedPath?: string,
         includeActiveFile?: boolean
     ) {
-        const explicitTrigger = /(?:genera|crea|modifica|cambia|actualiza|agrega|elimina|refactoriza)\s+(?:el\s+archivo|el\s+c[oó]digo|en\s+|el\s+script)/i.test(userPrompt);
-        if (!explicitTrigger) return;
-
         const blocks = extractCodeBlocks(botResponse);
         if (blocks.length === 0) return;
 
@@ -704,7 +701,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         const targetPath = best.filePath || extractedPath;
-        await this._handleOpenDiff(best.code, targetPath);
+        if (targetPath) {
+            await this._handleOpenDiff(best.code, targetPath);
+        }
     }
 
     private async _handleOpenDiff(code: string, filePath?: string) {
@@ -715,20 +714,31 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             if (editor && editor.document.uri.scheme === 'file') doc = editor.document;
         }
 
+        if (!doc && filePath) {
+            const folders = vscode.workspace.workspaceFolders;
+            if (folders && folders.length > 0) {
+                const cleanRel = filePath.replace(/^\.\//, '').replace(/^\//, '');
+                const newUri = vscode.Uri.joinPath(folders[0].uri, cleanRel);
+                try {
+                    await vscode.workspace.fs.writeFile(newUri, new Uint8Array());
+                    doc = await vscode.workspace.openTextDocument(newUri);
+                } catch {}
+            }
+        }
+
         if (!doc) {
-            vscode.window.showInformationMessage('Giskard: No hay archivo abierto u especificado. Creando borrador...');
             const newDoc = await vscode.workspace.openTextDocument({ content: code, language: 'typescript' });
             await vscode.window.showTextDocument(newDoc, { preview: false });
             return;
         }
 
-        // Open the active target document in the editor tab and apply edit directly in-place
-        await vscode.window.showTextDocument(doc, { preview: false });
-        const edit = new vscode.WorkspaceEdit();
-        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-        edit.replace(doc.uri, fullRange, code);
-        await vscode.workspace.applyEdit(edit);
-        vscode.window.showInformationMessage(`✓ Cambios aplicados directamente en el archivo ${vscode.workspace.asRelativePath(doc.uri)}.`);
+        const proposedDoc = await vscode.workspace.openTextDocument({
+            content: code,
+            language: doc.languageId
+        });
+
+        const title = `Giskard Diff: ${vscode.workspace.asRelativePath(doc.uri)} (Original ↔ Propuesta de IA)`;
+        await vscode.commands.executeCommand('vscode.diff', doc.uri, proposedDoc.uri, title);
     }
 
     private async _handleCompressMemory(historyText: string) {
