@@ -22,6 +22,35 @@ function setEnabledModels(enabledList) {
 
 let lastModelsPayload = { models: [], localModels: [], activeTag: 'ollama', activeName: 'Local AI' };
 
+function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
+    const m = (modelName || '').toLowerCase();
+    if (m.startsWith('local:')) {
+        return { tag: 'OLLAMA', label: 'Local Swarm (Ollama)', type: 'ollama' };
+    }
+    if (m.includes('nvidia') || m.includes('nemotron') || m.includes('llama') || m.includes('gpt-oss') || m.includes('mistralai')) {
+        return { tag: 'NVIDIA', label: 'NVIDIA NIM API', type: 'cli' };
+    }
+    if (m.includes('deepseek')) {
+        return { tag: 'DEEPSEEK', label: 'DeepSeek API', type: 'cli' };
+    }
+    if (m.includes('kimi') || m.includes('moonshot')) {
+        return { tag: 'KIMI', label: 'Moonshot Kimi API', type: 'cli' };
+    }
+    if (m.includes('qwen') || m.includes('dashscope')) {
+        return { tag: 'QWEN', label: 'Qwen / DashScope API', type: 'cli' };
+    }
+    if (m.includes('gemini')) {
+        return { tag: 'GEMINI', label: 'Google Gemini', type: 'cli' };
+    }
+    if (m.includes('claude')) {
+        return { tag: 'CLAUDE', label: 'Anthropic Claude', type: 'cli' };
+    }
+    
+    const tagUpper = (fallbackTag || 'NVIDIA').toUpperCase();
+    const tagClass = ['NVIDIA', 'DEEPSEEK', 'KIMI', 'QWEN', 'OPENAI', 'ANTHROPIC', 'GEMINI'].includes(tagUpper) ? 'cli' : 'ollama';
+    return { tag: tagUpper, label: fallbackName || 'AI Model', type: tagClass };
+}
+
 function renderModelFilterList(payload) {
     const modelFilterList = document.getElementById('model-filter-list');
     if (!modelFilterList) return;
@@ -32,39 +61,46 @@ function renderModelFilterList(payload) {
         lastModelsPayload = {
             models: payload.models || [],
             localModels: payload.localModels || [],
-            activeTag: payload.activeTag || 'ollama',
-            activeName: payload.activeName || 'Local AI'
+            activeTag: payload.activeTag || 'nvidia',
+            activeName: payload.activeName || 'AI Connections'
         };
     }
 
     const enabled = getEnabledModels();
     let html = '';
 
-    const tagUpper = (lastModelsPayload.activeTag || 'ollama').toUpperCase();
-    const tagClass = ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(lastModelsPayload.activeTag) ? 'cli' : 'ollama';
     const activeModels = lastModelsPayload.models || [];
     const localModels = lastModelsPayload.localModels || [];
 
-    // 1. Collapsible Group 1: Active Connection Provider Models
-    if (activeModels.length > 0) {
+    // Group models by authentic provider tag
+    const grouped = {};
+    activeModels.forEach(m => {
+        const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
+        if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
+        grouped[meta.label].items.push(m);
+    });
+
+    // 1. Collapsible Groups by Authentic Provider Tag
+    Object.keys(grouped).forEach(groupLabel => {
+        const grp = grouped[groupLabel];
         html += `<details open style="margin-bottom:8px;">
             <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
-                🟢 ${escapeHtml(lastModelsPayload.activeName)} [${escapeHtml(tagUpper)}] (${activeModels.length} detectados)
+                🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} detectados)
             </summary>
             <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-        activeModels.forEach(m => {
+        grp.items.forEach(m => {
             const isChecked = !enabled || enabled.includes(m);
             html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                 <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
-                <span class="filter-tag ${tagClass}">${escapeHtml(tagUpper)}</span>
+                <span class="filter-tag ${grp.meta.type}">${escapeHtml(grp.meta.tag)}</span>
                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
             </label>`;
         });
         html += `</div></details>`;
-    }
+    });
 
-    // 2. Collapsible Group 2: Local System Models (Ollama)
-    if (localModels.length > 0 && lastModelsPayload.activeTag !== 'ollama') {
+    // 2. Collapsible Group for Local System Models (Ollama)
+    if (localModels.length > 0) {
         html += `<details style="margin-bottom:8px;">
             <summary style="font-size:10px;font-weight:bold;color:#34d399;cursor:pointer;user-select:none;padding:2px 0;">
                 🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} detectados)
@@ -74,32 +110,16 @@ function renderModelFilterList(payload) {
             const isChecked = !enabled || enabled.includes(`local:${m}`);
             html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                 <input type="checkbox" class="model-filter-cb" value="local:${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
-                <span class="filter-tag ollama">LOCAL</span>
+                <span class="filter-tag ollama">OLLAMA</span>
                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
             </label>`;
         });
         html += `</div></details>`;
     }
 
-    // 3. Collapsible Group 3: Cloud Orchestrators & CLIs
-    html += `<details style="margin-bottom:4px;">
-        <summary style="font-size:10px;font-weight:bold;color:#fbbf24;cursor:pointer;user-select:none;padding:2px 0;">
-            ☁️ Orquestadores & CLIs
-        </summary>
-        <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-    const cliModels = [
-        { id: 'cli:gemini', name: 'Gemini CLI (Google AI)' },
-        { id: 'cli:claude', name: 'Claude CLI (Anthropic)' }
-    ];
-    cliModels.forEach(c => {
-        const isChecked = !enabled || enabled.includes(c.id);
-        html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
-            <input type="checkbox" class="model-filter-cb" value="${escapeHtml(c.id)}" ${isChecked ? 'checked' : ''}>
-            <span class="filter-tag cli">CLI</span>
-            <span>${escapeHtml(c.name)}</span>
-        </label>`;
-    });
-    html += `</div></details>`;
+    if (!html) {
+        html = '<div style="font-size:10px;opacity:0.6;">Sin modelos detectados. Configura o activa conexiones en la pestaña API Remota.</div>';
+    }
 
     modelFilterList.innerHTML = html;
 
@@ -108,25 +128,14 @@ function renderModelFilterList(payload) {
             const selected = [];
             modelFilterList.querySelectorAll('.model-filter-cb:checked').forEach(c => selected.push(c.value));
             setEnabledModels(selected);
-            updateModelDropdown(lastModelsPayload);
+            updateModelDropdown();
         });
     });
 }
 
-function updateModelDropdown(payload) {
+function updateModelDropdown() {
     const modelSelect = document.getElementById('model-select');
     if (!modelSelect) return;
-
-    if (Array.isArray(payload)) {
-        lastModelsPayload.models = payload;
-    } else if (payload && typeof payload === 'object') {
-        lastModelsPayload = {
-            models: payload.models || [],
-            localModels: payload.localModels || [],
-            activeTag: payload.activeTag || 'ollama',
-            activeName: payload.activeName || 'Local AI'
-        };
-    }
 
     const currentVal = modelSelect.value;
     const enabled = getEnabledModels();
@@ -136,21 +145,27 @@ function updateModelDropdown(payload) {
     const showClaude = !enabled || enabled.includes('cli:claude');
 
     let html = '';
-    const tagUpper = (lastModelsPayload.activeTag || 'ollama').toUpperCase();
 
-    // Group 1: Active Connection Provider Models
-    if (activeModels.length > 0) {
-        html += `<optgroup label="🟢 ${escapeHtml(lastModelsPayload.activeName)} [${escapeHtml(tagUpper)}] (${activeModels.length} activos)">`;
-        activeModels.forEach(m => {
+    // Group models by authentic provider
+    const grouped = {};
+    activeModels.forEach(m => {
+        const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
+        if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
+        grouped[meta.label].items.push(m);
+    });
+
+    Object.keys(grouped).forEach(groupLabel => {
+        const grp = grouped[groupLabel];
+        html += `<optgroup label="🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} activos)">`;
+        grp.items.forEach(m => {
             let label = m;
             if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
             html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
         });
         html += '</optgroup>';
-    }
+    });
 
-    // Group 2: Local System Models (Ollama)
-    if (localModels.length > 0 && lastModelsPayload.activeTag !== 'ollama') {
+    if (localModels.length > 0) {
         html += `<optgroup label="🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} activos)">`;
         localModels.forEach(m => {
             html += `<option value="local:${escapeHtml(m)}">Local: ${escapeHtml(m)}</option>`;
@@ -158,7 +173,6 @@ function updateModelDropdown(payload) {
         html += '</optgroup>';
     }
 
-    // Group 3: Cloud Orchestrators & CLIs
     if (showGemini || showClaude) {
         html += '<optgroup label="☁️ Orquestadores & CLIs">';
         if (showGemini) html += '<option value="cli:gemini">Gemini CLI (1M Context 🧠)</option>';
