@@ -20,39 +20,86 @@ function setEnabledModels(enabledList) {
     } catch {}
 }
 
-function renderModelFilterList(ollamaModels) {
+let lastModelsPayload = { models: [], localModels: [], activeTag: 'ollama', activeName: 'Local AI' };
+
+function renderModelFilterList(payload) {
     const modelFilterList = document.getElementById('model-filter-list');
     if (!modelFilterList) return;
-    lastDetectedModels = ollamaModels || [];
-    
+
+    if (Array.isArray(payload)) {
+        lastModelsPayload.models = payload;
+    } else if (payload && typeof payload === 'object') {
+        lastModelsPayload = {
+            models: payload.models || [],
+            localModels: payload.localModels || [],
+            activeTag: payload.activeTag || 'ollama',
+            activeName: payload.activeName || 'Local AI'
+        };
+    }
+
     const enabled = getEnabledModels();
     let html = '';
 
-    if (lastDetectedModels.length > 0) {
-        html += '<div class="filter-group-title">🚀 Enjambre Local (Ollama - ' + lastDetectedModels.length + ' detectados)</div>';
-        lastDetectedModels.forEach(m => {
+    const tagUpper = (lastModelsPayload.activeTag || 'ollama').toUpperCase();
+    const tagClass = ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(lastModelsPayload.activeTag) ? 'cli' : 'ollama';
+    const activeModels = lastModelsPayload.models || [];
+    const localModels = lastModelsPayload.localModels || [];
+
+    // 1. Collapsible Group 1: Active Connection Provider Models
+    if (activeModels.length > 0) {
+        html += `<details open style="margin-bottom:8px;">
+            <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
+                🟢 ${escapeHtml(lastModelsPayload.activeName)} [${escapeHtml(tagUpper)}] (${activeModels.length} detectados)
+            </summary>
+            <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
+        activeModels.forEach(m => {
             const isChecked = !enabled || enabled.includes(m);
-            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 4px;">
+            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                 <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
-                <span class="filter-tag ollama">OLLAMA</span>
+                <span class="filter-tag ${tagClass}">${escapeHtml(tagUpper)}</span>
                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
             </label>`;
         });
+        html += `</div></details>`;
     }
 
-    html += '<div class="filter-group-title" style="margin-top: 8px;">☁️ Orquestadores & CLIs</div>';
+    // 2. Collapsible Group 2: Local System Models (Ollama)
+    if (localModels.length > 0 && lastModelsPayload.activeTag !== 'ollama') {
+        html += `<details style="margin-bottom:8px;">
+            <summary style="font-size:10px;font-weight:bold;color:#34d399;cursor:pointer;user-select:none;padding:2px 0;">
+                🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} detectados)
+            </summary>
+            <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
+        localModels.forEach(m => {
+            const isChecked = !enabled || enabled.includes(`local:${m}`);
+            html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
+                <input type="checkbox" class="model-filter-cb" value="local:${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
+                <span class="filter-tag ollama">LOCAL</span>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+            </label>`;
+        });
+        html += `</div></details>`;
+    }
+
+    // 3. Collapsible Group 3: Cloud Orchestrators & CLIs
+    html += `<details style="margin-bottom:4px;">
+        <summary style="font-size:10px;font-weight:bold;color:#fbbf24;cursor:pointer;user-select:none;padding:2px 0;">
+            ☁️ Orquestadores & CLIs
+        </summary>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
     const cliModels = [
         { id: 'cli:gemini', name: 'Gemini CLI (Google AI)' },
         { id: 'cli:claude', name: 'Claude CLI (Anthropic)' }
     ];
     cliModels.forEach(c => {
         const isChecked = !enabled || enabled.includes(c.id);
-        html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 4px;">
+        html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
             <input type="checkbox" class="model-filter-cb" value="${escapeHtml(c.id)}" ${isChecked ? 'checked' : ''}>
             <span class="filter-tag cli">CLI</span>
             <span>${escapeHtml(c.name)}</span>
         </label>`;
     });
+    html += `</div></details>`;
 
     modelFilterList.innerHTML = html;
 
@@ -61,36 +108,57 @@ function renderModelFilterList(ollamaModels) {
             const selected = [];
             modelFilterList.querySelectorAll('.model-filter-cb:checked').forEach(c => selected.push(c.value));
             setEnabledModels(selected);
-            updateModelDropdown(lastDetectedModels);
+            updateModelDropdown(lastModelsPayload);
         });
     });
 }
 
-function updateModelDropdown(ollamaModels) {
+function updateModelDropdown(payload) {
     const modelSelect = document.getElementById('model-select');
     if (!modelSelect) return;
-    lastDetectedModels = ollamaModels || [];
+
+    if (Array.isArray(payload)) {
+        lastModelsPayload.models = payload;
+    } else if (payload && typeof payload === 'object') {
+        lastModelsPayload = {
+            models: payload.models || [],
+            localModels: payload.localModels || [],
+            activeTag: payload.activeTag || 'ollama',
+            activeName: payload.activeName || 'Local AI'
+        };
+    }
+
     const currentVal = modelSelect.value;
     const enabled = getEnabledModels();
-
-    const localModels = lastDetectedModels.filter(m => !enabled || enabled.includes(m));
+    const activeModels = (lastModelsPayload.models || []).filter(m => !enabled || enabled.includes(m));
+    const localModels = (lastModelsPayload.localModels || []).filter(m => !enabled || enabled.includes(`local:${m}`));
     const showGemini = !enabled || enabled.includes('cli:gemini');
     const showClaude = !enabled || enabled.includes('cli:claude');
 
     let html = '';
-    if (localModels.length > 0) {
-        html += '<optgroup label="🚀 Enjambre Local (Ollama - ' + localModels.length + ' activos)">';
-        localModels.forEach(m => {
+    const tagUpper = (lastModelsPayload.activeTag || 'ollama').toUpperCase();
+
+    // Group 1: Active Connection Provider Models
+    if (activeModels.length > 0) {
+        html += `<optgroup label="🟢 ${escapeHtml(lastModelsPayload.activeName)} [${escapeHtml(tagUpper)}] (${activeModels.length} activos)">`;
+        activeModels.forEach(m => {
             let label = m;
-            if (m.includes('distill') || m.includes('kimi')) label += ' (Kimi+Opus 🧠 128K)';
-            else if (m.includes('coder') || m.includes('code')) label += ' (Coder ⚡ 64K)';
-            else if (m.includes('phi')) label += ' (Fast ⚡ 32K)';
-            else if (m.includes('aya')) label += ' (Traductor 🌐 32K)';
-            html += '<option value="' + escapeHtml(m) + '">' + escapeHtml(label) + '</option>';
+            if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
+            html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
         });
         html += '</optgroup>';
     }
 
+    // Group 2: Local System Models (Ollama)
+    if (localModels.length > 0 && lastModelsPayload.activeTag !== 'ollama') {
+        html += `<optgroup label="🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} activos)">`;
+        localModels.forEach(m => {
+            html += `<option value="local:${escapeHtml(m)}">Local: ${escapeHtml(m)}</option>`;
+        });
+        html += '</optgroup>';
+    }
+
+    // Group 3: Cloud Orchestrators & CLIs
     if (showGemini || showClaude) {
         html += '<optgroup label="☁️ Orquestadores & CLIs">';
         if (showGemini) html += '<option value="cli:gemini">Gemini CLI (1M Context 🧠)</option>';
@@ -101,9 +169,9 @@ function updateModelDropdown(ollamaModels) {
     if (!html) {
         html = '<option value="default">— Selecciona un modelo —</option>';
     }
-    
+
     modelSelect.innerHTML = html;
-    
+
     if (currentVal) {
         for (let i = 0; i < modelSelect.options.length; i++) {
             if (modelSelect.options[i].value === currentVal) {
