@@ -378,16 +378,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         // 4. Active Connection is GISKARD-SYS (local port 3500)
-        const connectorUrl = activeConn?.url || getConnectorUrl();
-        const isOnline = await checkHealth(connectorUrl);
-
-        if (!isOnline) {
-            this._view.webview.postMessage({ type: 'offlineMode', active: true });
-            await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile);
-            return;
-        }
-
-        this._view.webview.postMessage({ type: 'offlineMode', active: false });
+        const connectorUrl = (activeTag === 'giskard-sys' && activeConn?.url) ? activeConn.url : getConnectorUrl();
 
         this._activeAbortController = new AbortController();
         const signal = this._activeAbortController.signal;
