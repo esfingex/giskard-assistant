@@ -278,11 +278,32 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             fullPrompt = `[Proyecto Activo VSCode: ${activeFolder.name} (${activeFolder.uri.fsPath})]\n${fullPrompt}`;
         }
 
-        const activeConn = this._store.getActive();
-        const apiKey = (activeConn && activeConn.id) ? (await this._store.getApiKey(activeConn.id) || '') : '';
+        let activeConn = this._store.getActive();
         const targetModel = model || 'meta/llama-3.3-70b-instruct';
-        const activeTag = (activeConn?.tag || 'ollama').toLowerCase();
+        let activeTag = (activeConn?.tag || 'ollama').toLowerCase();
         const maxContext = getModelMaxContextWindow(targetModel);
+
+        const isRemoteConnection = (activeConn && activeConn.type === 'remote') ||
+                                    ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
+                                    targetModel.includes('/') ||
+                                    targetModel.startsWith('deepseek') ||
+                                    targetModel.startsWith('moonshot') ||
+                                    targetModel.startsWith('qwen');
+
+        // Fallback: If current active connection is local but user selected a remote model, search for a saved remote connection profile
+        if (isRemoteConnection && activeConn?.type !== 'remote') {
+            const allConns = this._store.getAll();
+            const remoteConn = allConns.find(c => c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag));
+            if (remoteConn) {
+                activeConn = remoteConn;
+                activeTag = (remoteConn.tag || 'nvidia').toLowerCase();
+            }
+        }
+
+        let apiKey = '';
+        if (activeConn && activeConn.id) {
+            apiKey = (await this._store.getApiKey(activeConn.id)) || '';
+        }
 
         if (includeActiveFile) {
             const editor = vscode.window.activeTextEditor;
@@ -310,14 +331,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         // 2. Active Connection is REMOTE (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenAI, or type === 'remote')
-        const isRemoteConnection = (activeConn && activeConn.type === 'remote') ||
-                                    ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
-                                    targetModel.includes('/') ||
-                                    targetModel.startsWith('deepseek') ||
-                                    targetModel.startsWith('moonshot') ||
-                                    targetModel.startsWith('qwen');
-
         if (isRemoteConnection) {
+            if (!apiKey || !apiKey.trim()) {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `⚠️ Falta la API Key para conectar con ${targetModel}.\n\n💡 Agrega tu conexión en ⚙️ Ajustes -> Remote Connections (API Remota) con tu token (ej. nvapi-...) y haz clic en 'Activar'.`
+                });
+                return;
+            }
             const remoteUrl = activeConn?.url || 'https://integrate.api.nvidia.com/v1';
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
