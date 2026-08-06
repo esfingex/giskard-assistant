@@ -443,8 +443,18 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         try {
                             const json = JSON.parse(rawData);
                             let contentToken = '';
-                            if (json.choices && json.choices[0]?.delta?.content) {
-                                contentToken = json.choices[0].delta.content;
+                            const choice = json.choices && json.choices[0];
+                            const delta = choice?.delta;
+                            const msg = choice?.message;
+
+                            if (delta?.content) {
+                                contentToken = delta.content;
+                            } else if (delta?.reasoning_content) {
+                                contentToken = delta.reasoning_content;
+                            } else if (msg?.content) {
+                                contentToken = msg.content;
+                            } else if (msg?.reasoning_content) {
+                                contentToken = msg.reasoning_content;
                             } else if (json.content) {
                                 contentToken = json.content;
                             } else if (typeof json === 'string') {
