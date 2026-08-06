@@ -1,0 +1,66 @@
+{
+  "tabs": {
+    "local": "⚙️ IA Local",
+    "remote": "🌐 API Remota",
+    "mcp": "🔌 Servidores MCP",
+    "palette": "🎨 Tema de Color"
+  },
+  "status": {
+    "tokens": "🔢 Tokens",
+    "clearContext": "🗑️ Limpiar Contexto",
+    "settings": "⚙️ Ajustes",
+    "offline": "⚡ MODO OFFLINE"
+  },
+  "connections": {
+    "title": "🔌 Gestión de Conexiones IA",
+    "name": "Nombre Conexión:",
+    "type": "Tipo:",
+    "url": "URL Backend / API:",
+    "tag": "Etiqueta / Categoría:",
+    "apiKey": "API Key / Token:",
+    "test": "🧪 Probador URL",
+    "add": "➕ Guardar Conexión",
+    "active": "★ Activa",
+    "activate": "Activar",
+    "delete": "Eliminar"
+  },
+  "mcp": {
+    "title": "🔌 Configuración de Servidores MCP",
+    "import": "📂 Importar mcp_conf.js / config.json",
+    "name": "Nombre Servidor MCP:",
+    "type": "Tipo:",
+    "cmd": "Comando o URL:",
+    "test": "🧪 Probar MCP",
+    "add": "➕ Añadir MCP",
+    "scan": "🔍 Escanear Servicios MCP",
+    "active": "🟢 Activo",
+    "inactive": "⚪ Inactivo",
+    "availableServices": "🛠️ Servicios/Herramientas Disponibles"
+  },
+  "chat": {
+    "placeholder": "Pregunta al asistente... (Shift+Enter para nueva línea)",
+    "send": "Enviar ↵",
+    "stop": "Detener ⏹️",
+    "compress": "Comprimir Memoria",
+    "thinking": "Pensando...",
+    "applyDiff": "📝 Aplicar Diff",
+    "applyLastCode": "🚀 Aplicar último bloque de código",
+    "copy": "📋 Copiar",
+    "runShell": "⚡ Shell",
+    "openFile": "📄 Abrir"
+  },
+  "palette": {
+    "title": "🎨 Personalización de Colores",
+    "presets": "Preajustes:",
+    "white": "Blanco Mínimo",
+    "cyan": "Cian Soberano",
+    "emerald": "Esmeralda Cyber",
+    "purple": "Púrpura Synth",
+    "userFont": "💬 Color Texto Usuario:",
+    "headerFont": "📑 Color Títulos Cabecera:",
+    "accentColor": "⚡ Color Borde Acento:",
+    "userBg": "💬 Burbuja Usuario (Fondo):",
+    "botBg": "🤖 Burbuja IA (Fondo):",
+    "thinkBg": "💡 Caja de Razonamiento (Fondo):"
+  }
+}

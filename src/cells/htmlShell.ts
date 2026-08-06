@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import { loadTranslations } from '../core/i18n';
 
 export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webview): string {
     const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'marked.min.js'));
@@ -12,8 +13,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     const mcpViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'mcpView.js'));
     const chatViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatView.js'));
 
+    const i18n = loadTranslations(extensionUri);
+
     return `<!DOCTYPE html>
-<html lang="es" style="height: 100%;">
+<html lang="en" style="height: 100%;">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src ${webview.cspSource}; connect-src *;">
@@ -85,64 +88,61 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
 <body>
     <div class="chat-container">
         <div class="header">
-            <button class="btn-settings" id="open-settings-btn" title="Ajustes de Conector / API">⚙️</button>
+            <button class="btn-settings" id="open-settings-btn" title="${i18n.status.settings}">⚙️</button>
             <select id="model-select">
-                <optgroup label="Enjambre Local (Ollama)">
-                    <option value="">— Selecciona un modelo —</option>
+                <optgroup label="Local Swarm (Ollama)">
+                    <option value="">— Select AI model —</option>
                 </optgroup>
             </select>
-            <button class="btn-clear" id="clear-ctx-btn" title="Limpiar historial y resetear contexto de sesión">🗑️</button>
+            <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
 
         <div class="status-bar">
-            <span id="token-counter">Tokens: 0</span>
-            <span class="offline-badge" id="offline-badge">📴 OFFLINE MODE</span>
-            <button class="btn-compress" id="compress-btn" title="Guardar resumen en memoria soberana y limpiar ventana">Comprimir Memoria</button>
+            <span id="token-counter">${i18n.status.tokens}: 0</span>
+            <span class="offline-badge" id="offline-badge">${i18n.status.offline}</span>
+            <button class="btn-compress" id="compress-btn" title="${i18n.chat.compress}">${i18n.chat.compress}</button>
         </div>
 
-        <!-- Messages area — starts empty, no auto-welcome message -->
         <div class="messages" id="messages"></div>
 
         <div class="input-box">
             <div class="menu-dropdown" id="context-menu">
                 <div class="menu-item" id="ctx-mentions">@ Mentions (@file, @git)</div>
             </div>
-            <textarea id="prompt" rows="2" placeholder="Pregunta a la IA… (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
+            <textarea id="prompt" rows="2" placeholder="${i18n.chat.placeholder}"></textarea>
             <div class="toolbar">
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>
-                <label><input type="checkbox" id="inc-file" checked> Archivo activo</label>
-                <button id="send-btn" class="btn-send">Enviar ⚡</button>
-                <button id="stop-btn" class="btn-send" style="display: none; background: #ef4444; border-color: #ef4444; color: #ffffff;">🛑 Detener</button>
+                <label><input type="checkbox" id="inc-file" checked> Active File</label>
+                <button id="send-btn" class="btn-send">${i18n.chat.send}</button>
+                <button id="stop-btn" class="btn-send" style="display: none; background: #ef4444; border-color: #ef4444; color: #ffffff;">${i18n.chat.stop}</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Ajustes del Conector -->
+    <!-- Connector & MCP Settings Modal -->
     <div class="modal" id="settings-modal">
         <div class="modal-card">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--vscode-input-border); padding-bottom:6px; margin-bottom:2px;">
-                <h4 style="margin:0; font-size:12px; font-weight:bold; color:var(--vscode-foreground);">⚙️ Ajustes del Conector & MCP</h4>
-                <button type="button" id="close-modal-btn" style="background:transparent; border:none; color:#f87171; font-weight:bold; font-size:14px; cursor:pointer; padding:0 4px;" title="Cerrar modal (Esc)">✖</button>
+                <h4 style="margin:0; font-size:12px; font-weight:bold; color:var(--vscode-foreground);">⚙️ ${i18n.connections.title}</h4>
+                <button type="button" id="close-modal-btn" style="background:transparent; border:none; color:#f87171; font-weight:bold; font-size:14px; cursor:pointer; padding:0 4px;" title="Close (Esc)">✖</button>
             </div>
             <div class="tab-nav">
-                <button type="button" class="tab-btn active" id="tab-btn-local">Local & Visibilidad</button>
-                <button type="button" class="tab-btn" id="tab-btn-remote">API Remota & Keys</button>
-                <button type="button" class="tab-btn" id="tab-btn-mcp">🔌 Servicios MCP</button>
-                <button type="button" class="tab-btn" id="tab-btn-palette">🎨 Paleta</button>
+                <button type="button" class="tab-btn active" id="tab-btn-local">${i18n.tabs.local}</button>
+                <button type="button" class="tab-btn" id="tab-btn-remote">${i18n.tabs.remote}</button>
+                <button type="button" class="tab-btn" id="tab-btn-mcp">${i18n.tabs.mcp}</button>
+                <button type="button" class="tab-btn" id="tab-btn-palette">${i18n.tabs.palette}</button>
             </div>
 
-            <!-- Tab 1: Local & Visibilidad -->
+            <!-- Tab 1: Local AI -->
             <div class="tab-content active" id="tab-content-local">
                 <div class="field" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <label style="font-weight:bold; font-size:11px; margin-bottom:4px;">🎯 Modelos Visibles en Selector:</label>
-                    <div id="model-filter-list" style="flex:1; min-height:180px; max-height:100%; overflow-y:auto; border: 1px solid var(--vscode-input-border); padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.15);">Carga modelos con el botón de refresco →</div>
+                    <label style="font-weight:bold; font-size:11px; margin-bottom:4px;">🎯 Models Visible in Dropdown:</label>
+                    <div id="model-filter-list" style="flex:1; min-height:180px; max-height:100%; overflow-y:auto; border: 1px solid var(--vscode-input-border); padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.15);">Loading models...</div>
                 </div>
             </div>
 
-            <!-- Tab 2: Conexiones -->
+            <!-- Tab 2: Remote Connections -->
             <div class="tab-content" id="tab-content-remote">
-
-                <!-- Add Connection Form -->
                 <div style="display:flex; flex-direction:column; gap:6px;">
                     <div style="display:flex; gap:8px; align-items:center; font-size:10px;">
                         <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
@@ -153,19 +153,19 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                         </label>
                     </div>
                     <div class="field">
-                        <label>Nombre:</label>
-                        <input type="text" id="conn-name" placeholder="mi-giskard-local">
+                        <label>${i18n.connections.name}</label>
+                        <input type="text" id="conn-name" placeholder="my-giskard-local">
                     </div>
                     <div class="field">
-                        <label>URL:</label>
+                        <label>${i18n.connections.url}</label>
                         <div style="display:flex;gap:4px;align-items:center;">
                             <input type="text" id="conn-url" placeholder="http://localhost:3500" style="flex:1;">
-                            <button type="button" id="test-connection-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">🔌 Probar</button>
+                            <button type="button" id="test-connection-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">${i18n.connections.test}</button>
                         </div>
                         <div id="connection-status" style="font-size:9px;margin-top:3px;min-height:14px;display:flex;align-items:center;gap:4px;"></div>
                     </div>
                     <div class="field">
-                        <label>Tag / Proveedor:</label>
+                        <label>${i18n.connections.tag}</label>
                         <select id="conn-tag">
                             <option value="giskard-sys">giskard-sys</option>
                             <option value="ollama">ollama</option>
@@ -178,32 +178,31 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                         </select>
                     </div>
                     <div class="field" id="conn-token-field" style="display:none;">
-                        <label>Token / API Key:</label>
+                        <label>${i18n.connections.apiKey}</label>
                         <input type="password" id="conn-token" placeholder="sk-… / Bearer token">
                     </div>
-                    <button type="button" id="add-connection-btn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;">+ Agregar Conexión</button>
+                    <button type="button" id="add-connection-btn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;">${i18n.connections.add}</button>
                 </div>
 
-                <!-- Saved Connections Table -->
                 <div style="margin-top:8px; flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div style="font-size:9px;font-weight:bold;color:#38bdf8;margin-bottom:4px;border-bottom:1px solid rgba(56,189,248,0.2);padding-bottom:2px;">Conexiones Guardadas</div>
-                    <div id="connections-list" style="display:flex;flex-direction:column;gap:4px;flex:1;min-height:120px;overflow-y:auto;"><span style="font-size:9px;opacity:0.5;">Sin conexiones guardadas</span></div>
+                    <div style="font-size:9px;font-weight:bold;color:#38bdf8;margin-bottom:4px;border-bottom:1px solid rgba(56,189,248,0.2);padding-bottom:2px;">Saved AI Connections</div>
+                    <div id="connections-list" style="display:flex;flex-direction:column;gap:4px;flex:1;min-height:120px;overflow-y:auto;"><span style="font-size:9px;opacity:0.5;">No saved connections</span></div>
                 </div>
             </div>
             
-            <!-- Tab 3: Servicios MCP (Model Context Protocol) -->
+            <!-- Tab 3: MCP Servers -->
             <div class="tab-content" id="tab-content-mcp">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <span style="font-size:10px; font-weight:bold; color:#34d399;">🔌 Configuración de Servidores MCP</span>
-                    <button type="button" id="import-mcp-config-btn" style="padding:3px 7px; font-size:9px; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; border-radius:4px; cursor:pointer; font-weight:bold;" title="Cargar dinámicamente configuración MCP (config.json o mcp_conf.js)">📂 Importar config.json / mcp_conf.js</button>
+                    <span style="font-size:10px; font-weight:bold; color:#34d399;">${i18n.mcp.title}</span>
+                    <button type="button" id="import-mcp-config-btn" style="padding:3px 7px; font-size:9px; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; border-radius:4px; cursor:pointer; font-weight:bold;" title="Import mcp_conf.js or config.json">${i18n.mcp.import}</button>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px;">
                     <div class="field">
-                        <label>Nombre Servidor MCP:</label>
+                        <label>${i18n.mcp.name}</label>
                         <input type="text" id="mcp-name" placeholder="mcpo-docker / sqlite-mcp">
                     </div>
                     <div class="field">
-                        <label>Tipo de Conexión:</label>
+                        <label>${i18n.mcp.type}</label>
                         <select id="mcp-type">
                             <option value="docker">🐳 Docker Container</option>
                             <option value="stdio">💻 Local STDIO Script (npx / node / python)</option>
@@ -211,38 +210,38 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                         </select>
                     </div>
                     <div class="field">
-                        <label>Comando / URL / Endpoint:</label>
+                        <label>${i18n.mcp.cmd}</label>
                         <div style="display:flex;gap:4px;align-items:center;">
-                            <input type="text" id="mcp-cmd" placeholder="npx -y @modelcontextprotocol/server-filesystem ./ o python3 mcp_server.py" style="flex:1;">
-                            <button type="button" id="test-mcp-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #34d399;color:#34d399;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">🔌 Probar MCP</button>
+                            <input type="text" id="mcp-cmd" placeholder="npx -y @modelcontextprotocol/server-filesystem ./ or python3 mcp_server.py" style="flex:1;">
+                            <button type="button" id="test-mcp-btn" style="padding:3px 7px;font-size:10px;background:transparent;border:1px solid #34d399;color:#34d399;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:bold;">${i18n.mcp.test}</button>
                         </div>
                         <div id="mcp-status" style="font-size:9px;margin-top:3px;min-height:14px;display:flex;align-items:center;gap:4px;"></div>
                     </div>
-                    <button type="button" id="add-mcp-btn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;">+ Registrar Servidor MCP</button>
+                    <button type="button" id="add-mcp-btn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;">${i18n.mcp.add}</button>
                 </div>
 
                 <div style="margin-top:8px; flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div style="font-size:9px;font-weight:bold;color:#34d399;margin-bottom:4px;border-bottom:1px solid rgba(52,211,153,0.2);padding-bottom:2px;">Servidores MCP Registrados</div>
-                    <div id="mcp-servers-list" style="display:flex;flex-direction:column;gap:4px;flex:1;min-height:120px;overflow-y:auto;"><span style="font-size:9px;opacity:0.5;">Sin servidores MCP agregados</span></div>
+                    <div style="font-size:9px;font-weight:bold;color:#34d399;margin-bottom:4px;border-bottom:1px solid rgba(52,211,153,0.2);padding-bottom:2px;">Registered MCP Servers</div>
+                    <div id="mcp-servers-list" style="display:flex;flex-direction:column;gap:4px;flex:1;min-height:120px;overflow-y:auto;"><span style="font-size:9px;opacity:0.5;">No MCP servers registered</span></div>
                 </div>
             </div>
 
             <!-- Tab 4: Color Palette -->
             <div class="tab-content" id="tab-content-palette">
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 10px; font-weight: bold;">⚡ Presets de 1 Clic:</label>
+                    <label style="font-size: 10px; font-weight: bold;">${i18n.palette.presets}</label>
                     <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px;">
-                        <button type="button" id="preset-white" style="font-size: 9px; padding: 4px 6px; background: #1e293b; color: #ffffff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⚪ Blanco Minimal</button>
-                        <button type="button" id="preset-cyan" style="font-size: 9px; padding: 4px 6px; background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer;">🔵 Neón Cyan</button>
-                        <button type="button" id="preset-emerald" style="font-size: 9px; padding: 4px 6px; background: #064e3b; color: #34d399; border: 1px solid #34d399; border-radius: 4px; cursor: pointer;">🟢 Matrix Emerald</button>
-                        <button type="button" id="preset-purple" style="font-size: 9px; padding: 4px 6px; background: #3b0764; color: #c084fc; border: 1px solid #c084fc; border-radius: 4px; cursor: pointer;">🟣 Cyberpunk</button>
+                        <button type="button" id="preset-white" style="font-size: 9px; padding: 4px 6px; background: #1e293b; color: #ffffff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⚪ ${i18n.palette.white}</button>
+                        <button type="button" id="preset-cyan" style="font-size: 9px; padding: 4px 6px; background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer;">🔵 ${i18n.palette.cyan}</button>
+                        <button type="button" id="preset-emerald" style="font-size: 9px; padding: 4px 6px; background: #064e3b; color: #34d399; border: 1px solid #34d399; border-radius: 4px; cursor: pointer;">🟢 ${i18n.palette.emerald}</button>
+                        <button type="button" id="preset-purple" style="font-size: 9px; padding: 4px 6px; background: #3b0764; color: #c084fc; border: 1px solid #c084fc; border-radius: 4px; cursor: pointer;">🟣 ${i18n.palette.purple}</button>
                     </div>
-                    <div class="field"><label>Color de Texto Principal:</label><input type="color" id="palette-text-color" value="#f8fafc" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
-                    <div class="field"><label>Color de Encabezados:</label><input type="color" id="palette-header-color" value="#ffffff" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
-                    <div class="field"><label>Color de Acento:</label><input type="color" id="palette-accent-color" value="#38bdf8" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
-                    <div class="field"><label>💬 Burbuja Usuario (Fondo):</label><input type="color" id="palette-user-bg" value="#0284c7" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
-                    <div class="field"><label>🤖 Burbuja IA (Fondo):</label><input type="color" id="palette-bot-bg" value="#1e293b" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
-                    <div class="field"><label>💡 Caja de Razonamiento:</label><input type="color" id="palette-think-bg" value="#0f172a" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.userFont}</label><input type="color" id="palette-text-color" value="#f8fafc" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.headerFont}</label><input type="color" id="palette-header-color" value="#ffffff" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.accentColor}</label><input type="color" id="palette-accent-color" value="#38bdf8" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.userBg}</label><input type="color" id="palette-user-bg" value="#0284c7" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.botBg}</label><input type="color" id="palette-bot-bg" value="#1e293b" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
+                    <div class="field"><label>${i18n.palette.thinkBg}</label><input type="color" id="palette-think-bg" value="#0f172a" style="height: 24px; padding: 2px; cursor: pointer; width: 100%;"></div>
                 </div>
             </div>
         </div>

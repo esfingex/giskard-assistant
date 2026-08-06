@@ -111,6 +111,15 @@
           "type": "string",
           "default": "http://127.0.0.1:11434",
           "description": "URL base de la instancia local de Ollama."
+        },
+        "giskard-assistant.language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "es"
+          ],
+          "default": "en",
+          "description": "Interface language for Giskard Assistant (en: English [default], es: Spanish)."
         }
       }
     }
