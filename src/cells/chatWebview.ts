@@ -365,7 +365,18 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 });
                 return;
             }
-            const remoteUrl = activeConn?.url || 'https://integrate.api.nvidia.com/v1';
+
+            let remoteUrl = 'https://integrate.api.nvidia.com/v1';
+            if (targetModel.includes('deepseek')) {
+                remoteUrl = 'https://api.deepseek.com/v1';
+            } else if (targetModel.includes('kimi') || targetModel.includes('moonshot')) {
+                remoteUrl = 'https://api.moonshot.cn/v1';
+            } else if (targetModel.includes('qwen') || targetModel.includes('dashscope')) {
+                remoteUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+            } else if (activeConn && activeConn.type === 'remote' && activeConn.url && !activeConn.url.includes('localhost') && !activeConn.url.includes('127.0.0.1')) {
+                remoteUrl = activeConn.url;
+            }
+
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
