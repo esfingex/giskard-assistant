@@ -124,7 +124,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     <div class="modal" id="settings-modal">
         <div class="modal-card">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--vscode-input-border); padding-bottom:6px; margin-bottom:2px;">
-                <h4 style="margin:0; font-size:12px; font-weight:bold; color:var(--vscode-foreground);">⚙️ ${i18n.connections.title}</h4>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <h4 style="margin:0; font-size:12px; font-weight:bold; color:var(--vscode-foreground);">⚙️ ${i18n.connections.title}</h4>
+                    <a href="https://paypal.me/esfingex" target="_blank" style="background:#00457c; color:#ffffff; padding:2px 8px; border-radius:12px; font-size:9px; font-weight:bold; text-decoration:none; display:inline-flex; align-items:center; gap:3px; box-shadow:0 0 6px rgba(0,69,124,0.4);" title="Apoya el proyecto Open Source con un café vía PayPal">☕ Invítame un café (PayPal)</a>
+                </div>
                 <button type="button" id="close-modal-btn" style="background:transparent; border:none; color:#f87171; font-weight:bold; font-size:14px; cursor:pointer; padding:0 4px;" title="Close (Esc)">✖</button>
             </div>
             <div class="tab-nav">

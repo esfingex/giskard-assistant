@@ -55,8 +55,19 @@ npx @vscode/vsce package --no-dependencies
 
 ## 💻 Comandos Disponibles en VSCode
 
+* **`giskard-assistant.openChat`**: Abre el chat interactivo en la barra lateral principal de VSCode.
 * **`giskard-sys.listSandbox`**: Lista los archivos y directorios del sandbox activo en el puerto `3500`.
-* **`giskard-sys.readSandboxFile`**: Pide una ruta relativa dentro del sandbox y abre el contenido del archivo en una pestaña de editor en VSCode.
+* **`giskard-sys.readSandboxFile`**: Abre un archivo del sandbox en una pestaña del editor en VSCode.
+
+---
+
+## ☕ Apoya el Desarrollo Open Source / Buy Me a Coffee
+
+Si **Giskard Assistant** te ha sido útil y deseas apoyar el desarrollo continuo de esta herramienta soberana y multiproveedor, ¡puedes invitarme un café! ☕❤️
+
+[![Donar con PayPal](https://img.shields.io/badge/Donar%20con-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/esfingex)
+
+*Cada aporte ayuda a mantener el proyecto libre, independiente y en constante evolución.*
 
 ---
 
