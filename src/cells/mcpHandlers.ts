@@ -90,20 +90,18 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
     }
 }
 
-/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070/sse) over SSE transport using global fetch */
+/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070) over SSE transport */
 export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
-    try {
-        let cleanUrl = serverUrl.trim();
-        if (!cleanUrl.endsWith('/sse') && !cleanUrl.includes('openapi.json') && !cleanUrl.includes('/tools')) {
-            cleanUrl = `${cleanUrl.replace(/\/$/, '')}/sse`;
-        }
+    let cleanUrl = serverUrl.trim();
+    const sseUrl = cleanUrl.endsWith('/sse') ? cleanUrl : `${cleanUrl.replace(/\/$/, '')}/sse`;
+    const hostUrl = sseUrl.substring(0, sseUrl.indexOf('/sse'));
 
-        const baseUrl = cleanUrl.substring(0, cleanUrl.indexOf('/sse'));
+    try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 6000);
 
-        const response = await fetch(cleanUrl, {
-            headers: { 'Accept': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        const response = await fetch(sseUrl, {
+            headers: { 'Accept': 'text/event-stream' },
             signal: controller.signal
         });
 
@@ -125,10 +123,10 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
 
             if (match && !sessionPath) {
                 sessionPath = match[1];
-                const fullMsgUrl = `${baseUrl}${sessionPath}`;
+                const postUrl = `${hostUrl}${sessionPath}`;
 
                 // 1. Send initialize
-                await fetch(fullMsgUrl, {
+                fetch(postUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -137,20 +135,19 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                         method: 'initialize',
                         params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
                     })
-                }).catch(() => null);
+                }).then(() => {
+                    // 2. Send initialized & tools/list
+                    fetch(postUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+                    }).catch(() => null);
 
-                // 2. Send initialized notification
-                fetch(fullMsgUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
-                }).catch(() => null);
-
-                // 3. Request tools list
-                await fetch(fullMsgUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+                    fetch(postUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+                    }).catch(() => null);
                 }).catch(() => null);
             }
 
@@ -267,7 +264,7 @@ export async function handleDiscoverMcpTools(
         if (baseUrl.startsWith('http')) {
             const cleanUrl = baseUrl.replace(/\/$/, '');
 
-            const openApiRes = await fetchWithTimeout(`${cleanUrl}/openapi.json`, {}, 4000).catch(() => null);
+            const openApiRes = await fetchWithTimeout(`${cleanUrl}/openapi.json`, {}, 3000).catch(() => null);
             if (openApiRes && openApiRes.ok) {
                 const openApiData: any = await openApiRes.json().catch(() => null);
                 if (openApiData && openApiData.info && openApiData.info.description) {
@@ -277,7 +274,7 @@ export async function handleDiscoverMcpTools(
                         const toolCategory = m[1];
                         const docPath = m[2];
                         const apiPath = docPath.replace('/docs', '/openapi.json');
-                        const subRes = await fetchWithTimeout(`${cleanUrl}${apiPath}`, {}, 4000).catch(() => null);
+                        const subRes = await fetchWithTimeout(`${cleanUrl}${apiPath}`, {}, 3000).catch(() => null);
                         if (subRes && subRes.ok) {
                             const subData: any = await subRes.json().catch(() => null);
                             if (subData && subData.paths) {
@@ -313,7 +310,7 @@ export async function handleDiscoverMcpTools(
             }
 
             if (tools.length === 0) {
-                const toolsRes = await fetchWithTimeout(`${cleanUrl}/tools`, {}, 4000).catch(() => null);
+                const toolsRes = await fetchWithTimeout(`${cleanUrl}/tools`, {}, 3000).catch(() => null);
                 if (toolsRes && toolsRes.ok) {
                     const toolsData: any = await toolsRes.json().catch(() => null);
                     if (toolsData && Array.isArray(toolsData.tools)) {
@@ -350,25 +347,26 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
     if (!view) return;
     const start = Date.now();
     try {
-        let testUrl = commandOrUrl.trim();
+        let cleanUrl = commandOrUrl.trim();
 
-        if (testUrl.startsWith('http')) {
-            const sseUrl = testUrl.endsWith('/sse') ? testUrl : `${testUrl.replace(/\/$/, '')}/sse`;
-            const sseRes = await fetchWithTimeout(sseUrl, { headers: { 'Accept': 'text/event-stream' } }, 4000).catch(() => null);
-            const isSseOk = Boolean(sseRes && (sseRes.ok || sseRes.status === 200));
+        if (cleanUrl.startsWith('http')) {
+            const sseUrl = cleanUrl.endsWith('/sse') ? cleanUrl : `${cleanUrl.replace(/\/$/, '')}/sse`;
 
-            if (isSseOk) {
-                const ms = Date.now() - start;
+            let res = await fetch(sseUrl, { headers: { 'Accept': 'text/event-stream' } }).catch(() => null);
+            if (!res || !res.ok) {
+                res = await fetch(cleanUrl).catch(() => null);
+            }
+
+            const ms = Date.now() - start;
+            if (res && (res.ok || res.status === 200 || res.status === 404)) {
+                try { res.body?.cancel(); } catch { }
                 return view.webview.postMessage({ type: 'mcpTested', ok: true, ms });
             }
 
-            const mainRes = await fetchWithTimeout(testUrl, {}, 4000).catch(() => null);
-            const ms = Date.now() - start;
-            const ok = Boolean(mainRes && (mainRes.ok || mainRes.status === 404 || mainRes.status === 200));
-            view.webview.postMessage({
+            return view.webview.postMessage({
                 type: 'mcpTested',
-                ok,
-                error: ok ? undefined : (mainRes ? `HTTP ${mainRes.status}` : 'No response from server'),
+                ok: false,
+                error: res ? `HTTP ${res.status}` : 'No response from server',
                 ms
             });
         } else if (type === 'docker') {
