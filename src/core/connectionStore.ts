@@ -162,24 +162,34 @@ export class ConnectionStore {
         await this._saveRawList(list);
     }
 
-    /** Mark a connection as active (only one active at a time) */
-    async setActive(id: number): Promise<void> {
+    /** Toggle active state for a connection profile (allows multiple active profiles) */
+    async toggleActive(id: number): Promise<void> {
         const list = this._getRawList();
-        let updated = false;
-        for (const c of list) {
-            if (c.id === id) {
-                c.isActive = true;
-                updated = true;
-            } else {
-                c.isActive = false;
-            }
-        }
-        if (updated) {
+        const conn = list.find(c => c.id === id);
+        if (conn) {
+            conn.isActive = !conn.isActive;
             await this._saveRawList(list);
         }
     }
 
-    /** Get the currently active connection, or null */
+    /** Mark or toggle a connection as active */
+    async setActive(id: number): Promise<void> {
+        await this.toggleActive(id);
+    }
+
+    /** Get active remote connection profile */
+    getActiveRemote(): Connection | null {
+        const list = this._getRawList();
+        return list.find(c => c.isActive && (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag))) || null;
+    }
+
+    /** Get active local connection profile (giskard-sys or ollama) */
+    getActiveLocal(): Connection | null {
+        const list = this._getRawList();
+        return list.find(c => c.isActive && (c.type === 'local' || c.tag === 'giskard-sys' || c.tag === 'ollama')) || null;
+    }
+
+    /** Get the primary active connection, or null */
     getActive(): Connection | null {
         const list = this._getRawList();
         const active = list.find(c => c.isActive);

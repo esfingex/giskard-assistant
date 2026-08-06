@@ -194,8 +194,8 @@ function renderConnectionsList(connections) {
     let html = '';
     connections.forEach(c => {
         const activeBadge = c.isActive
-            ? '<span style="color:#4ade80;font-weight:bold;font-size:9px;">★ Activa</span>'
-            : `<button type="button" class="btn-act-conn" data-id="${c.id}" style="padding:1px 5px;font-size:9px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:3px;cursor:pointer;">Activar</button>`;
+            ? `<button type="button" class="btn-act-conn active" data-id="${c.id}" style="padding:2px 7px;font-size:9px;background:#16a34a;color:#ffffff;border:none;border-radius:3px;cursor:pointer;font-weight:bold;box-shadow:0 0 4px rgba(22,163,74,0.4);" title="Clic para desactivar esta conexión">★ Activa</button>`
+            : `<button type="button" class="btn-act-conn" data-id="${c.id}" style="padding:2px 7px;font-size:9px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:3px;cursor:pointer;" title="Clic para activar esta conexión">Activar</button>`;
 
         html += `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1px solid var(--vscode-input-border);padding:4px 6px;border-radius:4px;font-size:10px;">
             <div style="display:flex;flex-direction:column;gap:1px;overflow:hidden;flex:1;">
