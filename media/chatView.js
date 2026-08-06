@@ -246,7 +246,7 @@
             type: 'sendPrompt',
             prompt: prompt,
             model: modelSelect ? modelSelect.value : '',
-            includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : true,
+            includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : false,
             contextType: selectedContextType
         });
 
