@@ -421,15 +421,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || trimmed.startsWith(':')) continue;
+                    if (!line || line.startsWith(':')) continue;
 
-                    if (trimmed.startsWith('data: ')) {
-                        const rawData = trimmed.substring(6).trim();
-                        if (rawData === '[DONE]') continue;
+                    if (line.startsWith('data:')) {
+                        const rawData = line.substring(line.indexOf(':') + 1);
+                        if (rawData.trim() === '[DONE]') continue;
+
+                        const tokenStr = rawData.startsWith(' ') ? rawData.substring(1) : rawData;
+                        if (!tokenStr) continue;
 
                         try {
-                            const json = JSON.parse(rawData);
+                            const json = JSON.parse(tokenStr.trim());
                             let contentToken = '';
                             const choice = json.choices && json.choices[0];
                             const delta = choice?.delta;
@@ -454,9 +456,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                                 this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model: targetModel });
                             }
                         } catch {
-                            if (rawData) {
-                                accumulated += rawData;
-                                this._view.webview.postMessage({ type: 'streamToken', token: rawData, model: targetModel });
+                            if (tokenStr) {
+                                accumulated += tokenStr;
+                                this._view.webview.postMessage({ type: 'streamToken', token: tokenStr, model: targetModel });
                             }
                         }
                     }
@@ -550,15 +552,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || trimmed.startsWith(':')) continue;
+                    if (!line || line.startsWith(':')) continue;
 
-                    if (trimmed.startsWith('data: ')) {
-                        const rawData = trimmed.substring(6).trim();
-                        if (rawData === '[DONE]') continue;
+                    if (line.startsWith('data:')) {
+                        const rawData = line.substring(line.indexOf(':') + 1);
+                        if (rawData.trim() === '[DONE]') continue;
+
+                        const tokenStr = rawData.startsWith(' ') ? rawData.substring(1) : rawData;
+                        if (!tokenStr) continue;
 
                         try {
-                            const json = JSON.parse(rawData);
+                            const json = JSON.parse(tokenStr.trim());
                             let contentToken = '';
                             const choice = json.choices && json.choices[0];
                             const delta = choice?.delta;
