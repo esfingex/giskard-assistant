@@ -40,6 +40,18 @@ import {
     extractCodeBlocks
 } from './toolHandlers';
 
+export function getModelMaxContextWindow(modelName: string): number {
+    const m = (modelName || '').toLowerCase();
+    if (m.includes('nemotron-3-ultra') || m.includes('nemotron-3-nano')) return 16384;
+    if (m.includes('nemotron-4') || m.includes('nemotron-mini') || m.includes('phi')) return 32768;
+    if (m.includes('llama-3.3') || m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('gpt-oss') || m.includes('gpt-4')) return 128000;
+    if (m.includes('qwimi') || m.includes('distill') || m.includes('kimi') || m.includes('moonshot')) return 128000;
+    if (m.includes('coder') || m.includes('code') || m.includes('deepseek') || m.includes('qwen')) return 65536;
+    if (m.includes('gemini')) return 1048576;
+    if (m.includes('claude')) return 200000;
+    return 32768;
+}
+
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'giskard-assistant.chatView';
 
@@ -266,21 +278,28 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             fullPrompt = `[Proyecto Activo VSCode: ${activeFolder.name} (${activeFolder.uri.fsPath})]\n${fullPrompt}`;
         }
 
-        if (includeActiveFile) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.uri.scheme === 'file') {
-                const docText = editor.document.getText();
-                const fileName = editor.document.fileName;
-                const relPath = vscode.workspace.asRelativePath(editor.document.uri);
-                fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${fullPrompt}`;
-                fullPrompt += `\n\n[INSTRUCCION PARA LA IA]: Cuando propongas cambios de codigo, incluye SIEMPRE en la primera linea del bloque de codigo un comentario con la ruta relativa del archivo, por ejemplo: // ${relPath}`;
-            }
-        }
-
         const activeConn = this._store.getActive();
         const apiKey = (activeConn && activeConn.id) ? (await this._store.getApiKey(activeConn.id) || '') : '';
         const targetModel = model || 'meta/llama-3.3-70b-instruct';
         const activeTag = (activeConn?.tag || 'ollama').toLowerCase();
+        const maxContext = getModelMaxContextWindow(targetModel);
+
+        if (includeActiveFile) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.uri.scheme === 'file') {
+                let docText = editor.document.getText();
+                const fileName = editor.document.fileName;
+                const relPath = vscode.workspace.asRelativePath(editor.document.uri);
+
+                const maxFileChars = Math.max(4000, (maxContext - 3000) * 3.5);
+                if (docText.length > maxFileChars) {
+                    docText = docText.substring(0, maxFileChars) + `\n\n... [Contenido truncado para no exceder la ventana de contexto de ${maxContext.toLocaleString()} tokens del modelo ${targetModel}]`;
+                }
+
+                fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${fullPrompt}`;
+                fullPrompt += `\n\n[INSTRUCCION PARA LA IA]: Cuando propongas cambios de codigo, incluye SIEMPRE en la primera linea del bloque de codigo un comentario con la ruta relativa del archivo, por ejemplo: // ${relPath}`;
+            }
+        }
 
         // 1. Explicit Local Model selected (starts with "local:") -> Stream from active/local Ollama
         if (targetModel.startsWith('local:')) {
@@ -453,7 +472,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             'Content-Type': 'application/json',
             'Accept': 'text/event-stream'
         };
-        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+        const maxContext = getModelMaxContextWindow(model);
+        const estPromptTokens = Math.ceil(fullPrompt.length / 3.5);
+        const maxResponseTokens = Math.min(4096, Math.max(512, maxContext - estPromptTokens - 200));
 
         try {
             const response = await fetch(cleanUrl, {
@@ -464,7 +485,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     messages: [{ role: 'user', content: fullPrompt }],
                     stream: true,
                     temperature: 0.7,
-                    max_tokens: 4096
+                    max_tokens: maxResponseTokens
                 }),
                 signal
             });

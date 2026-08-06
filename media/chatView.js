@@ -70,23 +70,26 @@
         attachFileClickHandlers(div);
     }
 
+    function getModelMaxContext(modelName) {
+        const m = (modelName || '').toLowerCase();
+        if (m.includes('nemotron-3-ultra') || m.includes('nemotron-3-nano')) return 16384;
+        if (m.includes('nemotron-4') || m.includes('nemotron-mini') || m.includes('phi')) return 32768;
+        if (m.includes('llama-3.3') || m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('gpt-oss') || m.includes('gpt-4')) return 128000;
+        if (m.includes('qwimi') || m.includes('distill') || m.includes('kimi') || m.includes('moonshot')) return 128000;
+        if (m.includes('coder') || m.includes('code') || m.includes('deepseek') || m.includes('qwen')) return 65536;
+        if (m.includes('gemini')) return 1048576;
+        if (m.includes('claude')) return 200000;
+        return 32768;
+    }
+
     function updateTokenCounter() {
         if (!messagesDiv || !tokenCounter) return;
         let totalChars = 0;
         messagesDiv.querySelectorAll('.msg').forEach(m => totalChars += m.textContent.length);
         const totalEstTokens = Math.ceil(totalChars / 4);
 
-        let maxTokens = 32768;
-        const currentModel = (modelSelect ? modelSelect.value : '').toLowerCase();
-        if (currentModel.includes('qwimi') || currentModel.includes('distill') || currentModel.includes('kimi')) {
-            maxTokens = 131072;
-        } else if (currentModel.includes('coder') || currentModel.includes('code') || currentModel.includes('agent')) {
-            maxTokens = 65536;
-        } else if (currentModel.includes('gemini')) {
-            maxTokens = 1048576;
-        } else if (currentModel.includes('claude')) {
-            maxTokens = 200000;
-        }
+        const currentModel = modelSelect ? modelSelect.value : '';
+        const maxTokens = getModelMaxContext(currentModel);
 
         tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / ' + maxTokens.toLocaleString();
         tokenCounter.style.color = totalEstTokens > (maxTokens * 0.8) ? '#ff6b6b' : 'inherit';
