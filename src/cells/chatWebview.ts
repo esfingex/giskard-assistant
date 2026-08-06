@@ -40,29 +40,22 @@ import {
     extractCodeBlocks
 } from './toolHandlers';
 
-export interface CodeContextBlock {
-    relativePath: string;
-    startLine: number;
-    endLine: number;
-    code: string;
-    lang: string;
-}
-
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'giskard-assistant.chatView';
+
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
-    /** Stores the full text of the last AI response for conversational apply flow */
     private _lastBotResponse: string = '';
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _store: ConnectionStore
-    ) {}
+    ) { }
 
-    public resolveWebviewView(
+    public async resolveWebviewView(
         webviewView: vscode.WebviewView,
-        _context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
+        context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
 
@@ -71,139 +64,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
-        webviewView.webview.html = getHtmlForWebview(this._extensionUri, webviewView.webview);
+        webviewView.webview.html = await getHtmlForWebview(this._extensionUri, webviewView.webview);
 
-        // Message router — clean dispatch, delegating to specialized modules
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'webviewReady':
-                    await this.refreshState();
-                    await sendMcpServersList(this._view, this._store);
-                    break;
-                case 'sendPrompt':
-                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
-                    break;
-                case 'fetchModels':
-                    await this._sendModelsList();
-                    break;
-                case 'executeAction':
-                    await this._handleAction(data.action);
-                    break;
-                case 'saveSettings':
-                    await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
-                    break;
-                case 'saveConnectorUrl':
-                    const config = vscode.workspace.getConfiguration('giskard-assistant');
-                    await config.update('connectorUrl', data.url, vscode.ConfigurationTarget.Global);
-                    vscode.window.showInformationMessage(`✓ Conector configurado en: ${data.url}`);
-                    await this.refreshState();
-                    break;
-                case 'compressMemory':
-                    await this._handleCompressMemory(data.history);
-                    break;
-                case 'openDiff':
-                    await this._handleOpenDiff(data.code, data.filePath);
-                    break;
-                case 'executeShellCommand':
-                    await this._handleExecuteShellCommand(data.command);
-                    break;
-                case 'stopGeneration':
-                    this._handleStopGeneration();
-                    break;
-                case 'clearContext':
-                    await this._handleClearContext();
-                    break;
-                case 'openFile':
-                    await handleOpenFile(data.relativePath);
-                    break;
-                // ── Connection Manager ──────────────────────────────────
-                case 'addConnection':
-                    await this._handleAddConnection(data);
-                    break;
-                case 'removeConnection':
-                    await this._handleRemoveConnection(data.id);
-                    break;
-                case 'activateConnection':
-                    await this._handleActivateConnection(data.id);
-                    break;
-                case 'loadConnections':
-                    await this._sendConnectionsList();
-                    break;
-                case 'testConnectionUrl':
-                    await this._handleTestConnectionUrl(data.url);
-                    break;
-                // ── MCP Server Manager ──────────────────────────────────
-                case 'loadMcpServers':
-                    await sendMcpServersList(this._view, this._store);
-                    break;
-                case 'addMcpServer':
-                    await handleAddMcpServer(this._view, this._store, data.name, data.serverType, data.commandOrUrl);
-                    break;
-                case 'removeMcpServer':
-                    await handleRemoveMcpServer(this._view, this._store, data.id);
-                    break;
-                case 'toggleMcpServer':
-                    await handleToggleMcpServer(this._view, this._store, data.id);
-                    break;
-                case 'toggleMcpTool':
-                    await handleToggleMcpTool(this._view, this._store, data.serverId, data.toolId);
-                    break;
-                case 'discoverMcpTools':
-                    await handleDiscoverMcpTools(this._view, this._store, data.serverId);
-                    break;
-                case 'testMcpServer':
-                    await handleTestMcpServer(this._view, data.serverType, data.commandOrUrl);
-                    break;
-                case 'searchSmithery':
-                    await handleSearchSmitheryRegistry(this._view, data.query);
-                    break;
-                // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
-                case 'toolReadFile':
-                    await handleToolReadFile(this._view, data.path, data.id);
-                    break;
-                case 'toolWriteFile':
-                    await handleToolWriteFile(this._view, data.path, data.content, data.id);
-                    break;
-                case 'toolExec':
-                    await handleToolExec(this._view, data.command, data.args || [], data.id);
-                    break;
-            }
-        });
-    }
+        this._setWebviewMessageListener(webviewView.webview);
 
-    /** Called from extension.ts Ctrl+L handler */
-    public injectCodeContext(block: CodeContextBlock) {
-        if (!this._view) return;
-        this._view.show?.(true);
-        this._view.webview.postMessage({
-            type: 'attachedContext',
-            relativePath: block.relativePath,
-            startLine: block.startLine,
-            endLine: block.endLine,
-            code: block.code,
-            lang: block.lang,
-            prefillPrompt: 'Explica qué hace este código y sugiere mejoras.'
-        });
+        await this.refreshState();
     }
 
     public async refreshState() {
-        if (!this._view) return;
-        this._view.webview.postMessage({ type: 'stateRefreshed', url: getConnectorUrl() });
-        await this._sendModelsList();
         await this._sendConnectionsList();
+        await this._sendModelsList();
+        await sendMcpServersList(this._view, this._store);
     }
 
-    // ── Private Handlers ──────────────────────────────────────────────────────
-
-    private async _handleClearContext() {
-        if (this._activeAbortController) {
-            this._activeAbortController.abort();
-            this._activeAbortController = null;
-        }
-        await resetSession();
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'contextCleared' });
-        }
+    public injectCodeContext(contextBlock: { relativePath: string; startLine: number; endLine: number; code: string; lang: string }) {
+        if (!this._view) return;
+        this._view.webview.postMessage({
+            type: 'injectCodeSnippet',
+            contextBlock
+        });
     }
 
     private async _sendConnectionsList() {
@@ -215,7 +94,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private async _handleAddConnection(data: any) {
         if (!this._view) return;
         try {
-            await this._store.addConnection(
+            const id = await this._store.addConnection(
                 data.name,
                 data.connType,
                 data.url,
@@ -223,7 +102,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 data.apiKey
             );
             vscode.window.showInformationMessage(`✓ Conexión "${data.name}" guardada.`);
-            await this._sendConnectionsList();
+            await this._store.setActive(id);
+            await this.refreshState();
         } catch (err: any) {
             this._view.webview.postMessage({ type: 'connectionError', error: err.message });
             vscode.window.showErrorMessage(`Error guardando conexión: ${err.message}`);
@@ -235,7 +115,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         try {
             await this._store.removeConnection(id);
             vscode.window.showInformationMessage(`✓ Conexión eliminada.`);
-            await this._sendConnectionsList();
+            await this.refreshState();
         } catch (err: any) {
             vscode.window.showErrorMessage(`Error eliminando conexión: ${err.message}`);
         }
@@ -280,7 +160,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const ms = Date.now() - start;
             let reason = err.message;
             if (err.name === 'AbortError') reason = 'Timeout — sin respuesta en 5 segundos';
-            else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que giskard-sys esté iniciado en ese puerto';
+            else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que el servidor esté activo';
             else if (err.message.includes('ENOTFOUND')) reason = 'Host no encontrado — verifica la URL';
 
             this._view.webview.postMessage({
@@ -358,7 +238,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const blocks = extractCodeBlocks(this._lastBotResponse);
             if (blocks.length > 0) {
                 if (this._view) {
-                    this._view.webview.postMessage({ type: 'streamToken', token: '📦 Abriendo diff propuesto...', model });
+                    this._view.webview.postMessage({ type: 'streamToken', token: '📦 Aplicando código propuesto en el editor...', model });
                     this._view.webview.postMessage({ type: 'streamComplete' });
                 }
                 let best = blocks[0];
@@ -397,12 +277,30 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         }
 
+        const activeConn = this._store.getActive();
+        const apiKey = (activeConn && activeConn.id) ? (await this._store.getApiKey(activeConn.id) || '') : '';
+        const targetModel = model || 'openai/gpt-oss-120b';
+
+        // 1. If explicit Local model selected (starts with "local:") -> Stream from local Ollama
+        if (targetModel.startsWith('local:')) {
+            const localModelName = targetModel.replace(/^local:/, '');
+            await this._streamFromOllamaFallback(fullPrompt, localModelName, prompt, targetPathMatch, includeActiveFile);
+            return;
+        }
+
+        // 2. If Active Connection is REMOTE (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenAI) -> Stream directly from Remote API
+        if (activeConn && activeConn.type === 'remote') {
+            await this._streamFromRemoteApi(activeConn.url, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
+            return;
+        }
+
+        // 3. Active Connection is LOCAL (giskard-sys) -> Stream via giskard-sys on port 3500
         const connectorUrl = getConnectorUrl();
         const isOnline = await checkHealth(connectorUrl);
 
         if (!isOnline) {
             this._view.webview.postMessage({ type: 'offlineMode', active: true });
-            await this._streamFromOllamaFallback(fullPrompt, model, prompt, targetPathMatch, includeActiveFile);
+            await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile);
             return;
         }
 
@@ -415,7 +313,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const streamUrl = `${connectorUrl}/llm/stream`;
             const payload = {
                 prompt: fullPrompt,
-                model: model || undefined,
+                model: targetModel || undefined,
                 inject_sandbox_context: true
             };
 
@@ -479,12 +377,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
                             if (contentToken) {
                                 accumulated += contentToken;
-                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model });
+                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model: targetModel });
                             }
                         } catch {
                             if (rawData) {
                                 accumulated += rawData;
-                                this._view.webview.postMessage({ type: 'streamToken', token: rawData, model });
+                                this._view.webview.postMessage({ type: 'streamToken', token: rawData, model: targetModel });
                             }
                         }
                     }
@@ -498,10 +396,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         } catch (err: any) {
             if (err.name === 'AbortError') return;
 
-            // Backend failed during stream → Fallback to direct Ollama
             try {
                 this._view.webview.postMessage({ type: 'offlineMode', active: true });
-                await this._streamFromOllamaFallback(fullPrompt, model, prompt, targetPathMatch, includeActiveFile);
+                await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile);
             } catch (fallbackErr: any) {
                 if (fallbackErr.name !== 'AbortError') {
                     this._view.webview.postMessage({
@@ -510,6 +407,115 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     });
                 }
             }
+        } finally {
+            this._activeAbortController = null;
+        }
+    }
+
+    /** Streams directly from Remote OpenAI-compatible APIs (NVIDIA NIM, DeepSeek, Kimi, Qwen, etc) */
+    private async _streamFromRemoteApi(
+        baseUrl: string,
+        apiKey: string,
+        model: string,
+        fullPrompt: string,
+        userPrompt?: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean
+    ) {
+        if (!this._view) return;
+        this._activeAbortController = new AbortController();
+        const signal = this._activeAbortController.signal;
+
+        let cleanUrl = baseUrl.trim().replace(/\/$/, '');
+        if (!cleanUrl.endsWith('/chat/completions')) {
+            if (cleanUrl.endsWith('/v1')) cleanUrl = `${cleanUrl}/chat/completions`;
+            else cleanUrl = `${cleanUrl}/v1/chat/completions`;
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream'
+        };
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+        try {
+            const response = await fetch(cleanUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: 'user', content: fullPrompt }],
+                    stream: true,
+                    temperature: 0.7,
+                    max_tokens: 4096
+                }),
+                signal
+            });
+
+            if (!response.ok || !response.body) {
+                const errText = await response.text().catch(() => response.statusText);
+                throw new Error(`API Remota (${cleanUrl}) respondió HTTP ${response.status}: ${errText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let accumulated = '';
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed.startsWith(':')) continue;
+
+                    if (trimmed.startsWith('data: ')) {
+                        const rawData = trimmed.substring(6).trim();
+                        if (rawData === '[DONE]') continue;
+
+                        try {
+                            const json = JSON.parse(rawData);
+                            let contentToken = '';
+                            const choice = json.choices && json.choices[0];
+                            const delta = choice?.delta;
+                            const msg = choice?.message;
+
+                            if (delta?.content) {
+                                contentToken = delta.content;
+                            } else if (delta?.reasoning_content) {
+                                contentToken = delta.reasoning_content;
+                            } else if (msg?.content) {
+                                contentToken = msg.content;
+                            } else if (msg?.reasoning_content) {
+                                contentToken = msg.reasoning_content;
+                            } else if (json.content) {
+                                contentToken = json.content;
+                            }
+
+                            if (contentToken) {
+                                accumulated += contentToken;
+                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model });
+                            }
+                        } catch { }
+                    }
+                }
+            }
+
+            this._lastBotResponse = accumulated;
+            this._view.webview.postMessage({ type: 'streamComplete' });
+            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
+
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
+            this._view.webview.postMessage({
+                type: 'streamError',
+                error: `Error en API Remota (${model}): ${err.message}`
+            });
         } finally {
             this._activeAbortController = null;
         }
@@ -528,7 +534,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const signal = this._activeAbortController.signal;
 
         const config = vscode.workspace.getConfiguration('giskard-assistant');
-        const defaultModel = config.get<string>('defaultModel') || 'ollama';
+        const defaultModel = config.get<string>('defaultModel') || 'qwen3-coder:30b';
         const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
 
         const targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
@@ -558,42 +564,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     const json = JSON.parse(chunk);
                     if (json.response) {
                         ollamaAccumulated += json.response;
-                        this._view.webview.postMessage({ type: 'streamToken', token: json.response, model });
+                        this._view.webview.postMessage({ type: 'streamToken', token: json.response, model: targetModel });
                     }
-                    if (json.done) {
-                        this._lastBotResponse = ollamaAccumulated;
-                        this._view.webview.postMessage({ type: 'streamComplete' });
-                        if (userPrompt !== undefined) {
-                            await this._maybeAutoTriggerDiff(userPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
-                        }
-                        return;
+                } catch {
+                    if (chunk && !chunk.includes('{')) {
+                        ollamaAccumulated += chunk;
+                        this._view.webview.postMessage({ type: 'streamToken', token: chunk, model: targetModel });
                     }
-                } catch { /* Partial chunk */ }
+                }
             }
+
             this._lastBotResponse = ollamaAccumulated;
             this._view.webview.postMessage({ type: 'streamComplete' });
-            if (userPrompt !== undefined) {
-                await this._maybeAutoTriggerDiff(userPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
-            }
+            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
+
         } catch (err: any) {
-            if (err.name !== 'AbortError') {
-                this._view.webview.postMessage({
-                    type: 'streamError',
-                    error: `Backend y Ollama fallback inaccesibles: ${err.message}`
-                });
-            }
+            if (err.name === 'AbortError') return;
+            throw err;
         } finally {
             this._activeAbortController = null;
-        }
-    }
-
-    private _handleStopGeneration() {
-        if (this._activeAbortController) {
-            this._activeAbortController.abort();
-            this._activeAbortController = null;
-        }
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'streamComplete' });
         }
     }
 
@@ -649,25 +638,107 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const res = await execCliCommand('cavemem', 'save', 'history', historyText);
             const msg = res.success
                 ? '✓ Memoria soberana BCF guardada exitosamente en Alicanto CaveMem.'
-                : `⚠️ No se pudo guardar memoria: ${res.error}`;
-            vscode.window.showInformationMessage(msg);
-            this._view.webview.postMessage({ type: 'streamToken', token: `\n\n> 🧠 **Resultado BCF:** ${msg}` });
+                : `Error guardando memoria: ${res.error}`;
+            this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
             this._view.webview.postMessage({ type: 'streamComplete' });
         } catch (err: any) {
-            vscode.window.showErrorMessage(`Error al guardar memoria: ${err.message}`);
-            this._view.webview.postMessage({ type: 'streamComplete' });
+            this._view.webview.postMessage({ type: 'streamError', error: err.message });
         }
     }
 
-    private async _handleExecuteShellCommand(command: string) {
-        if (!this._view) return;
-        try {
-            const term = vscode.window.createTerminal('Giskard Terminal');
-            term.show();
-            term.sendText(command);
-            this._view.webview.postMessage({ type: 'shellExecuted', command });
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Error al ejecutar en terminal: ${err.message}`);
-        }
+    private _setWebviewMessageListener(webview: vscode.Webview) {
+        webview.onDidReceiveMessage(async (data) => {
+            switch (data.type) {
+                case 'sendPrompt':
+                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
+                    break;
+                case 'stopGeneration':
+                    if (this._activeAbortController) {
+                        this._activeAbortController.abort();
+                        this._activeAbortController = null;
+                    }
+                    break;
+                case 'openSettings':
+                    await this.refreshState();
+                    break;
+                case 'loadConnections':
+                    await this._sendConnectionsList();
+                    break;
+                case 'addConnection':
+                    await this._handleAddConnection(data);
+                    break;
+                case 'removeConnection':
+                    await this._handleRemoveConnection(data.id);
+                    break;
+                case 'activateConnection':
+                    await this._handleActivateConnection(data.id);
+                    break;
+                case 'testConnectionUrl':
+                    await this._handleTestConnectionUrl(data.url);
+                    break;
+                case 'fetchModels':
+                    await this._sendModelsList();
+                    break;
+                case 'saveSettings':
+                    await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
+                    break;
+                case 'clearContext':
+                    if (this._activeAbortController) {
+                        this._activeAbortController.abort();
+                        this._activeAbortController = null;
+                    }
+                    await resetSession();
+                    if (this._view) {
+                        this._view.webview.postMessage({ type: 'contextCleared' });
+                    }
+                    break;
+                case 'actionBtn':
+                    await this._handleAction(data.action);
+                    break;
+                case 'openFile':
+                    await handleOpenFile(data.path);
+                    break;
+                case 'openDiff':
+                    await this._handleOpenDiff(data.code, data.filePath);
+                    break;
+                case 'loadMcpServers':
+                    await sendMcpServersList(this._view, this._store);
+                    break;
+                case 'addMcpServer':
+                    await handleAddMcpServer(this._view, this._store, data.name, data.serverType, data.commandOrUrl);
+                    break;
+                case 'removeMcpServer':
+                    await handleRemoveMcpServer(this._view, this._store, data.id);
+                    break;
+                case 'toggleMcpServer':
+                    await handleToggleMcpServer(this._view, this._store, data.id);
+                    break;
+                case 'toggleMcpTool':
+                    await handleToggleMcpTool(this._view, this._store, data.serverId, data.toolId);
+                    break;
+                case 'discoverMcpTools':
+                    await handleDiscoverMcpTools(this._view, this._store, data.serverId);
+                    break;
+                case 'testMcpServer':
+                    await handleTestMcpServer(this._view, data.serverType, data.commandOrUrl);
+                    break;
+                case 'searchSmithery':
+                    await handleSearchSmitheryRegistry(this._view, data.query);
+                    break;
+                // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
+                case 'toolReadFile':
+                    await handleToolReadFile(this._view, data.path, data.id);
+                    break;
+                case 'toolWriteFile':
+                    await handleToolWriteFile(this._view, data.path, data.content, data.id);
+                    break;
+                case 'toolExec':
+                    await handleToolExec(this._view, data.command, data.args, data.id);
+                    break;
+                case 'compressMemory':
+                    await this._handleCompressMemory(data.historyText || '');
+                    break;
+            }
+        });
     }
 }
