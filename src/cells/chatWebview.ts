@@ -510,6 +510,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             'Content-Type': 'application/json',
             'Accept': 'text/event-stream'
         };
+        if (apiKey && apiKey.trim()) {
+            headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+        }
         const maxContext = getModelMaxContextWindow(model);
         const estPromptTokens = Math.ceil(fullPrompt.length / 3.5);
         const maxResponseTokens = Math.min(4096, Math.max(512, maxContext - estPromptTokens - 200));
