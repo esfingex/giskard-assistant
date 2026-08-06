@@ -7,7 +7,10 @@ import * as vscode from 'vscode';
 
 export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webview): string {
     const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'marked.min.js'));
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatView.js'));
+    const chatUtilsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatUtils.js'));
+    const connectionsViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'connectionsView.js'));
+    const mcpViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'mcpView.js'));
+    const chatViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatView.js'));
 
     return `<!DOCTYPE html>
 <html lang="es" style="height: 100%;">
@@ -246,7 +249,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     </div>
 
     <script src="${markedUri}"></script>
-    <script src="${scriptUri}"></script>
+    <script src="${chatUtilsUri}"></script>
+    <script src="${connectionsViewUri}"></script>
+    <script src="${mcpViewUri}"></script>
+    <script src="${chatViewUri}"></script>
 </body>
 </html>`;
 }
