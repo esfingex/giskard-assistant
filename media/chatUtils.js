@@ -15,6 +15,7 @@ let _toolCallDepth = 0;     // anti-loop: limit re-injection to 1 level
 
 function parseToolCalls(text) {
     const toolCalls = [];
+    if (!text) return { cleanText: '', toolCalls: [] };
     
     // 1. Standard [TOOL_CALL] ... [/END_TOOL]
     const regex1 = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/g;
@@ -26,19 +27,40 @@ function parseToolCalls(text) {
         } catch (e) {}
     }
 
-    // 2. Robust JSON tool call matcher for {"tool":"read_file", "args":{"path":"..."}} or {"action":"read_file", ...}
-    const jsonRegex = /\{[^{}]*(?:"tool"|"action")[^{}]*\}/g;
-    while ((match = jsonRegex.exec(text)) !== null) {
-        try {
-            const obj = JSON.parse(match[0]);
-            if (obj && (obj.tool || obj.action)) {
-                const action = obj.tool || obj.action;
-                const pathStr = obj.path || (obj.args ? obj.args.path : null);
-                if (action && pathStr && !toolCalls.some(t => t.path === pathStr && t.action === action)) {
-                    toolCalls.push({ action, path: pathStr, content: obj.content || (obj.args ? obj.args.content : undefined) });
+    // 2. Balanced brace JSON tool call parser for nested objects like {"tool":"read_file", "args":{"path":"..."}}
+    let idx = text.indexOf('{');
+    while (idx !== -1) {
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = idx; i < text.length; i++) {
+            if (text[i] === '{') depth++;
+            else if (text[i] === '}') {
+                depth--;
+                if (depth === 0) {
+                    endIdx = i;
+                    break;
                 }
             }
-        } catch (e) {}
+        }
+
+        if (endIdx !== -1) {
+            const candidateStr = text.substring(idx, endIdx + 1);
+            try {
+                const obj = JSON.parse(candidateStr);
+                if (obj && typeof obj === 'object' && (obj.tool || obj.action)) {
+                    const action = obj.tool || obj.action;
+                    const pathStr = obj.path || (obj.args ? obj.args.path : null);
+                    if (action && pathStr && !toolCalls.some(t => t.path === pathStr && t.action === action)) {
+                        toolCalls.push({
+                            action: action,
+                            path: pathStr,
+                            content: obj.content || (obj.args ? obj.args.content : undefined)
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
+        idx = text.indexOf('{', idx + 1);
     }
 
     const cleanText = text.replace(/\[TOOL_CALL\]\s*[\s\S]*?\s*\[\/END_TOOL\]/g, '').trim();

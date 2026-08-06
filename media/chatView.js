@@ -426,8 +426,9 @@
                 if (message.error) {
                     appendSystemMessage('❌ Error leyendo <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
                 } else {
+                    vscode.postMessage({ type: 'openFile', relativePath: message.path });
                     appendSystemMessage(
-                        '✅ Archivo leído: <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
+                        '✅ Archivo abierto y leído: <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
                         '📂'
                     );
                     if (_toolCallDepth < 1 && _lastUserPrompt) {
