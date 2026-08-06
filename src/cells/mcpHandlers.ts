@@ -135,6 +135,26 @@ export async function handleImportMcpConfigFile(
     }
 }
 
+/** Queries Smithery registry API/CLI for MCP servers */
+export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | undefined, query: string) {
+    if (!view || !query || !query.trim()) return;
+    try {
+        const resData: any = await execCliCommand('npx', '-y', '@smithery/cli', 'mcp', 'search', query.trim(), '--json');
+        let results: any[] = [];
+        if (resData && resData.success && resData.data) {
+            try {
+                const parsed = typeof resData.data === 'string' ? JSON.parse(resData.data) : resData.data;
+                if (parsed && Array.isArray(parsed.servers)) {
+                    results = parsed.servers;
+                }
+            } catch {}
+        }
+        view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), results });
+    } catch (err: any) {
+        view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), error: err.message, results: [] });
+    }
+}
+
 export async function handleDiscoverMcpTools(
     view: vscode.WebviewView | undefined,
     store: ConnectionStore,
@@ -216,7 +236,7 @@ export async function handleDiscoverMcpTools(
             }
         }
 
-        // Generate capabilities for stdio / command-based servers (e.g., git, ripgrep, searxng, docker, terminal, filesystem)
+        // Generate capabilities for stdio / command-based servers
         if (tools.length === 0) {
             const cmd = server.commandOrUrl.toLowerCase();
             if (cmd.includes('filesystem')) {
