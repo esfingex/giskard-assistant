@@ -841,6 +841,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private async _handleFetchSkills() {
         if (!this._view) return;
         const connectorUrl = getConnectorUrl();
+        const giskardConn = this._store.getActiveLocal();
+        const isGiskardActive = Boolean(giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500')));
+
         try {
             this._view.webview.postMessage({
                 type: 'streamToken',
@@ -851,13 +854,20 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 headers: { 'X-Client-Id': getClientId() }
             }, 10000).catch(() => null);
 
-            let skillsText = '\n✅ [Habilidades Disponibles del Agente]:\n';
+            let skillsText = '\n✅ [Habilidades Estándar del Agente]:\n';
             skillsText += ' • 🛠️ **web_search** (Búsqueda Técnica Web)\n';
             skillsText += ' • 💻 **exec_shell** (Ejecución Enjaulada RTK)\n';
             skillsText += ' • 📄 **read_file / write_file** (Lectura/Escritura de Archivos)\n';
-            skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM)\n';
-            skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF)\n';
             skillsText += ' • 📝 **diff_apply** (Edición In-Place de Código)\n';
+
+            skillsText += '\n🔒 [Habilidades Exclusivas del Backend giskard-sys (Puerto 3500)]:\n';
+            if (isGiskardActive || (res && res.ok)) {
+                skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM — Activo ✅)\n';
+                skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF — Activo ✅)\n';
+            } else {
+                skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
+                skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF — ⚠️ Requiere giskard-sys backend)\n';
+            }
 
             if (res && res.ok) {
                 const agents: any = await res.json().catch(() => null);
