@@ -137,9 +137,11 @@ export async function fetchLlmModels(): Promise<string[]> {
         }
     } catch {}
 
-    // Fallback: Query local Ollama directly
+    // Fallback: Query local Ollama directly via configured ollamaUrl
     try {
-        const resOllama = await fetchWithTimeout('http://127.0.0.1:11434/api/tags', {}, 5000);
+        const config = vscode.workspace.getConfiguration('giskard-assistant');
+        const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
+        const resOllama = await fetchWithTimeout(`${ollamaBaseUrl.replace(/\/$/, '')}/api/tags`, {}, 5000);
         const dataOllama: any = await resOllama.json();
         if (Array.isArray(dataOllama.models) && dataOllama.models.length > 0) {
             return dataOllama.models.map((m: any) => m.name);

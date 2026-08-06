@@ -498,8 +498,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         this._activeAbortController = new AbortController();
         const signal = this._activeAbortController.signal;
 
-        const targetModel = (model && !model.startsWith('cli:')) ? model : 'qwimi-k2.6:distill';
-        const url = 'http://127.0.0.1:11434/api/generate';
+        const config = vscode.workspace.getConfiguration('giskard-assistant');
+        const defaultModel = config.get<string>('defaultModel') || 'ollama';
+        const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
+
+        const targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
+        const url = `${ollamaBaseUrl.replace(/\/$/, '')}/api/generate`;
 
         try {
             const response = await fetch(url, {

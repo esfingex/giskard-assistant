@@ -278,10 +278,6 @@ export async function handleDiscoverMcpTools(
         let tools: McpTool[] = [];
         let baseUrl = server.commandOrUrl.trim();
 
-        if (server.type === 'docker' && (!baseUrl.startsWith('http') || baseUrl.includes('3000'))) {
-            baseUrl = 'http://localhost:3000';
-        }
-
         if (baseUrl.startsWith('http')) {
             const cleanUrl = baseUrl.replace(/\/$/, '');
 
@@ -364,9 +360,6 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
     const start = Date.now();
     try {
         let testUrl = commandOrUrl.trim();
-        if (type === 'docker' && (!testUrl.startsWith('http') || testUrl.includes('3000'))) {
-            testUrl = 'http://localhost:3000';
-        }
 
         if (testUrl.startsWith('http')) {
             const res = await fetchWithTimeout(testUrl, {}, 5000);

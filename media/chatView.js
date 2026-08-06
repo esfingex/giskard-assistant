@@ -492,7 +492,7 @@
         }
 
         if (!html) {
-            html = '<option value="qwimi-k2.6:distill">qwimi-k2.6:distill (128K Default)</option>';
+            html = '<option value="default">— Selecciona un modelo —</option>';
         }
         
         modelSelect.innerHTML = html;
