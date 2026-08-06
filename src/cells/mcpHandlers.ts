@@ -7,9 +7,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as http from 'http';
-import * as https from 'https';
-import * as urlModule from 'url';
 import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
@@ -30,10 +27,10 @@ export async function handleAddMcpServer(
     if (!view) return;
     try {
         const id = await store.addMcpServer(name, type, commandOrUrl);
-        vscode.window.showInformationMessage(`✓ Servidor MCP "${name}" guardado.`);
+        vscode.window.showInformationMessage(`✓ MCP Server "${name}" saved.`);
         await handleDiscoverMcpTools(view, store, id);
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error añadiendo servidor MCP: ${err.message}`);
+        vscode.window.showErrorMessage(`Error adding MCP server: ${err.message}`);
     }
 }
 
@@ -41,10 +38,10 @@ export async function handleRemoveMcpServer(view: vscode.WebviewView | undefined
     if (!view) return;
     try {
         await store.removeMcpServer(id);
-        vscode.window.showInformationMessage(`✓ Servidor MCP eliminado.`);
+        vscode.window.showInformationMessage(`✓ MCP server removed.`);
         await sendMcpServersList(view, store);
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error eliminando servidor MCP: ${err.message}`);
+        vscode.window.showErrorMessage(`Error removing MCP server: ${err.message}`);
     }
 }
 
@@ -54,7 +51,7 @@ export async function handleToggleMcpServer(view: vscode.WebviewView | undefined
         await store.toggleMcpServer(id);
         await sendMcpServersList(view, store);
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error cambiando estado de MCP: ${err.message}`);
+        vscode.window.showErrorMessage(`Error toggling MCP server state: ${err.message}`);
     }
 }
 
@@ -69,7 +66,7 @@ export async function handleToggleMcpTool(
         await store.toggleMcpTool(serverId, toolId);
         await sendMcpServersList(view, store);
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error cambiando estado de herramienta MCP: ${err.message}`);
+        vscode.window.showErrorMessage(`Error toggling MCP tool state: ${err.message}`);
     }
 }
 
@@ -93,104 +90,95 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
     }
 }
 
-/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070/sse) over SSE transport */
+/** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070/sse) over SSE transport using global fetch */
 export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
-    return new Promise((resolve) => {
+    try {
         let cleanUrl = serverUrl.trim();
         if (!cleanUrl.endsWith('/sse') && !cleanUrl.includes('openapi.json') && !cleanUrl.includes('/tools')) {
             cleanUrl = `${cleanUrl.replace(/\/$/, '')}/sse`;
         }
 
-        let parsed: any;
-        try {
-            parsed = urlModule.parse(cleanUrl);
-        } catch {
-            return resolve([]);
-        }
+        const baseUrl = cleanUrl.substring(0, cleanUrl.indexOf('/sse'));
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000);
 
-        const transport = parsed.protocol === 'https:' ? https : http;
-        let sessionPath = '';
-        let resolvedTools: McpTool[] = [];
-        let req: any;
+        const response = await fetch(cleanUrl, {
+            headers: { 'Accept': 'text/event-stream', 'Cache-Control': 'no-cache' },
+            signal: controller.signal
+        });
 
-        const timeout = setTimeout(() => {
-            if (req) { try { req.destroy(); } catch { } }
-            resolve(resolvedTools);
-        }, 5000);
-
-        try {
-            req = transport.get(cleanUrl, { headers: { 'Accept': 'text/event-stream' } }, (res: any) => {
-                let sseBuffer = '';
-                res.on('data', (chunk: Buffer) => {
-                    sseBuffer += chunk.toString('utf-8');
-                    const match = sseBuffer.match(/data:\s*(\/message\?sessionId=[\w-]+)/);
-                    if (match && !sessionPath) {
-                        sessionPath = match[1];
-
-                        const sendJson = (obj: any) => {
-                            const data = JSON.stringify(obj);
-                            const pReq = transport.request({
-                                hostname: parsed.hostname,
-                                port: parsed.port,
-                                path: sessionPath,
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-                            }, () => { });
-                            pReq.on('error', () => { });
-                            pReq.write(data);
-                            pReq.end();
-                        };
-
-                        sendJson({
-                            jsonrpc: '2.0',
-                            id: 1,
-                            method: 'initialize',
-                            params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
-                        });
-
-                        setTimeout(() => {
-                            sendJson({ jsonrpc: '2.0', method: 'notifications/initialized' });
-                            sendJson({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-                        }, 300);
-                    }
-
-                    const lines = sseBuffer.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data:')) {
-                            const jsonStr = line.substring(5).trim();
-                            try {
-                                const json = JSON.parse(jsonStr);
-                                if (json.result && Array.isArray(json.result.tools)) {
-                                    clearTimeout(timeout);
-                                    if (req) { try { req.destroy(); } catch { } }
-                                    resolvedTools = json.result.tools.map((t: any) => ({
-                                        id: t.name || t.id,
-                                        name: t.name || 'tool',
-                                        description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
-                                        enabled: true
-                                    }));
-                                    return resolve(resolvedTools);
-                                }
-                            } catch { }
-                        }
-                    }
-                });
-
-                res.on('error', () => {
-                    clearTimeout(timeout);
-                    resolve(resolvedTools);
-                });
-            });
-
-            req.on('error', () => {
-                clearTimeout(timeout);
-                resolve(resolvedTools);
-            });
-        } catch {
+        if (!response.ok || !response.body) {
             clearTimeout(timeout);
-            resolve(resolvedTools);
+            return [];
         }
-    });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let sessionPath = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const match = text.match(/data:\s*(\/message\?sessionId=[\w-]+)/);
+
+            if (match && !sessionPath) {
+                sessionPath = match[1];
+                const fullMsgUrl = `${baseUrl}${sessionPath}`;
+
+                // 1. Send initialize
+                await fetch(fullMsgUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'initialize',
+                        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
+                    })
+                }).catch(() => null);
+
+                // 2. Send initialized notification
+                fetch(fullMsgUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+                }).catch(() => null);
+
+                // 3. Request tools list
+                await fetch(fullMsgUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+                }).catch(() => null);
+            }
+
+            const lines = text.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const jsonStr = line.substring(5).trim();
+                    try {
+                        const json = JSON.parse(jsonStr);
+                        if (json.result && Array.isArray(json.result.tools)) {
+                            clearTimeout(timeout);
+                            try { reader.cancel(); } catch { }
+                            return json.result.tools.map((t: any) => ({
+                                id: t.name || t.id,
+                                name: t.name || 'tool',
+                                description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
+                                enabled: true
+                            }));
+                        }
+                    } catch { }
+                }
+            }
+        }
+        clearTimeout(timeout);
+    } catch (err) {
+        console.warn('[Giskard] Error querying SSE MCP tools:', err);
+    }
+    return [];
 }
 
 /** Queries live STDIO MCP process via JSON-RPC tools/list to dynamically autogenerate tools list */
@@ -351,10 +339,10 @@ export async function handleDiscoverMcpTools(
         }
 
         await store.updateMcpTools(serverId, tools);
-        vscode.window.showInformationMessage(`✓ ${tools.length} herramientas/servicios descubiertos dinámicamente en tiempo real para "${server.name}".`);
+        vscode.window.showInformationMessage(`✓ ${tools.length} MCP tools discovered dynamically for "${server.name}".`);
         await sendMcpServersList(view, store);
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Error descubriendo herramientas MCP: ${err.message}`);
+        vscode.window.showErrorMessage(`Error discovering MCP tools: ${err.message}`);
     }
 }
 
@@ -366,8 +354,8 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
 
         if (testUrl.startsWith('http')) {
             const sseUrl = testUrl.endsWith('/sse') ? testUrl : `${testUrl.replace(/\/$/, '')}/sse`;
-            const sseRes = await fetchWithTimeout(sseUrl, {}, 4000).catch(() => null);
-            const isSseOk = sseRes && (sseRes.ok || sseRes.status === 200);
+            const sseRes = await fetchWithTimeout(sseUrl, { headers: { 'Accept': 'text/event-stream' } }, 4000).catch(() => null);
+            const isSseOk = Boolean(sseRes && (sseRes.ok || sseRes.status === 200));
 
             if (isSseOk) {
                 const ms = Date.now() - start;
@@ -376,11 +364,11 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
 
             const mainRes = await fetchWithTimeout(testUrl, {}, 4000).catch(() => null);
             const ms = Date.now() - start;
-            const ok = mainRes && (mainRes.ok || mainRes.status === 404 || mainRes.status === 200);
+            const ok = Boolean(mainRes && (mainRes.ok || mainRes.status === 404 || mainRes.status === 200));
             view.webview.postMessage({
                 type: 'mcpTested',
-                ok: Boolean(ok),
-                error: ok ? undefined : `HTTP ${mainRes?.status || 'Error'}`,
+                ok,
+                error: ok ? undefined : (mainRes ? `HTTP ${mainRes.status}` : 'No response from server'),
                 ms
             });
         } else if (type === 'docker') {
@@ -390,7 +378,7 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
             view.webview.postMessage({
                 type: 'mcpTested',
                 ok,
-                error: ok ? undefined : (resData.error || 'Docker no responde'),
+                error: ok ? undefined : (resData.error || 'Docker not responding'),
                 ms
             });
         } else {
@@ -416,21 +404,21 @@ export function getActiveMcpPromptContext(store: ConnectionStore): string {
     const activeMcpServers = store.getMcpServers().filter(s => s.isActive);
     if (activeMcpServers.length === 0) return '';
 
-    let text = '[Servicios MCP Activos Conectados en el Entorno]:\n';
+    let text = '[Active Connected MCP Services in Environment]:\n';
     activeMcpServers.forEach(s => {
-        text += `\n▶ Servidor MCP: ${s.name} [${s.type.toUpperCase()}] (${s.commandOrUrl})\n`;
+        text += `\n▶ MCP Server: ${s.name} [${s.type.toUpperCase()}] (${s.commandOrUrl})\n`;
         if (s.tools && s.tools.length > 0) {
             const enabledTools = s.tools.filter(t => t.enabled);
             if (enabledTools.length > 0) {
-                text += '  Herramientas/Servicios Habilitados:\n';
+                text += '  Enabled Services/Tools:\n';
                 enabledTools.forEach(t => {
                     text += `  - ${t.name}: ${t.description}\n`;
                 });
             } else {
-                text += '  (Sin herramientas individuales habilitadas)\n';
+                text += '  (No individual tools enabled)\n';
             }
         } else {
-            text += '  Herramientas/Servicios Habilitados: (Acceso general al servidor)\n';
+            text += '  Enabled Services/Tools: (General server access)\n';
         }
     });
     return text + '\n';
