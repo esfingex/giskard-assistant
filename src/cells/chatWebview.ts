@@ -280,30 +280,39 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const activeConn = this._store.getActive();
         const apiKey = (activeConn && activeConn.id) ? (await this._store.getApiKey(activeConn.id) || '') : '';
         const targetModel = model || 'meta/llama-3.3-70b-instruct';
+        const activeTag = (activeConn?.tag || 'ollama').toLowerCase();
 
-        // 1. If explicit Local model selected (starts with "local:") -> Stream from local Ollama
+        // 1. Explicit Local Model selected (starts with "local:") -> Stream from active/local Ollama
         if (targetModel.startsWith('local:')) {
             const localModelName = targetModel.replace(/^local:/, '');
-            await this._streamFromOllamaFallback(fullPrompt, localModelName, prompt, targetPathMatch, includeActiveFile);
+            const ollamaUrl = (activeTag === 'ollama' && activeConn?.url) ? activeConn.url : undefined;
+            await this._streamFromOllamaFallback(fullPrompt, localModelName, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
             return;
         }
 
-        // 2. If Active Connection is REMOTE or model is a remote API model (meta/..., nvidia/..., openai/..., deepseek, etc) -> Stream directly from Remote API
-        const isRemoteModel = (activeConn && activeConn.type === 'remote') ||
-                              targetModel.includes('/') ||
-                              targetModel.startsWith('deepseek') ||
-                              targetModel.startsWith('moonshot') ||
-                              targetModel.startsWith('qwen') ||
-                              targetModel.startsWith('openai');
+        // 2. Active Connection is REMOTE (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenAI, or type === 'remote')
+        const isRemoteConnection = (activeConn && activeConn.type === 'remote') ||
+                                    ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'anthropic', 'gemini'].includes(activeTag) ||
+                                    targetModel.includes('/') ||
+                                    targetModel.startsWith('deepseek') ||
+                                    targetModel.startsWith('moonshot') ||
+                                    targetModel.startsWith('qwen');
 
-        if (isRemoteModel) {
-            const remoteUrl = (activeConn && activeConn.type === 'remote') ? activeConn.url : 'https://integrate.api.nvidia.com/v1';
+        if (isRemoteConnection) {
+            const remoteUrl = activeConn?.url || 'https://integrate.api.nvidia.com/v1';
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
 
-        // 3. Active Connection is LOCAL (giskard-sys) -> Stream via giskard-sys on port 3500
-        const connectorUrl = getConnectorUrl();
+        // 3. Active Connection is OLLAMA (local or remote Ollama server profile)
+        if (activeTag === 'ollama') {
+            const ollamaUrl = activeConn?.url || 'http://127.0.0.1:11434';
+            await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
+            return;
+        }
+
+        // 4. Active Connection is GISKARD-SYS (local port 3500)
+        const connectorUrl = activeConn?.url || getConnectorUrl();
         const isOnline = await checkHealth(connectorUrl);
 
         if (!isOnline) {
@@ -534,7 +543,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         model: string,
         userPrompt?: string,
         extractedPath?: string,
-        includeActiveFile?: boolean
+        includeActiveFile?: boolean,
+        customOllamaUrl?: string
     ) {
         if (!this._view) return;
 
@@ -543,7 +553,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         const config = vscode.workspace.getConfiguration('giskard-assistant');
         const defaultModel = config.get<string>('defaultModel') || 'qwen3-coder:30b';
-        const ollamaBaseUrl = config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
+        const ollamaBaseUrl = customOllamaUrl || config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
 
         let targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
         if (targetModel.includes('/') || targetModel.startsWith('deepseek') || targetModel.startsWith('moonshot')) {
