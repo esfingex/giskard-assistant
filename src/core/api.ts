@@ -126,19 +126,27 @@ export async function fetchSandboxRead(path: string) {
     return res.json();
 }
 
-export async function fetchLlmModels() {
+export async function fetchLlmModels(): Promise<string[]> {
     try {
         const res = await fetchWithTimeout(`${getConnectorUrl()}/llm/models`, {
             headers: { 'X-Client-Id': CLIENT_ID }
-        }, 15000);
+        }, 5000);
         const data: any = await res.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-            return data.data.map((m: any) => m.name);
+            return data.data.map((m: any) => m.name || m.id || String(m));
         }
-        return [];
-    } catch {
-        return [];
-    }
+    } catch {}
+
+    // Fallback: Query local Ollama directly
+    try {
+        const resOllama = await fetchWithTimeout('http://127.0.0.1:11434/api/tags', {}, 5000);
+        const dataOllama: any = await resOllama.json();
+        if (Array.isArray(dataOllama.models) && dataOllama.models.length > 0) {
+            return dataOllama.models.map((m: any) => m.name);
+        }
+    } catch {}
+
+    return [];
 }
 
 export async function updateProviderConfig(activeProvider: string, openaiBaseUrl?: string, openaiApiKey?: string) {
@@ -154,11 +162,11 @@ export async function updateProviderConfig(activeProvider: string, openaiBaseUrl
     return res.json();
 }
 
-export async function execCliCommand(command: string, prompt: string) {
+export async function execCliCommand(command: string, ...args: string[]) {
     const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
-        body: JSON.stringify({ command, args: [prompt] })
+        body: JSON.stringify({ command, args })
     });
     return res.json();
 }

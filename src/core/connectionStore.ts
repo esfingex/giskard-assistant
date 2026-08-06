@@ -19,7 +19,25 @@ export interface Connection {
     createdAt: string;
 }
 
+export interface McpTool {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+}
+
+export interface McpServer {
+    id: number;
+    name: string;
+    type: 'docker' | 'stdio' | 'url';
+    commandOrUrl: string;
+    isActive: boolean;
+    tools?: McpTool[];
+    createdAt: string;
+}
+
 const STORAGE_KEY = 'giskard_connections_v1';
+const MCP_STORAGE_KEY = 'giskard_mcp_servers_v1';
 
 export class ConnectionStore {
     constructor(private readonly context: vscode.ExtensionContext) {}
@@ -39,6 +57,20 @@ export class ConnectionStore {
                 createdAt: new Date().toISOString()
             };
             await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
+        }
+
+        // Seed default local MCP server if empty
+        const mcpServers = this.getMcpServers();
+        if (mcpServers.length === 0) {
+            const defaultMcp: McpServer = {
+                id: 1,
+                name: 'MCPO Docker Server',
+                type: 'docker',
+                commandOrUrl: 'docker run -d -p 3000:8000 ghcr.io/open-webui/mcpo:main',
+                isActive: true,
+                createdAt: new Date().toISOString()
+            };
+            await this.context.globalState.update(MCP_STORAGE_KEY, [defaultMcp]);
         }
     }
 
@@ -144,6 +176,63 @@ export class ConnectionStore {
         const active = this.getActive();
         if (!active || !active.secretRef) return null;
         return (await this.context.secrets.get(active.secretRef)) || null;
+    }
+
+    // ── MCP Server Storage ───────────────────────────────────────────────────
+
+    getMcpServers(): McpServer[] {
+        return this.context.globalState.get<McpServer[]>(MCP_STORAGE_KEY, []);
+    }
+
+    async addMcpServer(name: string, type: 'docker' | 'stdio' | 'url', commandOrUrl: string): Promise<number> {
+        const list = this.getMcpServers();
+        const newId = Date.now();
+        const newMcp: McpServer = {
+            id: newId,
+            name: name.trim(),
+            type,
+            commandOrUrl: commandOrUrl.trim(),
+            isActive: true,
+            createdAt: new Date().toISOString()
+        };
+        list.push(newMcp);
+        await this.context.globalState.update(MCP_STORAGE_KEY, list);
+        return newId;
+    }
+
+    async removeMcpServer(id: number): Promise<void> {
+        const list = this.getMcpServers().filter(s => s.id !== id);
+        await this.context.globalState.update(MCP_STORAGE_KEY, list);
+    }
+
+    async toggleMcpServer(id: number): Promise<void> {
+        const list = this.getMcpServers();
+        const target = list.find(s => s.id === id);
+        if (target) {
+            target.isActive = !target.isActive;
+            await this.context.globalState.update(MCP_STORAGE_KEY, list);
+        }
+    }
+
+    async updateMcpTools(id: number, tools: McpTool[]): Promise<void> {
+        const list = this.getMcpServers();
+        const target = list.find(s => s.id === id);
+        if (target) {
+            target.tools = tools;
+            await this.context.globalState.update(MCP_STORAGE_KEY, list);
+        }
+    }
+
+    async toggleMcpTool(serverId: number, toolId: string): Promise<void> {
+        const list = this.getMcpServers();
+        const target = list.find(s => s.id === serverId);
+        if (target && target.tools) {
+            const tool = target.tools.find(t => t.id === toolId);
+            if (tool) {
+                tool.enabled = !tool.enabled;
+                await this.context.globalState.update(MCP_STORAGE_KEY, list);
+            }
+        }
     }
 
     dispose(): void {
