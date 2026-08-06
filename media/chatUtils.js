@@ -117,17 +117,32 @@ function applyTheme(theme) {
 function preprocessMarkdown(text) {
     if (!text) return '';
 
-    // 1. Auto-fix un-backticked code patterns like "typescript// relative/path..."
-    let fixedText = text.replace(/([a-zA-Z0-9_-]+)\s*(\/\/\s*[a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)\s*(import|export|const|let|var|class|function|type|interface)/g, '\n```$1\n$2\n$3');
+    // 1. Ensure space/newline before triple backticks if glued to text (e.g. "mejora:```typescript")
+    let fixedText = text.replace(/([^\n`])```/g, '$1\n```');
+
+    // 2. Auto-fix un-backticked code patterns like "typescript// relative/path..."
+    fixedText = fixedText.replace(/([a-zA-Z0-9_-]+)\s*(\/\/\s*[a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)\s*(import|export|const|let|var|class|function|type|interface)/g, '\n```$1\n$2\n$3');
 
     const parts = fixedText.split(/(```[\s\S]*?```)/g);
     return parts.map(part => {
         if (part.startsWith('```')) {
             let codeContent = part;
-            // 2. If code block lacks proper line breaks, format semicolons and braces
+            // 3. Split concatenated statements without newlines (e.g. ";import", ";export", ";const")
+            codeContent = codeContent
+                .replace(/(```[a-zA-Z0-9_-]+)(\/\/|\/\*)/i, '$1\n$2')
+                .replace(/;import\b/g, ';\nimport')
+                .replace(/;export\b/g, ';\nexport')
+                .replace(/;const\b/g, ';\nconst')
+                .replace(/;let\b/g, ';\nlet')
+                .replace(/;var\b/g, ';\nvar')
+                .replace(/;type\b/g, ';\ntype')
+                .replace(/;interface\b/g, ';\ninterface')
+                .replace(/;class\b/g, ';\nclass')
+                .replace(/;function\b/g, ';\nfunction');
+
+            // 4. Format dense single-line code blocks
             if ((codeContent.match(/;/g) || []).length > 2 && codeContent.split('\n').length < 5) {
                 codeContent = codeContent
-                    .replace(/(```[a-zA-Z0-9_-]+)(\/\/|\/\*)/i, '$1\n$2')
                     .replace(/;\s*(import|export|const|let|var|class|function|type|interface|private|public|protected|return|if|try|catch)/g, ';\n$1')
                     .replace(/;\s*/g, ';\n')
                     .replace(/\{\s*/g, ' {\n')
