@@ -405,21 +405,24 @@ export function getActiveMcpPromptContext(store: ConnectionStore): string {
     const activeMcpServers = store.getMcpServers().filter(s => s.isActive);
     if (activeMcpServers.length === 0) return '';
 
-    let text = '[Active Connected MCP Services in Environment]:\n';
+    let text = '[HERRAMIENTAS MCP ACTIVAS EN EL ENTORNO]:\n';
+    text += 'Puedes invocar cualquiera de las siguientes herramientas MCP en tu respuesta usando:\n';
+    text += '{"tool": "nombre_de_herramienta", "args": {"parametro": "valor"}}\n\n';
+
     activeMcpServers.forEach(s => {
-        text += `\n▶ MCP Server: ${s.name} [${s.type.toUpperCase()}] (${s.commandOrUrl})\n`;
+        text += `▶ Servidor MCP: ${s.name} [${s.type.toUpperCase()}] (${s.commandOrUrl})\n`;
         if (s.tools && s.tools.length > 0) {
             const enabledTools = s.tools.filter(t => t.enabled);
             if (enabledTools.length > 0) {
-                text += '  Enabled Services/Tools:\n';
+                text += '  Herramientas Habilitadas:\n';
                 enabledTools.forEach(t => {
-                    text += `  - ${t.name}: ${t.description}\n`;
+                    text += `  • ${t.name}: ${t.description}\n`;
                 });
             } else {
-                text += '  (No individual tools enabled)\n';
+                text += '  (Acceso a servicios generales del servidor MCP)\n';
             }
         } else {
-            text += '  Enabled Services/Tools: (General server access)\n';
+            text += '  Herramientas Habilitadas: (Acceso a servicios generales)\n';
         }
     });
     return text + '\n';
