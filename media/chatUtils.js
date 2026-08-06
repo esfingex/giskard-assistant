@@ -82,6 +82,10 @@ function preprocessMarkdown(text) {
     return parts.map(part => {
         if (part.startsWith('```')) return part;
         let clean = part;
+        clean = clean.replace(/([^\n])(\s*##+\s)/g, '$1\n\n$2');
+        clean = clean.replace(/([:\.\wáéíóúñA-Z])\s*(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
+        clean = clean.replace(/([^\n])(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
+        clean = clean.replace(/([^\n])(-\s+[\*\*\wáéíóúñA-Z✔️✅❌💡▶])/g, '$1\n$2');
         if (clean.includes('├──') || clean.includes('└──')) {
             clean = clean.replace(/((?:^[ \t]*(?:├──|└──|│|\/)[^\n]*\n?)+)/gm, '\n```text\n$1```\n');
         }
