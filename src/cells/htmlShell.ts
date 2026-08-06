@@ -167,14 +167,17 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                     <div class="field">
                         <label>${i18n.connections.tag}</label>
                         <select id="conn-tag">
-                            <option value="giskard-sys">giskard-sys</option>
-                            <option value="ollama">ollama</option>
-                            <option value="lm-studio">lm-studio</option>
-                            <option value="openai">openai</option>
-                            <option value="deepseek">deepseek</option>
-                            <option value="anthropic">anthropic</option>
-                            <option value="gemini">gemini</option>
-                            <option value="custom">✅ custom…</option>
+                            <option value="giskard-sys">🦀 giskard-sys (Local Rust Axum @ 3500)</option>
+                            <option value="nvidia">🟢 NVIDIA NIM API (https://integrate.api.nvidia.com/v1)</option>
+                            <option value="deepseek">🐳 DeepSeek API (https://api.deepseek.com/v1)</option>
+                            <option value="kimi">🌙 Moonshot Kimi API (https://api.moonshot.cn/v1)</option>
+                            <option value="qwen">☁️ Qwen / DashScope API (https://dashscope.aliyuncs.com/compatible-mode/v1)</option>
+                            <option value="ollama">🦙 Ollama Local (http://localhost:11434)</option>
+                            <option value="openai">⚡ OpenAI API (https://api.openai.com/v1)</option>
+                            <option value="anthropic">🧠 Anthropic Claude API</option>
+                            <option value="gemini">✨ Google Gemini API</option>
+                            <option value="lm-studio">💻 LM Studio / vLLM (Local)</option>
+                            <option value="custom">✅ Custom API…</option>
                         </select>
                     </div>
                     <div class="field" id="conn-token-field" style="display:none;">

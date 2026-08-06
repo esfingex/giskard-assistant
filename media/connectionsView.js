@@ -180,6 +180,42 @@ function renderConnectionsList(connections) {
         connTokenField.style.display = isRemote ? 'flex' : 'none';
     }
 
+    if (connTagSel) {
+        connTagSel.addEventListener('change', () => {
+            const val = connTagSel.value;
+            if (val === 'nvidia') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'NVIDIA NIM API';
+                if (connUrlInp) connUrlInp.value = 'https://integrate.api.nvidia.com/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
+            } else if (val === 'deepseek') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'DeepSeek V3 / R1 API';
+                if (connUrlInp) connUrlInp.value = 'https://api.deepseek.com/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
+            } else if (val === 'kimi') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'Moonshot Kimi API';
+                if (connUrlInp) connUrlInp.value = 'https://api.moonshot.cn/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
+            } else if (val === 'qwen') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'Qwen DashScope API';
+                if (connUrlInp) connUrlInp.value = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
+            } else if (val === 'giskard-sys') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'Giskard-Sys Sovereign';
+                if (connUrlInp) connUrlInp.value = 'http://localhost:3500';
+                if (connTypeLocal) connTypeLocal.checked = true;
+            } else if (val === 'ollama') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'Ollama Local';
+                if (connUrlInp) connUrlInp.value = 'http://localhost:11434';
+                if (connTypeLocal) connTypeLocal.checked = true;
+            } else if (val === 'openai') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'OpenAI API';
+                if (connUrlInp) connUrlInp.value = 'https://api.openai.com/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
+            }
+            updateConnTypeVisibility();
+        });
+    }
+
     if (connTypeLocal) connTypeLocal.addEventListener('change', updateConnTypeVisibility);
     if (connTypeRemote) connTypeRemote.addEventListener('change', updateConnTypeVisibility);
 
