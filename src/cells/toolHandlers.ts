@@ -59,7 +59,11 @@ export async function handleToolReadFile(view: vscode.WebviewView | undefined, t
     try {
         const doc = await resolveWorkspaceFile(targetPath);
         if (!doc) throw new Error(`Archivo no encontrado en el workspace: ${targetPath}`);
-        const content = doc.getText();
+        let content = doc.getText();
+        const MAX_READ_CHARS = 14000;
+        if (content.length > MAX_READ_CHARS) {
+            content = content.substring(0, MAX_READ_CHARS) + `\n\n... [Contenido optimizado a los primeros 14,000 caracteres de ${content.length.toLocaleString()} caracteres totales para máxima velocidad de inferencia]`;
+        }
         view.webview.postMessage({ type: 'toolReadFileResult', id, content, path: targetPath });
     } catch (err: any) {
         view.webview.postMessage({ type: 'toolReadFileResult', id, error: err.message, path: targetPath });
