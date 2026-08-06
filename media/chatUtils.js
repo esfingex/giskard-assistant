@@ -150,12 +150,33 @@ function preprocessMarkdown(text) {
 
 function formatMarkdown(text) {
     if (!text) return '';
-    const preprocessed = preprocessMarkdown(text);
+
+    // 1. Universal Stream Sanitizer: Close unclosed code blocks if response ended mid-stream
+    let sanitized = text;
+    const fenceMatches = (sanitized.match(/```/g) || []).length;
+    if (fenceMatches % 2 !== 0) {
+        sanitized += '\n```';
+    }
+
+    const preprocessed = preprocessMarkdown(sanitized);
     let htmlText = preprocessed;
+
     if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
         try {
             if (typeof marked.setOptions === 'function') {
-                marked.setOptions({ breaks: true, gfm: true });
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true,
+                    highlight: function (code, lang) {
+                        if (typeof hljs !== 'undefined') {
+                            if (lang && hljs.getLanguage && hljs.getLanguage(lang)) {
+                                return hljs.highlight(code, { language: lang }).value;
+                            }
+                            return hljs.highlightAuto(code).value;
+                        }
+                        return code;
+                    }
+                });
             }
             htmlText = marked.parse(preprocessed);
         } catch (e) {

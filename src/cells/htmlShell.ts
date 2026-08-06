@@ -8,6 +8,7 @@ import { loadTranslations } from '../core/i18n';
 
 export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webview): string {
     const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'marked.min.js'));
+    const highlightUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'highlight.min.js'));
     const chatUtilsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatUtils.js'));
     const connectionsViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'connectionsView.js'));
     const mcpViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'mcpView.js'));
@@ -254,6 +255,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     </div>
 
     <script src="${markedUri}"></script>
+    <script src="${highlightUri}"></script>
     <script src="${chatUtilsUri}"></script>
     <script src="${connectionsViewUri}"></script>
     <script src="${mcpViewUri}"></script>
