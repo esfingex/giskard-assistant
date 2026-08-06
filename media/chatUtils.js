@@ -292,8 +292,13 @@ function attachCodeBlockActions(container) {
         copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
         copyBtn.onclick = (e) => {
             e.preventDefault(); e.stopPropagation();
-            navigator.clipboard.writeText(codeText);
-            copyBtn.textContent = '✓';
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(codeText).catch(function() {});
+                }
+            } catch (err) {}
+            vscode.postMessage({ type: 'copyToClipboard', text: codeText });
+            copyBtn.textContent = '✓ Copiado';
             setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
         };
 

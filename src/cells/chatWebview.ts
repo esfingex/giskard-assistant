@@ -843,6 +843,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'fetchSkills':
                     await this._handleFetchSkills();
                     break;
+                case 'copyToClipboard':
+                    if (data.text) {
+                        await vscode.env.clipboard.writeText(data.text);
+                        vscode.window.setStatusBarMessage('$(clippy) Código copiado al portapapeles', 2500);
+                    }
+                    break;
             }
         });
     }
