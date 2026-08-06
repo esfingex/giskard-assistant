@@ -266,11 +266,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         let fullPrompt = prompt;
 
-        // Inject active MCP servers context
+        // 1. Check if Giskard-Sys active connection is present
+        const giskardConn = this._store.getActiveLocal();
+        const isGiskardActive = giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500'));
+
+        // 2. Check active MCP context
         const mcpContext = getActiveMcpPromptContext(this._store);
-        if (mcpContext) {
-            fullPrompt = mcpContext + fullPrompt;
+
+        // Build System Capability Context Header
+        let systemHeader = '';
+        if (isGiskardActive) {
+            systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
+        if (mcpContext) {
+            systemHeader += `${mcpContext}\n`;
+        } else if (!isGiskardActive) {
+            systemHeader += `[Modo Chat Estándar: Sin herramientas MCP ni servidor Giskard-Sys activos]\n`;
+        }
+
+        fullPrompt = systemHeader + fullPrompt;
 
         // Passive workspace context injection
         const folders = vscode.workspace.workspaceFolders;
