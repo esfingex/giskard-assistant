@@ -17,14 +17,20 @@ export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL
         if (res && res.ok) {
             const data: any = await res.json().catch(() => null);
             if (data && Array.isArray(data.data) && data.data.length > 0) {
-                return data.data.map((m: any) => m.id || m.name || String(m));
+                const fetched = data.data
+                    .map((m: any) => m.id || m.name || String(m))
+                    .filter((id: string) => {
+                        const l = id.toLowerCase();
+                        return !l.includes('embed') && !l.includes('detector') && !l.includes('translate') && !l.includes('parse') && !l.includes('clip') && !l.includes('guard');
+                    });
+                if (fetched.length > 0) return fetched;
             }
         }
     } catch { }
     return [
-        'openai/gpt-oss-120b',
         'meta/llama-3.3-70b-instruct',
         'nvidia/llama-3.1-nemotron-70b-instruct',
+        'openai/gpt-oss-120b',
         'mistralai/codestral-22b-instruct-v0.1',
         'ibm/granite-34b-code-instruct'
     ];
