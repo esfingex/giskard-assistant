@@ -41,16 +41,21 @@ import {
     extractCodeBlocks
 } from './toolHandlers';
 
+const _modelContextRegistry: Map<string, number> = new Map();
+
+export function setModelContextWindow(modelName: string, maxTokens: number) {
+    if (modelName && maxTokens > 0) {
+        _modelContextRegistry.set(modelName.toLowerCase().trim(), maxTokens);
+    }
+}
+
 export function getModelMaxContextWindow(modelName: string): number {
-    const m = (modelName || '').toLowerCase();
-    if (m.includes('nemotron-3-ultra') || m.includes('nemotron-3-nano')) return 16384;
-    if (m.includes('nemotron-4') || m.includes('nemotron-mini') || m.includes('phi')) return 32768;
-    if (m.includes('llama-3.3') || m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('gpt-oss') || m.includes('gpt-4')) return 128000;
-    if (m.includes('qwimi') || m.includes('distill') || m.includes('kimi') || m.includes('moonshot')) return 128000;
-    if (m.includes('coder') || m.includes('code') || m.includes('deepseek') || m.includes('qwen')) return 65536;
-    if (m.includes('gemini')) return 1048576;
-    if (m.includes('claude')) return 200000;
-    return 32768;
+    const cleanName = (modelName || '').toLowerCase().trim();
+    if (_modelContextRegistry.has(cleanName)) {
+        return _modelContextRegistry.get(cleanName)!;
+    }
+    // Remote models default to unrestrictive modern baseline (128,000 tokens), local models default to 32,768 tokens
+    return cleanName.startsWith('local:') ? 32768 : 128000;
 }
 
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {

@@ -73,15 +73,8 @@
     }
 
     function getModelMaxContext(modelName) {
-        const m = (modelName || '').toLowerCase();
-        if (m.includes('nemotron-3-ultra') || m.includes('nemotron-3-nano')) return 16384;
-        if (m.includes('nemotron-4') || m.includes('nemotron-mini') || m.includes('phi')) return 32768;
-        if (m.includes('llama-3.3') || m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('gpt-oss') || m.includes('gpt-4')) return 128000;
-        if (m.includes('qwimi') || m.includes('distill') || m.includes('kimi') || m.includes('moonshot')) return 128000;
-        if (m.includes('coder') || m.includes('code') || m.includes('deepseek') || m.includes('qwen')) return 65536;
-        if (m.includes('gemini')) return 1048576;
-        if (m.includes('claude')) return 200000;
-        return 32768;
+        const m = (modelName || '').toLowerCase().trim();
+        return m.startsWith('local:') ? 32768 : 128000;
     }
 
     function updateTokenCounter() {
