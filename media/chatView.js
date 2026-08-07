@@ -416,6 +416,16 @@
                 }
                 break;
 
+            case 'setSelectedModel':
+                if (message.model) {
+                    currentActiveModel = message.model;
+                    const activeModelDisplay = document.getElementById('active-model-display');
+                    if (activeModelDisplay) {
+                        activeModelDisplay.textContent = '🤖 ' + message.model;
+                    }
+                }
+                break;
+
             case 'stateRefreshed':
                 const connUrlInp = document.getElementById('conn-url');
                 if (message.url && connUrlInp) connUrlInp.value = message.url;

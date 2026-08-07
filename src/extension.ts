@@ -68,9 +68,8 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (modelName: string) => {
             if (!modelName) return;
-            const allModels = await fetchLlmModels().catch(() => []);
-            const isNowEnabled = await store.toggleModelEnabled(modelName, allModels);
-            const enabledList = store.getEnabledModels() || allModels;
+            const isNowEnabled = await store.toggleModelEnabled(modelName);
+            const enabledList = store.getEnabledModels();
 
             provider.postMessage({ type: 'setEnabledModels', enabledModels: enabledList });
             localModelsTree.refresh();

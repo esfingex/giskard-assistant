@@ -156,24 +156,19 @@ export class ConnectionStore {
     }
 
     /** Get array of multi-selected enabled models for Chat dropdown */
-    getEnabledModels(): string[] | undefined {
-        return this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1');
+    getEnabledModels(): string[] {
+        return this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1') || [];
     }
 
-    /** Check if a specific model is enabled */
+    /** Check if a specific model is enabled (Default: FALSE / Disabled) */
     isModelEnabled(modelName: string): boolean {
         const list = this.getEnabledModels();
-        if (!list) return true;
         return list.includes(modelName);
     }
 
     /** Toggle multi-selected enabled state for a model */
-    async toggleModelEnabled(modelName: string, allModels: string[] = []): Promise<boolean> {
+    async toggleModelEnabled(modelName: string): Promise<boolean> {
         let list = this.getEnabledModels();
-        if (!list) {
-            list = allModels.length > 0 ? [...allModels] : [modelName];
-        }
-
         const index = list.indexOf(modelName);
         let newState = false;
         if (index >= 0) {

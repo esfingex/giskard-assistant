@@ -89,7 +89,7 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                 m,
                 vscode.TreeItemCollapsibleState.None,
                 'local-model',
-                { isEnabled: !enabledModels || enabledModels.includes(m) }
+                { isEnabled: enabledModels.includes(m) }
             ));
         }
 

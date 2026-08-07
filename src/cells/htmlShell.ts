@@ -84,17 +84,23 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .modal-card { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 14px; border-radius: 8px; width: 94%; max-width: 520px; max-height: 88vh; resize: both; overflow: auto; min-width: 280px; min-height: 320px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.7); }
         .modal-card h4 { margin: 0; font-size: 12px; }
         .field { display: flex; flex-direction: column; gap: 3px; font-size: 10px; }
+        .active-model-badge {
+            font-size: 11px;
+            font-weight: 600;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="header">
-            <button class="btn-settings" id="open-settings-btn" title="${i18n.status.settings}">⚙️</button>
-            <select id="model-select">
-                <optgroup label="Local Swarm (Ollama)">
-                    <option value="">— Select AI model —</option>
-                </optgroup>
-            </select>
+            <div class="active-model-badge" id="active-model-display">🤖 Giskard Assistant (Soberano)</div>
             <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
 
