@@ -302,7 +302,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         // Build System Capability Context Header
         let systemHeader = `[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
 • TO READ A FILE: Emit [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] or {"tool": "read_file", "args": {"path": "src/extension.ts"}}. Always use actual relative workspace file paths.
-• TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).\n\n`;
+• TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).
+• IGNORED DIRECTORIES: Do NOT attempt to read non-source files or build output directories like node_modules, out/, dist/, target/, build/, or .git/. Focus exclusively on source code files (src/, package.json, README.md, etc.).\n\n`;
         if (isGiskardActive) {
             systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }

@@ -6,9 +6,17 @@
 import * as vscode from 'vscode';
 import { getConnectorUrl, getClientId, fetchWithTimeout } from '../core/api';
 
+export const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,out,dist,target,build,coverage,.git,.gemini,.cache,venv,.venv}/**';
+
 export async function resolveWorkspaceFile(targetPath: string): Promise<vscode.TextDocument | null> {
     if (!targetPath || !targetPath.trim()) return null;
     let cleanPath = targetPath.trim();
+
+    // Ignore requests to read build output / node_modules / git directories
+    const lower = cleanPath.toLowerCase();
+    if (lower.includes('node_modules/') || lower.includes('dist/') || lower.includes('out/') || lower.includes('target/') || lower.includes('.git/')) {
+        return null;
+    }
 
     // 1. Absolute path check
     if (cleanPath.startsWith('/')) {
@@ -29,10 +37,10 @@ export async function resolveWorkspaceFile(targetPath: string): Promise<vscode.T
         return await vscode.workspace.openTextDocument(uri);
     } catch {}
 
-    // 3. Fallback search via findFiles
+    // 3. Fallback search via findFiles excluding build/dependency dirs
     try {
         const fileName = cleanPath.split('/').pop() || cleanPath;
-        const matches = await vscode.workspace.findFiles(`**/${fileName}`, '**/node_modules/**', 5);
+        const matches = await vscode.workspace.findFiles(`**/${fileName}`, DEFAULT_EXCLUDE_GLOB, 5);
         if (matches && matches.length > 0) {
             return await vscode.workspace.openTextDocument(matches[0]);
         }
