@@ -321,19 +321,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         let activeTag = (activeConn?.tag || 'ollama').toLowerCase();
         const maxContext = getModelMaxContextWindow(targetModel);
 
-        const isRemoteProfile = Boolean(activeConn && activeConn.type === 'remote');
-        const isRemoteModel = targetModel.includes('/') && (
-            targetModel.startsWith('nvidia/') ||
-            targetModel.startsWith('meta/') ||
-            targetModel.startsWith('deepseek/') ||
-            targetModel.startsWith('mistral/') ||
-            targetModel.startsWith('anthropic/') ||
-            targetModel.startsWith('google/') ||
-            targetModel.startsWith('openai/')
-        );
-
-        // Remote connection is true if model has vendor prefix or active profile is remote
-        const isRemoteConnection = !targetModel.startsWith('local:') && (isRemoteProfile || isRemoteModel);
+        // Universal Rule: If model starts with 'local:', it is Local Ollama.
+        // Otherwise, any model is a Remote AI model!
+        const isRemoteConnection = !targetModel.startsWith('local:');
 
         let apiKey = '';
         const allConns = this._store.getAll();
