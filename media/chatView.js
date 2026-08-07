@@ -34,6 +34,8 @@
     let currentBotRawText = '';
     let currentActiveModel = '';
     let selectedContextType = 'none';
+    let _readFilesBatch = [];
+    let _readFileTimer = null;
 
     function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
         if (!div) return;
@@ -424,21 +426,29 @@
 
             case 'toolReadFileResult':
                 if (message.error) {
-                    appendActivityPill('❌ Error leyendo <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                    appendActivityPill('❌ Error reading <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
                 } else {
                     vscode.postMessage({ type: 'openFile', relativePath: message.path });
                     appendActivityPill(
-                        'Leyó 1 archivo ➔ <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
+                        'Read 1 file ➔ <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
                         '🔍'
                     );
-                    if (_toolCallDepth < 1 && _lastUserPrompt) {
-                        _toolCallDepth++;
-                        var followUp = 'Here is the current content of `' + message.path + '`:\n```\n' + message.content + '\n```\n\nNow, generate the complete updated file code block starting line 1 with `// ' + message.path + '` to implement the requested changes and improvements: ' + _lastUserPrompt;
-                        if (promptInput) {
-                            promptInput.value = followUp;
-                            setTimeout(function() { send(); }, 300);
+                    _readFilesBatch.push(message);
+                    if (_readFileTimer) clearTimeout(_readFileTimer);
+                    _readFileTimer = setTimeout(function() {
+                        if (_readFilesBatch.length > 0 && _lastUserPrompt) {
+                            var combinedContent = _readFilesBatch.map(function(item) {
+                                return 'File `' + item.path + '`:\n```\n' + item.content + '\n```';
+                            }).join('\n\n');
+                            var targetFile = _readFilesBatch[_readFilesBatch.length - 1].path;
+                            var followUp = 'Here is the content of the read workspace files:\n' + combinedContent + '\n\nNow, generate the complete updated file code block starting line 1 with `// ' + targetFile + '` to implement the requested changes and improvements: ' + _lastUserPrompt;
+                            _readFilesBatch = [];
+                            if (promptInput) {
+                                promptInput.value = followUp;
+                                setTimeout(function() { send(); }, 300);
+                            }
                         }
-                    }
+                    }, 600);
                 }
                 break;
 
