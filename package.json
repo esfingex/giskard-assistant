@@ -41,8 +41,18 @@
       "giskard-explorer": [
         {
           "id": "giskard.chatView",
-          "name": "Giskard Assistant Chat",
+          "name": "💬 Giskard Assistant Chat",
           "type": "webview"
+        },
+        {
+          "id": "giskard-local-models",
+          "name": "🤖 Local & Active LLM Models",
+          "icon": "$(server-environment)"
+        },
+        {
+          "id": "giskard-remote-connections",
+          "name": "🌐 Remote AI Connections",
+          "icon": "$(cloud)"
         }
       ]
     },

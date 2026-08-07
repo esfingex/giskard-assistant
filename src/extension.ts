@@ -16,6 +16,7 @@ import { ConnectionStore } from './core/connectionStore';
 
 import { GiskardStatusBar } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
+import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider } from './cells/treeViewProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Giskard Assistant v4.2.0 activada (GPL-3.0)');
@@ -42,8 +43,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 1. Célula Webview Sidebar Chat
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
+    const localModelsTree = new GiskardLocalModelsTreeProvider(store);
+    const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
+
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('giskard.chatView', provider)
+        vscode.window.registerWebviewViewProvider('giskard.chatView', provider),
+        vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
+        vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree)
     );
 
     // 2. Célula de Comandos Sandbox
