@@ -190,6 +190,18 @@ export class ConnectionStore {
         return undefined;
     }
 
+    /** Save or update API key secret for a connection */
+    async saveApiKey(id: number, apiKey: string): Promise<void> {
+        const list = this._getRawList();
+        const conn = list.find(c => c.id === id);
+        if (!conn) return;
+        if (!conn.secretRef) {
+            conn.secretRef = `conn_${id}_token`;
+        }
+        await this.context.secrets.store(conn.secretRef, apiKey.trim());
+        await this._saveRawList(list);
+    }
+
     /** Remove a connection profile and its stored secret */
     async removeConnection(id: number): Promise<void> {
         let list = this._getRawList();

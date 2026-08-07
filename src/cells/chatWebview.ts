@@ -99,6 +99,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    public postMessage(message: any) {
+        if (this._view) {
+            this._view.webview.postMessage(message);
+        }
+    }
+
     public injectCodeContext(contextBlock: { relativePath: string; startLine: number; endLine: number; code: string; lang: string }) {
         if (!this._view) return;
         this._view.webview.postMessage({

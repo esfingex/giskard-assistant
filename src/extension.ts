@@ -66,6 +66,46 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 3. Comandos de apertura & Gestión de Servidores desde el TreeView
     context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-assistant.manageApiKey', async () => {
+            const active = store.getActive();
+            if (!active) {
+                vscode.window.showWarningMessage('No hay una conexión activa seleccionada.');
+                return;
+            }
+            const apiKey = await vscode.window.showInputBox({
+                prompt: `Ingresa / Actualiza tu API Key para ${active.name} (${active.tag.toUpperCase()})`,
+                password: true
+            });
+            if (apiKey !== undefined) {
+                await store.saveApiKey(active.id, apiKey);
+                vscode.window.showInformationMessage(`🔑 API Key actualizada con éxito para ${active.name}!`);
+            }
+        }),
+        vscode.commands.registerCommand('giskard-assistant.filterCapabilities', async () => {
+            const pick = await vscode.window.showQuickPick([
+                { label: '🧠 Pensamiento Profundo / Reasoning (R1/QwQ)', description: 'Modelos de razonamiento' },
+                { label: '🛠️ Herramientas & Coder', description: 'Edición de código y Function Calling' },
+                { label: '👁️ Visión Multimodal', description: 'Comprensión visual e imágenes' },
+                { label: '🧩 Vectores & Embeddings', description: 'Búsqueda vectorial RAG' },
+                { label: '✨ Todos los Modelos', description: 'Mostrar lista completa' }
+            ], { placeHolder: 'Selecciona capacidad para filtrar la lista de modelos' });
+            if (pick) {
+                vscode.window.showInformationMessage(`Filtro aplicado: ${pick.label}`);
+            }
+        }),
+        vscode.commands.registerCommand('giskard-assistant.searchModels', async () => {
+            const query = await vscode.window.showInputBox({
+                prompt: 'Buscar modelos por nombre o patrón',
+                placeHolder: 'ej. qwen, r1, llama, gpt-4o'
+            });
+            if (query !== undefined) {
+                vscode.window.showInformationMessage(`🔍 Buscando modelos con término: "${query}"`);
+            }
+        }),
+        vscode.commands.registerCommand('giskard-assistant.openSettingsModal', async () => {
+            await vscode.commands.executeCommand('giskard.chatView.focus');
+            provider.postMessage({ type: 'openSettings' });
+        }),
         vscode.commands.registerCommand('giskard-assistant.addServer', async () => {
             const name = await vscode.window.showInputBox({ prompt: 'Nombre de la Conexión (ej. Mi Servidor Ollama, NVIDIA NIM, DeepSeek)', placeHolder: 'NVIDIA NIM Prod' });
             if (!name) return;

@@ -72,6 +72,36 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.manageApiKey",
+        "title": "Gestionar API Keys y Tokens de Autenticación",
+        "icon": "$(key)"
+      },
+      {
+        "command": "giskard-assistant.filterCapabilities",
+        "title": "Filtrar Modelos por Capacidad (🧠 🛠️ 👁️ 🧩)",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "giskard-assistant.searchModels",
+        "title": "Buscar y Filtrar Modelos por Nombre",
+        "icon": "$(search)"
+      },
+      {
+        "command": "giskard-assistant.addServer",
+        "title": "Agregar Servidor / Conexión IA",
+        "icon": "$(add)"
+      },
+      {
+        "command": "giskard-assistant.refreshTree",
+        "title": "Refrescar Servidores y Modelos",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "giskard-assistant.openSettingsModal",
+        "title": "Abrir Ajustes de Extensión",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "giskard-assistant.openChat",
         "title": "Giskard Assistant: Abrir Chat en Barra Principal (Izquierda)",
         "icon": "$(robot)"
@@ -153,14 +183,34 @@
     "menus": {
       "view/title": [
         {
+          "command": "giskard-assistant.manageApiKey",
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@1"
+        },
+        {
+          "command": "giskard-assistant.filterCapabilities",
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@2"
+        },
+        {
+          "command": "giskard-assistant.searchModels",
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@3"
+        },
+        {
           "command": "giskard-assistant.addServer",
-          "when": "view == giskard-remote-connections || view == giskard-local-models",
-          "group": "navigation"
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@4"
         },
         {
           "command": "giskard-assistant.refreshTree",
-          "when": "view == giskard-remote-connections || view == giskard-local-models",
-          "group": "navigation"
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@5"
+        },
+        {
+          "command": "giskard-assistant.openSettingsModal",
+          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "group": "navigation@6"
         }
       ]
     }
