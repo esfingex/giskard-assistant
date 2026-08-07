@@ -211,9 +211,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const groups = await fetchLlmModelsGrouped();
         const remoteModels = await fetchLlmModels();
 
-        // Only query local Ollama server if an active connection is explicitly set to Ollama
-        const ollamaConn = this._store.getAll().find(c => c.isActive && (c.tag === 'ollama' || c.url.includes(':11434')));
-        const localModels = ollamaConn ? await fetchOllamaModels(ollamaConn.url) : [];
+        // Always query local Ollama models so they remain available in the model dropdown
+        const ollamaConn = this._store.getAll().find(c => c.tag === 'ollama' || c.url.includes(':11434'));
+        const ollamaUrl = ollamaConn?.url || 'http://127.0.0.1:11434';
+        const localModels = await fetchOllamaModels(ollamaUrl).catch(() => []);
 
         this._view.webview.postMessage({
             type: 'modelsList',
