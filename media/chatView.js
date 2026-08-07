@@ -431,7 +431,11 @@
                     _readFileTimer = setTimeout(function() {
                         if (_readFilesBatch.length > 0 && _lastUserPrompt) {
                             var combinedContent = _readFilesBatch.map(function(item) {
-                                return 'File `' + item.path + '`:\n```\n' + item.content + '\n```';
+                                var content = item.content || '';
+                                if (content.length > 6000) {
+                                    content = content.substring(0, 6000) + '\n... [Contenido truncado a 6000 caracteres para seguridad de contexto]';
+                                }
+                                return 'File `' + item.path + '`:\n```\n' + content + '\n```';
                             }).join('\n\n');
                             var followUp = '[Contenido de los archivos leídos del workspace]:\n\n' + combinedContent + '\n\nCon base en la información de estos archivos del proyecto, responde a la solicitud del usuario:\n' + _lastUserPrompt;
                             _readFilesBatch = [];

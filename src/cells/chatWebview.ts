@@ -535,9 +535,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (apiKey && apiKey.trim()) {
             headers['Authorization'] = `Bearer ${apiKey.trim()}`;
         }
-        const maxContext = getModelMaxContextWindow(model);
-        const estPromptTokens = Math.ceil(fullPrompt.length / 3.5);
-        const maxResponseTokens = Math.min(4096, Math.max(512, maxContext - estPromptTokens - 200));
+        let safePrompt = fullPrompt;
+        if (safePrompt.length > 100000) {
+            safePrompt = safePrompt.substring(0, 100000) + '\n\n... [Prompt contextual truncado para no exceder los límites del servidor remoto]';
+        }
+        const maxResponseTokens = 4096;
 
         const timeoutId = setTimeout(() => {
             if (this._activeAbortController) {
@@ -551,7 +553,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 headers,
                 body: JSON.stringify({
                     model: model,
-                    messages: [{ role: 'user', content: fullPrompt }],
+                    messages: [{ role: 'user', content: safePrompt }],
                     stream: true,
                     temperature: 0.7,
                     max_tokens: maxResponseTokens
