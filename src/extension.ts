@@ -51,8 +51,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 3. Comandos de apertura de Chat Sidebar
     context.subscriptions.push(
-        vscode.commands.registerCommand('giskard-assistant.openChat', () => {
-            vscode.commands.executeCommand('workbench.view.extension.giskard-sidebar');
+        vscode.commands.registerCommand('giskard-assistant.openChat', async () => {
+            await vscode.commands.executeCommand('giskard.chatView.focus');
         }),
         vscode.commands.registerCommand('giskard-assistant.openChatRight', () => {
             vscode.commands.executeCommand('workbench.action.focusSecondarySideBar');
