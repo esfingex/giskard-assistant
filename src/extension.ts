@@ -14,8 +14,11 @@ import { registerSandboxCommands } from './cells/sandboxCommands';
 import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
 
+import { GiskardStatusBar } from './cells/statusBar';
+import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
+
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('🚀 Giskard Assistant v4.1.0 activada (GPL-3.0)');
+    console.log('🚀 Giskard Assistant v4.2.0 activada (GPL-3.0)');
 
     // 0. Initialize SQLite Connection Store
     const store = new ConnectionStore(context);
@@ -26,6 +29,16 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage(`Giskard: Connection store init failed: ${err.message}`);
     }
     context.subscriptions.push({ dispose: () => store.dispose() });
+
+    // 0.1 Status Bar Heartbeat Item
+    const statusBar = new GiskardStatusBar(store);
+    context.subscriptions.push(statusBar);
+
+    // 0.2 Inline Code Completion Provider (Ghost Text / FIM)
+    const inlineProvider = new GiskardInlineCompletionProvider(store);
+    context.subscriptions.push(
+        vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, inlineProvider)
+    );
 
     // 1. Célula Webview Sidebar Chat
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store);

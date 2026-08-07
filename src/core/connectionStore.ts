@@ -36,9 +36,46 @@ export interface McpServer {
     createdAt: string;
 }
 
+export interface ModelSettings {
+    temperature: number; // 0.0 - 1.0
+    topP: number;        // 0.0 - 1.0
+    topK: number;        // 1 - 100
+    numCtx: number;      // 2048 - 128000
+    numPredict: number;  // 512 - 4096
+    think?: boolean;
+    thinkBudget?: number;
+}
+
 const STORAGE_KEY = 'giskard_connections_v1';
 const MCP_STORAGE_KEY = 'giskard_mcp_servers_v1';
 const EXCLUSION_STORAGE_KEY = 'giskard_exclusion_patterns_v1';
+const MODEL_OVERRIDES_STORAGE_KEY = 'giskard_model_overrides_v1';
+
+export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+    temperature: 0.7,
+    topP: 0.9,
+    topK: 40,
+    numCtx: 32768,
+    numPredict: 4096,
+    think: false,
+    thinkBudget: 2048
+};
+
+export interface ModelCapabilities {
+    thinking: boolean;
+    tools: boolean;
+    vision: boolean;
+    embedding: boolean;
+}
+
+export function getModelCapabilities(modelName: string): ModelCapabilities {
+    const l = (modelName || '').toLowerCase();
+    const thinking = l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('nemotron-3') || l.includes('thinking');
+    const tools = l.includes('instruct') || l.includes('coder') || l.includes('gpt') || l.includes('claude') || l.includes('gemini') || l.includes('llama-3');
+    const vision = l.includes('vision') || l.includes('vl') || l.includes('gpt-4o') || l.includes('gemini-1.5') || l.includes('gemini-2') || l.includes('claude-3');
+    const embedding = l.includes('embed') || l.includes('bge') || l.includes('nomic');
+    return { thinking, tools, vision, embedding };
+}
 
 export const DEFAULT_EXCLUSIONS = [
     'node_modules', 'out', 'dist', 'target', 'build', 'coverage',
@@ -345,6 +382,20 @@ export class ConnectionStore {
             .map(p => p.trim().replace(/^\*\*\//, '').replace(/\/$/, ''))
             .filter(Boolean);
         await this.context.globalState.update(EXCLUSION_STORAGE_KEY, clean);
+    }
+
+    // ── Model Overrides Storage ─────────────────────────────────────────────
+
+    getModelOverrides(modelName: string): ModelSettings {
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        return allMap[modelName] || { ...DEFAULT_MODEL_SETTINGS };
+    }
+
+    async saveModelOverrides(modelName: string, settings: Partial<ModelSettings>): Promise<void> {
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        const current = allMap[modelName] || { ...DEFAULT_MODEL_SETTINGS };
+        allMap[modelName] = { ...current, ...settings };
+        await this.context.globalState.update(MODEL_OVERRIDES_STORAGE_KEY, allMap);
     }
 
     dispose(): void {

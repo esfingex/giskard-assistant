@@ -51,6 +51,24 @@ function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
     return { tag: tagUpper, label: fallbackName || 'AI Model', type: tagClass };
 }
 
+function getModelCapabilityBadges(modelName) {
+    const l = (modelName || '').toLowerCase();
+    let badges = '';
+    if (l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('nemotron-3') || l.includes('thinking')) {
+        badges += ' <span title="Pensamiento Profundo / Reasoning" style="font-size:10px;">🧠</span>';
+    }
+    if (l.includes('instruct') || l.includes('coder') || l.includes('gpt') || l.includes('claude') || l.includes('gemini') || l.includes('llama-3')) {
+        badges += ' <span title="Herramientas & Edición de Código" style="font-size:10px;">🛠️</span>';
+    }
+    if (l.includes('vision') || l.includes('vl') || l.includes('gpt-4o') || l.includes('gemini-1.5') || l.includes('gemini-2')) {
+        badges += ' <span title="Visión Multimodal" style="font-size:10px;">👁️</span>';
+    }
+    if (l.includes('embed') || l.includes('bge') || l.includes('nomic')) {
+        badges += ' <span title="Vectores & Embeddings" style="font-size:10px;">🧩</span>';
+    }
+    return badges;
+}
+
 function renderModelFilterList(payload) {
     const modelFilterList = document.getElementById('model-filter-list');
     if (!modelFilterList) return;
@@ -85,10 +103,11 @@ function renderModelFilterList(payload) {
             grp.models.forEach(m => {
                 const meta = getModelProviderMeta(m, grp.connectionTag, grp.connectionName);
                 const isChecked = !enabled || enabled.includes(m);
+                const badges = getModelCapabilityBadges(m);
                 html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                     <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
                     <span class="filter-tag ${meta.type}">${escapeHtml(meta.tag)}</span>
-                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}${badges}</span>
                 </label>`;
             });
             html += `</div></details>`;
@@ -110,10 +129,11 @@ function renderModelFilterList(payload) {
                 <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
             grp.items.forEach(m => {
                 const isChecked = !enabled || enabled.includes(m);
+                const badges = getModelCapabilityBadges(m);
                 html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                     <input type="checkbox" class="model-filter-cb" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
                     <span class="filter-tag ${grp.meta.type}">${escapeHtml(grp.meta.tag)}</span>
-                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeHtml(m)}">${escapeHtml(m)}${badges}</span>
                 </label>`;
             });
             html += `</div></details>`;

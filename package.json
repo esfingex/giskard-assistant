@@ -29,7 +29,7 @@
         {
           "id": "giskard-sidebar",
           "title": "Giskard Assistant",
-          "icon": "$(robot)"
+          "icon": "resources/icon.svg"
         }
       ]
     },
