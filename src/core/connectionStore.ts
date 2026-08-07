@@ -81,11 +81,18 @@ export class ConnectionStore {
         }
     }
 
+    private _cachedTokenMap: Map<string, { apiKey: string; url?: string }> = new Map();
+
+    clearTokenCache() {
+        this._cachedTokenMap.clear();
+    }
+
     private _getRawList(): Connection[] {
         return this.context.globalState.get<Connection[]>(STORAGE_KEY, []);
     }
 
     private async _saveRawList(connections: Connection[]): Promise<void> {
+        this.clearTokenCache();
         await this.context.globalState.update(STORAGE_KEY, connections);
     }
 
@@ -207,17 +214,27 @@ export class ConnectionStore {
         return list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag) || null;
     }
 
-    /** Robust API key lookup: tries exact tag match, active connection, then any saved secret in SecretStorage */
+    /** Robust API key lookup with session RAM cache: tries exact tag match, active connection, then any saved secret in SecretStorage */
     async getAnyRemoteApiKey(providerTag?: string): Promise<{ apiKey: string; url?: string } | null> {
-        const list = this._getRawList();
         const cleanTag = (providerTag || '').toLowerCase().trim();
+        const cacheKey = cleanTag || '__default__';
+
+        if (this._cachedTokenMap.has(cacheKey)) {
+            return this._cachedTokenMap.get(cacheKey)!;
+        }
+
+        const list = this._getRawList();
 
         // 1. Exact tag match
         if (cleanTag) {
             const tagConn = list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag);
             if (tagConn && tagConn.secretRef) {
                 const key = await this.context.secrets.get(tagConn.secretRef);
-                if (key && key.trim()) return { apiKey: key.trim(), url: tagConn.url };
+                if (key && key.trim()) {
+                    const result = { apiKey: key.trim(), url: tagConn.url };
+                    this._cachedTokenMap.set(cacheKey, result);
+                    return result;
+                }
             }
         }
 
@@ -225,14 +242,22 @@ export class ConnectionStore {
         const active = this.getActive();
         if (active && active.secretRef) {
             const key = await this.context.secrets.get(active.secretRef);
-            if (key && key.trim()) return { apiKey: key.trim(), url: active.url };
+            if (key && key.trim()) {
+                const result = { apiKey: key.trim(), url: active.url };
+                this._cachedTokenMap.set(cacheKey, result);
+                return result;
+            }
         }
 
         // 3. Any saved connection with a secret in SecretStorage
         for (const conn of list) {
             if (conn.secretRef) {
                 const key = await this.context.secrets.get(conn.secretRef);
-                if (key && key.trim()) return { apiKey: key.trim(), url: conn.url };
+                if (key && key.trim()) {
+                    const result = { apiKey: key.trim(), url: conn.url };
+                    this._cachedTokenMap.set(cacheKey, result);
+                    return result;
+                }
             }
         }
 
