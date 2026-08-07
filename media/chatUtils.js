@@ -283,7 +283,7 @@ function attachCodeBlockActions(container) {
         const langLabel = document.createElement('span');
         langLabel.style.color = isShellCommand ? '#f59e0b' : '#38bdf8';
         langLabel.style.fontWeight = 'bold';
-        langLabel.textContent = detectedPath ? `▶ 📄 ${detectedPath}` : (isShellCommand ? '▶ ⚡ Comando Shell' : '▶ 💻 Código');
+        langLabel.textContent = detectedPath ? `▶ 📄 ${detectedPath}` : (isShellCommand ? '▶ ⚡ Shell Command' : '▶ 💻 Code');
 
         const btnGroup = document.createElement('div');
         btnGroup.style.display = 'flex';
@@ -292,7 +292,7 @@ function attachCodeBlockActions(container) {
 
         const copyBtn = document.createElement('button');
         copyBtn.textContent = '📋';
-        copyBtn.title = 'Copiar código';
+        copyBtn.title = 'Copy code';
         copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--vscode-input-border); padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
         copyBtn.onclick = (e) => {
             e.preventDefault(); e.stopPropagation();
@@ -302,7 +302,7 @@ function attachCodeBlockActions(container) {
                 }
             } catch (err) {}
             vscode.postMessage({ type: 'copyToClipboard', text: codeText });
-            copyBtn.textContent = '✓ Copiado';
+            copyBtn.textContent = '✓ Copied';
             setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
         };
         btnGroup.appendChild(copyBtn);
@@ -310,7 +310,7 @@ function attachCodeBlockActions(container) {
         if (isShellCommand) {
             const runBtn = document.createElement('button');
             runBtn.textContent = '⚡ Shell';
-            runBtn.title = 'Ejecutar en terminal';
+            runBtn.title = 'Run in terminal';
             runBtn.style.cssText = 'background: rgba(245,158,11,0.2); color: #f59e0b; border: 1px solid #f59e0b; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
             runBtn.onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -319,8 +319,8 @@ function attachCodeBlockActions(container) {
             btnGroup.appendChild(runBtn);
         } else {
             const diffBtn = document.createElement('button');
-            diffBtn.textContent = '📝 Aplicar Cambio';
-            diffBtn.title = detectedPath ? `Abrir y aplicar cambios en ${detectedPath}` : 'Seleccionar archivo y aplicar cambios';
+            diffBtn.textContent = '📝 Apply Change';
+            diffBtn.title = detectedPath ? `Open and apply changes to ${detectedPath}` : 'Select file and apply changes';
             diffBtn.style.cssText = 'background: #16a34a; color: #fff; border: none; padding: 3px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold; box-shadow: 0 0 6px rgba(22,163,74,0.5);';
             diffBtn.onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
