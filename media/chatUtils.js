@@ -276,10 +276,14 @@ function attachCodeBlockActions(container) {
         summary.className = 'code-toolbar';
         summary.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.35); padding: 4px 8px; border: 1px solid var(--vscode-input-border); border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 10px; cursor: pointer; user-select: none; opacity: 0.95;';
 
+        const langClass = (codeEl ? codeEl.className : '').toLowerCase();
+        const isShellCommand = /language-(bash|sh|zsh|shell|console|powershell|cmd)\b/.test(langClass) ||
+            (!detectedPath && /^(?:sudo\s+|npm\s+|cargo\s+|git\s+|cd\s+|ls\s+|pip\s+|python\s+|code\s+|docker\s+|npx\s+)/i.test(codeText.trim()));
+
         const langLabel = document.createElement('span');
-        langLabel.style.color = '#38bdf8';
+        langLabel.style.color = isShellCommand ? '#f59e0b' : '#38bdf8';
         langLabel.style.fontWeight = 'bold';
-        langLabel.textContent = detectedPath ? `▶ 📄 ${detectedPath}` : '▶ 💻 Código / Shell';
+        langLabel.textContent = detectedPath ? `▶ 📄 ${detectedPath}` : (isShellCommand ? '▶ ⚡ Comando Shell' : '▶ 💻 Código');
 
         const btnGroup = document.createElement('div');
         btnGroup.style.display = 'flex';
@@ -301,48 +305,50 @@ function attachCodeBlockActions(container) {
             copyBtn.textContent = '✓ Copiado';
             setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
         };
-
-        const runBtn = document.createElement('button');
-        runBtn.textContent = '⚡ Shell';
-        runBtn.title = 'Ejecutar en terminal';
-        runBtn.style.cssText = 'background: rgba(56,189,248,0.2); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer;';
-        runBtn.onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
-        };
-
-        const diffBtn = document.createElement('button');
-        diffBtn.textContent = '📝 Aplicar Diff';
-        diffBtn.title = detectedPath ? `Abrir diff y aplicar a ${detectedPath}` : 'Seleccionar archivo y aplicar diff';
-        diffBtn.style.cssText = 'background: #16a34a; color: #fff; border: none; padding: 3px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold; box-shadow: 0 0 6px rgba(22,163,74,0.5);';
-        diffBtn.onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            if (detectedPath) {
-                vscode.postMessage({ type: 'openDiff', code: codeText, filePath: detectedPath });
-            } else {
-                const inp = document.createElement('input');
-                inp.type = 'text';
-                inp.placeholder = 'ruta/al/archivo.ts';
-                inp.style.cssText = 'font-size:9px;padding:2px 4px;border-radius:3px;border:1px solid #16a34a;background:#0f172a;color:#f8fafc;width:140px;';
-                const okBtn = document.createElement('button');
-                okBtn.textContent = '→';
-                okBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;padding:2px 5px;border-radius:3px;font-size:9px;cursor:pointer;margin-left:3px;';
-                okBtn.onclick = (ev) => {
-                    ev.stopPropagation();
-                    const p = inp.value.trim();
-                    vscode.postMessage({ type: 'openDiff', code: codeText, filePath: p || undefined });
-                    inp.remove(); okBtn.remove();
-                };
-                inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') okBtn.click(); });
-                btnGroup.appendChild(inp);
-                btnGroup.appendChild(okBtn);
-                inp.focus();
-            }
-        };
-
         btnGroup.appendChild(copyBtn);
-        btnGroup.appendChild(runBtn);
-        btnGroup.appendChild(diffBtn);
+
+        if (isShellCommand) {
+            const runBtn = document.createElement('button');
+            runBtn.textContent = '⚡ Shell';
+            runBtn.title = 'Ejecutar en terminal';
+            runBtn.style.cssText = 'background: rgba(245,158,11,0.2); color: #f59e0b; border: 1px solid #f59e0b; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
+            runBtn.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
+            };
+            btnGroup.appendChild(runBtn);
+        } else {
+            const diffBtn = document.createElement('button');
+            diffBtn.textContent = '📝 Aplicar Cambio';
+            diffBtn.title = detectedPath ? `Abrir y aplicar cambios en ${detectedPath}` : 'Seleccionar archivo y aplicar cambios';
+            diffBtn.style.cssText = 'background: #16a34a; color: #fff; border: none; padding: 3px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold; box-shadow: 0 0 6px rgba(22,163,74,0.5);';
+            diffBtn.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (detectedPath) {
+                    vscode.postMessage({ type: 'openDiff', code: codeText, filePath: detectedPath });
+                } else {
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.placeholder = 'ruta/al/archivo.ts';
+                    inp.style.cssText = 'font-size:9px;padding:2px 4px;border-radius:3px;border:1px solid #16a34a;background:#0f172a;color:#f8fafc;width:140px;';
+                    const okBtn = document.createElement('button');
+                    okBtn.textContent = '→';
+                    okBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;padding:2px 5px;border-radius:3px;font-size:9px;cursor:pointer;margin-left:3px;';
+                    okBtn.onclick = (ev) => {
+                        ev.preventDefault(); ev.stopPropagation();
+                        if (inp.value.trim()) {
+                            vscode.postMessage({ type: 'openDiff', code: codeText, filePath: inp.value.trim() });
+                        }
+                    };
+                    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') okBtn.click(); });
+                    btnGroup.innerHTML = '';
+                    btnGroup.appendChild(inp);
+                    btnGroup.appendChild(okBtn);
+                    inp.focus();
+                }
+            };
+            btnGroup.appendChild(diffBtn);
+        }
 
         if (detectedPath) {
             const openBtn = document.createElement('button');
