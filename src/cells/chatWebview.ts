@@ -323,17 +323,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const allConns = this._store.getAll();
 
         if (isRemoteConnection) {
-            const modelPrefix = targetModel.split('/')[0].toLowerCase();
-            let targetConn = (activeConn && activeConn.type === 'remote') ? activeConn : null;
-            if (!targetConn) {
-                targetConn = allConns.find(c => c.type === 'remote' && (
-                    c.tag.toLowerCase().includes(modelPrefix) ||
-                    c.name.toLowerCase().includes(modelPrefix) ||
-                    (modelPrefix === 'nvidia' && (c.tag.toLowerCase().includes('nvidia') || c.name.toLowerCase().includes('nvidia')))
-                )) || null;
+            const providerTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+            // 1:1 Exact Provider Tag lookup (e.g. tag === 'nvidia', tag === 'openai', tag === 'deepseek')
+            let targetConn = this._store.getConnectionByTag(providerTag);
+            if (!targetConn && activeConn && activeConn.type === 'remote') {
+                targetConn = activeConn;
             }
             if (!targetConn) {
-                targetConn = allConns.find(c => c.type === 'remote' && c.secretRef) || allConns.find(c => c.type === 'remote') || null;
+                targetConn = allConns.find(c => c.type === 'remote') || null;
             }
 
             if (targetConn) {

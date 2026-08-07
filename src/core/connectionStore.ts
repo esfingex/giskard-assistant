@@ -198,6 +198,14 @@ export class ConnectionStore {
         return null;
     }
 
+    /** Find connection profile by exact provider tag (e.g. 'nvidia', 'openai', 'deepseek', 'giskard-sys', 'ollama') */
+    getConnectionByTag(tag: string): Connection | null {
+        const cleanTag = (tag || '').toLowerCase().trim();
+        if (!cleanTag) return null;
+        const list = this._getRawList();
+        return list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag) || null;
+    }
+
     /** Retrieve the API token for the active connection, if any */
     async getActiveToken(): Promise<string | null> {
         const active = this.getActive();
