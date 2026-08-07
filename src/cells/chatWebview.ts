@@ -374,36 +374,29 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         }
 
-        // 1. Explicit Local Model selected (starts with "local:") -> Stream from active/local Ollama
+        // 1. Explicit Local Ollama Model (starts with "local:")
         if (targetModel.startsWith('local:')) {
             const localModelName = targetModel.replace(/^local:/, '');
-            const ollamaUrl = (activeTag === 'ollama' && activeConn?.url) ? activeConn.url : undefined;
+            const ollamaUrl = (activeTag === 'ollama' && activeConn?.url) ? activeConn.url : 'http://127.0.0.1:11434';
             await this._streamFromOllamaFallback(fullPrompt, localModelName, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
             return;
         }
 
-        // 2. Active Connection is REMOTE (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenAI, or type === 'remote')
-        if (isRemoteConnection) {
-            if (!apiKey || !apiKey.trim()) {
-                this._view.webview.postMessage({
-                    type: 'streamError',
-                    error: `⚠️ Falta la API Key para conectar con ${targetModel}.\n\n💡 Agrega tu conexión en ⚙️ Ajustes -> Remote Connections (API Remota) con tu token (ej. nvapi-...) y haz clic en 'Activar'.`
-                });
-                return;
-            }
-            const remoteUrl = activeConn?.url || getConnectorUrl();
+        // 2. Active Connection is DIRECT REMOTE profile (user activated a direct remote API key in Settings)
+        if (activeConn && activeConn.type === 'remote' && apiKey) {
+            const remoteUrl = activeConn.url || 'https://integrate.api.nvidia.com/v1';
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
 
-        // 3. Active Connection is OLLAMA (local or remote Ollama server profile)
+        // 3. Active Connection is OLLAMA DIRECT
         if (activeTag === 'ollama') {
             const ollamaUrl = activeConn?.url || 'http://127.0.0.1:11434';
             await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
             return;
         }
 
-        // 4. Active Connection is GISKARD-SYS (local port 3500)
+        // 4. DEFAULT: Route through Sovereign Backend Giskard-Sys (Port 3500)
         const connectorUrl = (activeTag === 'giskard-sys' && activeConn?.url) ? activeConn.url : getConnectorUrl();
 
         this._activeAbortController = new AbortController();
