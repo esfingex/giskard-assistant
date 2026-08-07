@@ -321,21 +321,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         let activeTag = (activeConn?.tag || 'ollama').toLowerCase();
         const maxContext = getModelMaxContextWindow(targetModel);
 
-        const isLocalProfile = activeConn && (activeConn.type === 'local' || activeConn.tag === 'ollama' || activeConn.tag === 'giskard-sys');
-        const isRemoteProfile = activeConn && activeConn.type === 'remote';
-
-        // Remote models have a vendor slash prefix (e.g. nvidia/..., meta/..., deepseek/...) or active connection is remote
-        const isRemoteConnection = !targetModel.startsWith('local:') && (
-            isRemoteProfile ||
-            (!isLocalProfile && targetModel.includes('/') && (
-                targetModel.startsWith('nvidia/') ||
-                targetModel.startsWith('meta/') ||
-                targetModel.startsWith('deepseek/') ||
-                targetModel.startsWith('mistral/') ||
-                targetModel.startsWith('anthropic/') ||
-                targetModel.startsWith('google/')
-            ))
+        const isRemoteProfile = Boolean(activeConn && activeConn.type === 'remote');
+        const isRemoteModel = targetModel.includes('/') && (
+            targetModel.startsWith('nvidia/') ||
+            targetModel.startsWith('meta/') ||
+            targetModel.startsWith('deepseek/') ||
+            targetModel.startsWith('mistral/') ||
+            targetModel.startsWith('anthropic/') ||
+            targetModel.startsWith('google/') ||
+            targetModel.startsWith('openai/')
         );
+
+        // Remote connection is true if model has vendor prefix or active profile is remote
+        const isRemoteConnection = !targetModel.startsWith('local:') && (isRemoteProfile || isRemoteModel);
 
         let apiKey = '';
         const allConns = this._store.getAll();
