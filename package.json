@@ -40,7 +40,6 @@
     "views": {
       "giskard-sidebar": [
         {
-          "type": "webview",
           "id": "giskard.chatView",
           "name": "Giskard Assistant",
           "icon": "resources/icon.png"
