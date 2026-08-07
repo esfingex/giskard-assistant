@@ -424,12 +424,12 @@
 
             case 'toolReadFileResult':
                 if (message.error) {
-                    appendSystemMessage('❌ Error leyendo <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                    appendActivityPill('❌ Error leyendo <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
                 } else {
                     vscode.postMessage({ type: 'openFile', relativePath: message.path });
-                    appendSystemMessage(
-                        '✅ Archivo abierto y leído: <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
-                        '📂'
+                    appendActivityPill(
+                        'Leyó 1 archivo ➔ <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
+                        '🔍'
                     );
                     if (_toolCallDepth < 1 && _lastUserPrompt) {
                         _toolCallDepth++;
@@ -444,21 +444,21 @@
 
             case 'toolWriteFileResult':
                 if (message.error) {
-                    appendSystemMessage('❌ Error aplicando diff a <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                    appendActivityPill('❌ Error aplicando diff a <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
                 } else if (message.diffOpened) {
-                    appendSystemMessage('📝 Diff abierto para <code>' + escapeHtml(message.path) + '</code> — Acepta o rechaza los cambios.', '📝');
+                    appendActivityPill('Abierto cambio in-place para <code>' + escapeHtml(message.path) + '</code> — Acepta o rechaza en el editor.', '📝');
                 } else if (message.success) {
-                    appendSystemMessage('✅ Cambios aplicados a <code>' + escapeHtml(message.path) + '</code>.', '✅');
+                    appendActivityPill('Cambios aplicados a <code>' + escapeHtml(message.path) + '</code>', '✅');
                 }
                 break;
 
             case 'toolExecResult':
                 if (message.error) {
-                    appendSystemMessage('❌ Error ejecutando: ' + escapeHtml(message.error), '❌');
+                    appendActivityPill('❌ Error ejecutando: ' + escapeHtml(message.error), '❌');
                 } else {
-                    appendSystemMessage(
-                        '💻 Salida:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' + escapeHtml(message.output || '(sin salida)') + '</pre>',
-                        '💻'
+                    appendActivityPill(
+                        'Ejecutó comando en terminal:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' + escapeHtml(message.output || '(sin salida)') + '</pre>',
+                        '⚡'
                     );
                 }
                 break;
