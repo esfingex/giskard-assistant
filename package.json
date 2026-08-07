@@ -39,7 +39,7 @@
           "type": "webview",
           "id": "giskard.chatView",
           "name": "Giskard Assistant Chat",
-          "icon": "$(robot)"
+          "icon": "resources/icon.svg"
         }
       ]
     },
