@@ -29,7 +29,7 @@
         {
           "id": "giskard-sidebar",
           "title": "Giskard Assistant",
-          "icon": "resources/icon.png"
+          "icon": "$(robot)"
         }
       ]
     },
@@ -39,7 +39,7 @@
           "type": "webview",
           "id": "giskard.chatView",
           "name": "Giskard Assistant Chat",
-          "icon": "resources/icon.png"
+          "icon": "$(robot)"
         }
       ]
     },
