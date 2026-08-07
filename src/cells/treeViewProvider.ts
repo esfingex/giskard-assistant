@@ -111,9 +111,9 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
 
                 if (matchingModels.length > 0) {
                     const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
-                    const title = `🔌 ${grp.connectionName} [${tagUpper}] (${matchingModels.length})`;
+                    const title = `${grp.connectionName} [${tagUpper}] (${matchingModels.length})`;
                     const item = new GiskardTreeItem(title, vscode.TreeItemCollapsibleState.Expanded, 'header', matchingModels);
-                    item.iconPath = new vscode.ThemeIcon('plug');
+                    item.iconPath = new vscode.ThemeIcon('server');
                     filteredGroups.push(item);
                 }
             }
