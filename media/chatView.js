@@ -476,13 +476,16 @@
             case 'streamError':
             case 'settingsError':
                 if (currentBotMsgDiv) {
-                    let errText = message.error || 'Error desconocido';
+                    let errText = message.error || 'Unknown error';
                     if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
-                        errText = `⚠️ La herramienta CLI '${currentActiveModel.replace('cli:', '')}' no está instalada.\n\n💡 Usa modelos del Enjambre Local (Ollama) o configura una API Remota en ⚙️ Ajustes.`;
-                    } else {
-                        errText = '❌ ' + errText;
+                        errText = `⚠️ CLI tool '${currentActiveModel.replace('cli:', '')}' is not installed.\n\n💡 Use Local Swarm models (Ollama) or configure a Remote API Key in Settings ⚙️.`;
                     }
-                    currentBotMsgDiv.textContent = errText;
+                    updateBotMessageDisplay(
+                        currentBotMsgDiv,
+                        `⚠️ **Connection Error**:\n\n${errText}`,
+                        currentActiveModel,
+                        false
+                    );
                 }
                 setGenerationState(false);
                 break;
