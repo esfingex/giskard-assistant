@@ -21,8 +21,13 @@
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p ./",
-    "package": "npx --yes @vscode/vsce package --no-dependencies"
+    "package": "npx --yes @vscode/vsce package --no-dependencies --allow-star-activation"
   },
+  "activationEvents": [
+    "onView:giskard.chatView",
+    "onView:giskard.chatViewExplorer",
+    "*"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
