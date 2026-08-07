@@ -25,6 +25,9 @@
   },
   "activationEvents": [
     "onView:giskard.chatView",
+    "onView:giskard-local-models",
+    "onView:giskard-remote-connections",
+    "onView:giskard-theme-palette",
     "*"
   ],
   "contributes": {

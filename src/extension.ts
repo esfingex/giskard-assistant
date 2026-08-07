@@ -21,8 +21,19 @@ import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, Giskard
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Giskard Assistant v4.2.0 activada (GPL-3.0)');
 
-    // 0. Initialize SQLite Connection Store
     const store = new ConnectionStore(context);
+    const localModelsTree = new GiskardLocalModelsTreeProvider(store);
+    const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
+    const themePaletteTree = new GiskardThemePaletteTreeProvider();
+
+    // 0. Register Tree View Providers synchronously so VS Code finds them immediately
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
+        vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
+        vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree)
+    );
+
+    // 0.1 Initialize SQLite Connection Store
     try {
         await store.init();
         setConnectionStore(store);
@@ -31,11 +42,11 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     context.subscriptions.push({ dispose: () => store.dispose() });
 
-    // 0.1 Status Bar Heartbeat Item
+    // 0.2 Status Bar Heartbeat Item
     const statusBar = new GiskardStatusBar(store);
     context.subscriptions.push(statusBar);
 
-    // 0.2 Inline Code Completion Provider (Ghost Text / FIM)
+    // 0.3 Inline Code Completion Provider (Ghost Text / FIM)
     const inlineProvider = new GiskardInlineCompletionProvider(store);
     context.subscriptions.push(
         vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, inlineProvider)
@@ -43,15 +54,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 1. Célula Webview Sidebar Chat
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
-    const localModelsTree = new GiskardLocalModelsTreeProvider(store);
-    const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
-    const themePaletteTree = new GiskardThemePaletteTreeProvider();
-
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('giskard.chatView', provider),
-        vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
-        vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
-        vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree)
+        vscode.window.registerWebviewViewProvider('giskard.chatView', provider)
     );
 
     // 2. Célula de Comandos Sandbox
