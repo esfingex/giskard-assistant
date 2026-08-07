@@ -27,6 +27,7 @@
     "onView:giskard.chatView",
     "onView:giskard-local-models",
     "onView:giskard-remote-connections",
+    "onView:giskard-model-settings",
     "onView:giskard-theme-palette",
     "*"
   ],
@@ -51,6 +52,11 @@
           "id": "giskard-remote-connections",
           "name": "Remote AI Connections",
           "icon": "$(cloud)"
+        },
+        {
+          "id": "giskard-model-settings",
+          "name": "⚙️ Model Settings",
+          "type": "webview"
         },
         {
           "id": "giskard-theme-palette",

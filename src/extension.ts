@@ -17,6 +17,7 @@ import { ConnectionStore } from './core/connectionStore';
 import { GiskardStatusBar } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
 import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider } from './cells/treeViewProvider';
+import { GiskardModelSettingsWebviewProvider } from './cells/modelSettingsWebview';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Giskard Assistant v4.2.0 activada (GPL-3.0)');
@@ -25,12 +26,14 @@ export async function activate(context: vscode.ExtensionContext) {
     const localModelsTree = new GiskardLocalModelsTreeProvider(store);
     const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
     const themePaletteTree = new GiskardThemePaletteTreeProvider();
+    const modelSettingsProvider = new GiskardModelSettingsWebviewProvider(context.extensionUri, store);
 
     // 0. Register Tree View Providers synchronously so VS Code finds them immediately
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
         vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
-        vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree)
+        vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree),
+        vscode.window.registerWebviewViewProvider('giskard-model-settings', modelSettingsProvider)
     );
 
     // 0.1 Initialize SQLite Connection Store
