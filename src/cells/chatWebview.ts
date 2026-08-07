@@ -127,10 +127,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
         try {
             await this._store.removeConnection(id);
-            vscode.window.showInformationMessage(`✓ Conexión eliminada.`);
+            vscode.window.showInformationMessage(`✓ Connection deleted.`);
             await this.refreshState();
         } catch (err: any) {
-            vscode.window.showErrorMessage(`Error eliminando conexión: ${err.message}`);
+            vscode.window.showErrorMessage(`Error deleting connection: ${err.message}`);
+        }
+    }
+
+    private async _handleResetConnections() {
+        if (!this._view) return;
+        try {
+            const list = this._store.getAll();
+            for (const c of list) {
+                await this._store.removeConnection(c.id);
+            }
+            await this._store.init();
+            vscode.window.showInformationMessage(`✓ All connection profiles reset.`);
+            await this.refreshState();
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Error resetting connections: ${err.message}`);
         }
     }
 
@@ -819,6 +834,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'removeConnection':
                     await this._handleRemoveConnection(data.id);
+                    break;
+                case 'resetConnections':
+                    await this._handleResetConnections();
                     break;
                 case 'activateConnection':
                     await this._handleActivateConnection(data.id);
