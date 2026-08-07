@@ -72,6 +72,11 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.newChatContext",
+        "title": "Nuevo Contexto de Chat (💬✨)",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "giskard-assistant.toggleModelForChat",
         "title": "Activar / Desactivar Modelo para Chat (Multi-Select)",
         "icon": "$(check)"
@@ -187,6 +192,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "giskard-assistant.newChatContext",
+          "when": "view == giskard-local-models || view == giskard-remote-connections || view == giskard-model-settings",
+          "group": "navigation@0"
+        },
         {
           "command": "giskard-assistant.filterCapabilities",
           "when": "view == giskard-local-models",

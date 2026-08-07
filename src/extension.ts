@@ -66,6 +66,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 3. Comandos de apertura & Gestión de Servidores desde el TreeView
     context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-assistant.newChatContext', async () => {
+            await vscode.commands.executeCommand('giskard.chatView.focus');
+            provider.postMessage({ type: 'clearMessages' });
+            vscode.window.showInformationMessage('💬✨ Nuevo contexto de chat iniciado.');
+        }),
         vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (modelName: string) => {
             if (!modelName) return;
             const isNowEnabled = await store.toggleModelEnabled(modelName);

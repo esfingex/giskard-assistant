@@ -416,6 +416,14 @@
                 }
                 break;
 
+            case 'clearMessages':
+                if (messagesDiv) {
+                    messagesDiv.innerHTML = '';
+                    currentBotMsgDiv = null;
+                    currentBotRawText = '';
+                }
+                break;
+
             case 'setSelectedModel':
                 if (message.model) {
                     currentActiveModel = message.model;
