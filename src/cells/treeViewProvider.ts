@@ -36,6 +36,13 @@ export class GiskardTreeItem extends vscode.TreeItem {
             this.iconPath = new vscode.ThemeIcon('graph');
             this.contextValue = 'memoryBcf';
         }
+
+        if (itemType === 'local-model' || itemType === 'remote-conn') {
+            this.command = {
+                command: 'giskard-assistant.openChat',
+                title: 'Abrir Chat'
+            };
+        }
     }
 }
 
