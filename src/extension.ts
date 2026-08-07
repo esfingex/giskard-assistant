@@ -59,9 +59,11 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('giskard-assistant.openChat', async () => {
             await vscode.commands.executeCommand('giskard.chatView.focus');
+            await vscode.commands.executeCommand('workbench.action.focusSecondarySideBar').then(undefined, () => {});
         }),
-        vscode.commands.registerCommand('giskard-assistant.openChatRight', () => {
-            vscode.commands.executeCommand('workbench.action.focusSecondarySideBar');
+        vscode.commands.registerCommand('giskard-assistant.openChatRight', async () => {
+            await vscode.commands.executeCommand('giskard.chatView.focus');
+            await vscode.commands.executeCommand('workbench.action.focusSecondarySideBar').then(undefined, () => {});
         })
     );
 

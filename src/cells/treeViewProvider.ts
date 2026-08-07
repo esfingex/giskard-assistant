@@ -61,25 +61,25 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
     }
 
     async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
-        if (element) return [];
+        // If child of a connection group, return models in that group
+        if (element && element.itemType === 'header' && Array.isArray(element.rawData)) {
+            return element.rawData.map(m => new GiskardTreeItem(m, vscode.TreeItemCollapsibleState.None, 'local-model'));
+        }
 
+        // Root level: return connection groups
         try {
             const groups = await fetchLlmModelsGrouped();
-            const items: GiskardTreeItem[] = [];
-
-            if (groups && groups.length > 0) {
-                groups.forEach((grp) => {
-                    grp.models.forEach((m) => {
-                        items.push(new GiskardTreeItem(m, vscode.TreeItemCollapsibleState.None, 'local-model', grp));
-                    });
-                });
+            if (!groups || groups.length === 0) {
+                return [new GiskardTreeItem('No connections/models detected', vscode.TreeItemCollapsibleState.None, 'header')];
             }
 
-            if (items.length === 0) {
-                items.push(new GiskardTreeItem('No models detected', vscode.TreeItemCollapsibleState.None, 'header'));
-            }
-
-            return items;
+            return groups.map(grp => {
+                const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
+                const title = `🔌 ${grp.connectionName} [${tagUpper}] (${grp.models.length})`;
+                const item = new GiskardTreeItem(title, vscode.TreeItemCollapsibleState.Expanded, 'header', grp.models);
+                item.iconPath = new vscode.ThemeIcon('plug');
+                return item;
+            });
         } catch {
             return [new GiskardTreeItem('Local AI (127.0.0.1)', vscode.TreeItemCollapsibleState.None, 'header')];
         }
