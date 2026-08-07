@@ -548,6 +548,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const estPromptTokens = Math.ceil(fullPrompt.length / 3.5);
         const maxResponseTokens = Math.min(4096, Math.max(512, maxContext - estPromptTokens - 200));
 
+        const timeoutId = setTimeout(() => {
+            if (this._activeAbortController) {
+                this._activeAbortController.abort();
+            }
+        }, 12000);
+
         try {
             const response = await fetch(cleanUrl, {
                 method: 'POST',
@@ -561,6 +567,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 }),
                 signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok || !response.body) {
                 const errText = await response.text().catch(() => response.statusText);
@@ -648,10 +656,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
 
         } catch (err: any) {
-            if (err.name === 'AbortError') return;
+            if (err.name === 'AbortError') {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `⚠️ Connection Timeout (12s) for remote model '${model}'. Please check your network connection or API Key in Settings ⚙️.`
+                });
+                return;
+            }
             this._view.webview.postMessage({
                 type: 'streamError',
-                error: `Error en API Remota (${model}): ${err.message}`
+                error: `Remote API Error (${model}): ${err.message}`
             });
         } finally {
             this._activeAbortController = null;
