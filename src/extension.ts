@@ -83,23 +83,29 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('giskard-assistant.filterCapabilities', async () => {
             const pick = await vscode.window.showQuickPick([
-                { label: '🧠 Pensamiento Profundo / Reasoning (R1/QwQ)', description: 'Modelos de razonamiento' },
-                { label: '🛠️ Herramientas & Coder', description: 'Edición de código y Function Calling' },
-                { label: '👁️ Visión Multimodal', description: 'Comprensión visual e imágenes' },
-                { label: '🧩 Vectores & Embeddings', description: 'Búsqueda vectorial RAG' },
-                { label: '✨ Todos los Modelos', description: 'Mostrar lista completa' }
-            ], { placeHolder: 'Selecciona capacidad para filtrar la lista de modelos' });
+                { label: '🧠 Pensamiento Profundo / Reasoning', key: 'reasoning' },
+                { label: '🛠️ Herramientas & Coder', key: 'tools' },
+                { label: '👁️ Visión Multimodal', key: 'vision' },
+                { label: '🧩 Vectores & Embeddings', key: 'embedding' },
+                { label: '✨ Todos los Modelos (Sin Filtro)', key: 'all' }
+            ], { placeHolder: 'Selecciona capacidad para filtrar el árbol de modelos' });
             if (pick) {
-                vscode.window.showInformationMessage(`Filtro aplicado: ${pick.label}`);
+                localModelsTree.setCapabilityFilter(pick.key);
+                vscode.window.showInformationMessage(`✓ Filtro de capacidad activo: ${pick.label}`);
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.searchModels', async () => {
             const query = await vscode.window.showInputBox({
-                prompt: 'Buscar modelos por nombre o patrón',
+                prompt: 'Buscar modelos por nombre o término (dejar vacío para limpiar)',
                 placeHolder: 'ej. qwen, r1, llama, gpt-4o'
             });
             if (query !== undefined) {
-                vscode.window.showInformationMessage(`🔍 Buscando modelos con término: "${query}"`);
+                localModelsTree.setSearchQuery(query);
+                if (query.trim()) {
+                    vscode.window.showInformationMessage(`🔍 Árbol filtrado por término: "${query}"`);
+                } else {
+                    vscode.window.showInformationMessage(`🔍 Filtro de búsqueda limpiado.`);
+                }
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.openSettingsModal', async () => {

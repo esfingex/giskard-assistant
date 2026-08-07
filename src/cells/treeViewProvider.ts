@@ -50,10 +50,23 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
     private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
+    private activeCapabilityFilter: string = 'all';
+    private activeSearchQuery: string = '';
+
     constructor(private readonly store: ConnectionStore) {}
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
+    }
+
+    setCapabilityFilter(filter: string): void {
+        this.activeCapabilityFilter = filter;
+        this.refresh();
+    }
+
+    setSearchQuery(query: string): void {
+        this.activeSearchQuery = query;
+        this.refresh();
     }
 
     getTreeItem(element: GiskardTreeItem): vscode.TreeItem {
@@ -73,13 +86,44 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                 return [new GiskardTreeItem('No connections/models detected', vscode.TreeItemCollapsibleState.None, 'header')];
             }
 
-            return groups.map(grp => {
-                const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
-                const title = `🔌 ${grp.connectionName} [${tagUpper}] (${grp.models.length})`;
-                const item = new GiskardTreeItem(title, vscode.TreeItemCollapsibleState.Expanded, 'header', grp.models);
-                item.iconPath = new vscode.ThemeIcon('plug');
-                return item;
-            });
+            const filteredGroups: GiskardTreeItem[] = [];
+
+            for (const grp of groups) {
+                let matchingModels = grp.models;
+
+                // 1. Filter by Capability
+                if (this.activeCapabilityFilter && this.activeCapabilityFilter !== 'all') {
+                    matchingModels = matchingModels.filter(m => {
+                        const caps = getModelCapabilities(m);
+                        if (this.activeCapabilityFilter === 'reasoning') return caps.thinking;
+                        if (this.activeCapabilityFilter === 'tools') return caps.tools;
+                        if (this.activeCapabilityFilter === 'vision') return caps.vision;
+                        if (this.activeCapabilityFilter === 'embedding') return caps.embedding;
+                        return true;
+                    });
+                }
+
+                // 2. Filter by Search Query
+                if (this.activeSearchQuery && this.activeSearchQuery.trim()) {
+                    const q = this.activeSearchQuery.toLowerCase().trim();
+                    matchingModels = matchingModels.filter(m => m.toLowerCase().includes(q));
+                }
+
+                if (matchingModels.length > 0) {
+                    const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
+                    const title = `🔌 ${grp.connectionName} [${tagUpper}] (${matchingModels.length})`;
+                    const item = new GiskardTreeItem(title, vscode.TreeItemCollapsibleState.Expanded, 'header', matchingModels);
+                    item.iconPath = new vscode.ThemeIcon('plug');
+                    filteredGroups.push(item);
+                }
+            }
+
+            if (filteredGroups.length === 0) {
+                const msg = `No models match filter (${this.activeCapabilityFilter} / "${this.activeSearchQuery}")`;
+                return [new GiskardTreeItem(msg, vscode.TreeItemCollapsibleState.None, 'header')];
+            }
+
+            return filteredGroups;
         } catch {
             return [new GiskardTreeItem('Local AI (127.0.0.1)', vscode.TreeItemCollapsibleState.None, 'header')];
         }
