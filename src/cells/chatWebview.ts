@@ -326,7 +326,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const modelPrefix = targetModel.split('/')[0].toLowerCase();
             let targetConn = (activeConn && activeConn.type === 'remote') ? activeConn : null;
             if (!targetConn) {
-                targetConn = allConns.find(c => c.type === 'remote' && (c.tag.toLowerCase() === modelPrefix || c.tag.toLowerCase().includes('nvidia'))) || null;
+                targetConn = allConns.find(c => c.type === 'remote' && (
+                    c.tag.toLowerCase().includes(modelPrefix) ||
+                    c.name.toLowerCase().includes(modelPrefix) ||
+                    (modelPrefix === 'nvidia' && (c.tag.toLowerCase().includes('nvidia') || c.name.toLowerCase().includes('nvidia')))
+                )) || null;
+            }
+            if (!targetConn) {
+                targetConn = allConns.find(c => c.type === 'remote' && c.secretRef) || allConns.find(c => c.type === 'remote') || null;
             }
 
             if (targetConn) {
