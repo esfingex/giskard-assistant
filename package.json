@@ -31,18 +31,18 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "giskard-sidebar",
-          "title": "Giskard Assistant",
-          "icon": "resources/icon.png"
+          "id": "giskard-explorer",
+          "title": "Giskard",
+          "icon": "giskard.svg"
         }
       ]
     },
     "views": {
-      "giskard-sidebar": [
+      "giskard-explorer": [
         {
           "id": "giskard.chatView",
-          "name": "Giskard Assistant",
-          "icon": "resources/icon.png"
+          "name": "Giskard Assistant Chat",
+          "type": "webview"
         }
       ]
     },
