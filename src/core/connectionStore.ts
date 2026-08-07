@@ -155,6 +155,39 @@ export class ConnectionStore {
         await this.context.globalState.update('giskard_active_chat_model', model);
     }
 
+    /** Get array of multi-selected enabled models for Chat dropdown */
+    getEnabledModels(): string[] | undefined {
+        return this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1');
+    }
+
+    /** Check if a specific model is enabled */
+    isModelEnabled(modelName: string): boolean {
+        const list = this.getEnabledModels();
+        if (!list) return true;
+        return list.includes(modelName);
+    }
+
+    /** Toggle multi-selected enabled state for a model */
+    async toggleModelEnabled(modelName: string, allModels: string[] = []): Promise<boolean> {
+        let list = this.getEnabledModels();
+        if (!list) {
+            list = allModels.length > 0 ? [...allModels] : [modelName];
+        }
+
+        const index = list.indexOf(modelName);
+        let newState = false;
+        if (index >= 0) {
+            list.splice(index, 1);
+            newState = false;
+        } else {
+            list.push(modelName);
+            newState = true;
+        }
+
+        await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
+        return newState;
+    }
+
     /** Add a new connection profile */
     async addConnection(
         name: string,

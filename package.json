@@ -72,8 +72,8 @@
     },
     "commands": [
       {
-        "command": "giskard-assistant.selectModelForChat",
-        "title": "Seleccionar Modelo para Chat Activo",
+        "command": "giskard-assistant.toggleModelForChat",
+        "title": "Activar / Desactivar Modelo para Chat (Multi-Select)",
         "icon": "$(check)"
       },
       {

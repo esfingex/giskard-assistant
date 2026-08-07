@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import { GiskardChatWebviewProvider } from './cells/chatWebview';
 import { registerSandboxCommands } from './cells/sandboxCommands';
-import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore } from './core/api';
+import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore, fetchLlmModels } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
 
 import { GiskardStatusBar } from './cells/statusBar';
@@ -66,12 +66,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 3. Comandos de apertura & Gestión de Servidores desde el TreeView
     context.subscriptions.push(
-        vscode.commands.registerCommand('giskard-assistant.selectModelForChat', async (modelName: string) => {
+        vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (modelName: string) => {
             if (!modelName) return;
-            await store.setActiveChatModel(modelName);
-            provider.postMessage({ type: 'setSelectedModel', model: modelName });
+            const allModels = await fetchLlmModels().catch(() => []);
+            const isNowEnabled = await store.toggleModelEnabled(modelName, allModels);
+            const enabledList = store.getEnabledModels() || allModels;
+
+            provider.postMessage({ type: 'setEnabledModels', enabledModels: enabledList });
             localModelsTree.refresh();
-            vscode.window.showInformationMessage(`✓ Modelo '${modelName}' seleccionado como activo para el Chat.`);
+
+            const statusStr = isNowEnabled ? 'activado 🟢 en el desplegable del Chat' : 'desactivado ⚪ del Chat';
+            vscode.window.showInformationMessage(`✓ Modelo '${modelName}' ${statusStr}.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.manageApiKey', async () => {
             const active = store.getActive();

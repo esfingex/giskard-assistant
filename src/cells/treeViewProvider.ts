@@ -24,16 +24,16 @@ export class GiskardTreeItem extends vscode.TreeItem {
             if (caps.vision) badges += '👁️ ';
             if (caps.embedding) badges += '🧩 ';
 
-            const isActive = rawData?.isActiveModel || false;
-            this.description = isActive ? `✓ Chat Activo ${badges}`.trim() : (badges ? badges.trim() : 'AI Model');
-            this.iconPath = isActive
+            const isEnabled = rawData?.isEnabled !== false;
+            this.description = isEnabled ? `🟢 Activo en Chat ${badges}`.trim() : `⚪ Desactivado ${badges}`.trim();
+            this.iconPath = isEnabled
                 ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
-                : new vscode.ThemeIcon('server-environment');
-            this.contextValue = isActive ? 'activeLocalModel' : 'localModel';
+                : new vscode.ThemeIcon('circle-outline');
+            this.contextValue = isEnabled ? 'enabledLocalModel' : 'disabledLocalModel';
 
             this.command = {
-                command: 'giskard-assistant.selectModelForChat',
-                title: 'Seleccionar para Chat',
+                command: 'giskard-assistant.toggleModelForChat',
+                title: 'Activar/Desactivar Modelo para Chat',
                 arguments: [label]
             };
         } else if (itemType === 'remote-conn') {
@@ -81,7 +81,7 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
     }
 
     async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
-        const activeChatModel = this.store.getActiveChatModel();
+        const enabledModels = this.store.getEnabledModels();
 
         // If child of a connection group, return models in that group
         if (element && element.itemType === 'header' && Array.isArray(element.rawData)) {
@@ -89,7 +89,7 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                 m,
                 vscode.TreeItemCollapsibleState.None,
                 'local-model',
-                { isActiveModel: m === activeChatModel }
+                { isEnabled: !enabledModels || enabledModels.includes(m) }
             ));
         }
 
