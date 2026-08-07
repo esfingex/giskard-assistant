@@ -575,14 +575,22 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
                             if (delta?.content) {
                                 contentToken = delta.content;
+                            } else if (delta?.text) {
+                                contentToken = delta.text;
                             } else if (delta?.reasoning_content) {
                                 contentToken = delta.reasoning_content;
+                            } else if (delta?.reasoning) {
+                                contentToken = delta.reasoning;
+                            } else if (choice?.text) {
+                                contentToken = choice.text;
                             } else if (msg?.content) {
                                 contentToken = msg.content;
                             } else if (msg?.reasoning_content) {
                                 contentToken = msg.reasoning_content;
                             } else if (json.content) {
                                 contentToken = json.content;
+                            } else if (json.text) {
+                                contentToken = json.text;
                             }
 
                             if (contentToken) {
