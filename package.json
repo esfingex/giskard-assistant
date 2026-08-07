@@ -123,7 +123,7 @@
       },
       {
         "command": "giskard-assistant.syncState",
-        "title": "Giskard Assistant: Sincronizar Estado con Conector Soberano"
+        "title": "Giskard Assistant: Sincronizar Estado"
       },
       {
         "command": "giskard-assistant.listSandbox",
@@ -152,7 +152,7 @@
         "giskard-assistant.connectorUrl": {
           "type": "string",
           "default": "http://localhost:3500",
-          "description": "URL del backend soberano al que se conecta el asistente."
+          "description": "URL del backend al que se conecta el asistente."
         },
         "giskard-assistant.clientId": {
           "type": "string",
@@ -174,9 +174,9 @@
           "default": "./mcp_conf.js",
           "description": "Ruta al archivo de configuración de servidores MCP (mcp_conf.js o config.json)."
         },
-        "giskard-assistant.ollamaUrl": {
+        "giskard-assistant.ollamaBaseUrl": {
           "type": "string",
-          "default": "http://127.0.0.1:11434",
+          "default": "http://localhost:11434",
           "description": "URL base de la instancia local de Ollama."
         },
         "giskard-assistant.language": {
@@ -194,23 +194,23 @@
       "view/title": [
         {
           "command": "giskard-assistant.newChatContext",
-          "when": "view == giskard-local-models || view == giskard-remote-connections || view == giskard-model-settings",
-          "group": "navigation@0"
+          "when": "view == giskard-local-models || view == giskard-remote-connections || view == giskard-model-settings || view == giskard-theme-palette",
+          "group": "navigation@1"
         },
         {
           "command": "giskard-assistant.filterCapabilities",
           "when": "view == giskard-local-models",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "giskard-assistant.searchModels",
           "when": "view == giskard-local-models",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "giskard-assistant.refreshTree",
           "when": "view == giskard-local-models || view == giskard-remote-connections",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ]
     }

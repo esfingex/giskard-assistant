@@ -161,7 +161,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('giskard-assistant.syncState', async () => {
             await provider.refreshState();
-            vscode.window.showInformationMessage('✓ Estado del conector soberano sincronizado.');
+            vscode.window.showInformationMessage('✓ Estado del conector sincronizado.');
         })
     );
 

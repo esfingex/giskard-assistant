@@ -100,7 +100,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
 <body>
     <div class="chat-container">
         <div class="header">
-            <div class="active-model-badge" id="active-model-display">🤖 Giskard Assistant (Soberano)</div>
+            <div class="active-model-badge" id="active-model-display">🤖 Giskard Assistant</div>
             <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
 
