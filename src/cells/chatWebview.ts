@@ -392,14 +392,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 });
                 return;
             }
-            const providerTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
-            let remoteUrl = activeConn?.url;
-            if (!remoteUrl || remoteUrl.includes('localhost') || remoteUrl.includes('3500')) {
-                if (providerTag === 'nvidia') remoteUrl = 'https://integrate.api.nvidia.com/v1';
-                else if (providerTag === 'deepseek') remoteUrl = 'https://api.deepseek.com/v1';
-                else if (providerTag === 'google') remoteUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
-                else if (providerTag === 'kimi' || providerTag === 'moonshot') remoteUrl = 'https://api.moonshot.cn/v1';
-                else remoteUrl = 'https://api.openai.com/v1';
+            const remoteUrl = activeConn?.url;
+            if (!remoteUrl) {
+                const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `⚠️ No Base URL configured for remote connection tag '${vendorTag}'. Please check Settings ⚙️.`
+                });
+                return;
             }
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
