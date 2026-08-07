@@ -72,6 +72,11 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.selectModelForChat",
+        "title": "Seleccionar Modelo para Chat Activo",
+        "icon": "$(check)"
+      },
+      {
         "command": "giskard-assistant.manageApiKey",
         "title": "Gestionar API Keys y Tokens de Autenticación",
         "icon": "$(key)"

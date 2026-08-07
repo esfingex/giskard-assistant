@@ -145,6 +145,16 @@ export class ConnectionStore {
         return list.slice().sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
     }
 
+    /** Get active selected model for Chat */
+    getActiveChatModel(): string | undefined {
+        return this.context.globalState.get<string>('giskard_active_chat_model');
+    }
+
+    /** Set active selected model for Chat */
+    async setActiveChatModel(model: string): Promise<void> {
+        await this.context.globalState.update('giskard_active_chat_model', model);
+    }
+
     /** Add a new connection profile */
     async addConnection(
         name: string,

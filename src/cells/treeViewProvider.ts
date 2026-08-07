@@ -23,25 +23,32 @@ export class GiskardTreeItem extends vscode.TreeItem {
             if (caps.tools) badges += '🛠️ ';
             if (caps.vision) badges += '👁️ ';
             if (caps.embedding) badges += '🧩 ';
-            this.description = badges ? badges.trim() : 'Local AI Model';
-            this.iconPath = new vscode.ThemeIcon('server-environment');
-            this.contextValue = 'localModel';
+
+            const isActive = rawData?.isActiveModel || false;
+            this.description = isActive ? `✓ Chat Activo ${badges}`.trim() : (badges ? badges.trim() : 'AI Model');
+            this.iconPath = isActive
+                ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
+                : new vscode.ThemeIcon('server-environment');
+            this.contextValue = isActive ? 'activeLocalModel' : 'localModel';
+
+            this.command = {
+                command: 'giskard-assistant.selectModelForChat',
+                title: 'Seleccionar para Chat',
+                arguments: [label]
+            };
         } else if (itemType === 'remote-conn') {
             const activeTag = rawData?.tag || 'AI';
             this.description = rawData?.isActive ? `🟢 Active [${activeTag.toUpperCase()}]` : `⚪ [${activeTag.toUpperCase()}]`;
             this.iconPath = new vscode.ThemeIcon(rawData?.isActive ? 'cloud' : 'cloud-offline');
             this.contextValue = 'remoteConn';
-        } else if (itemType === 'memory-bcf') {
-            this.description = 'BCF Sovereign Graph';
-            this.iconPath = new vscode.ThemeIcon('graph');
-            this.contextValue = 'memoryBcf';
-        }
-
-        if (itemType === 'local-model' || itemType === 'remote-conn') {
             this.command = {
                 command: 'giskard-assistant.openChat',
                 title: 'Abrir Chat'
             };
+        } else if (itemType === 'memory-bcf') {
+            this.description = 'BCF Sovereign Graph';
+            this.iconPath = new vscode.ThemeIcon('graph');
+            this.contextValue = 'memoryBcf';
         }
     }
 }
@@ -74,9 +81,16 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
     }
 
     async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
+        const activeChatModel = this.store.getActiveChatModel();
+
         // If child of a connection group, return models in that group
         if (element && element.itemType === 'header' && Array.isArray(element.rawData)) {
-            return element.rawData.map(m => new GiskardTreeItem(m, vscode.TreeItemCollapsibleState.None, 'local-model'));
+            return element.rawData.map(m => new GiskardTreeItem(
+                m,
+                vscode.TreeItemCollapsibleState.None,
+                'local-model',
+                { isActiveModel: m === activeChatModel }
+            ));
         }
 
         // Root level: return connection groups
