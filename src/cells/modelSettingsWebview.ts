@@ -31,8 +31,14 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'loadModels': {
-                    const models = await fetchLlmModels().catch(() => []);
-                    webviewView.webview.postMessage({ command: 'modelsLoaded', models });
+                    // Filter to ONLY active local models (Ollama / Local connections)
+                    const allModels = await fetchLlmModels().catch(() => []);
+                    const localModels = allModels.filter(m => {
+                        const l = m.toLowerCase();
+                        return !l.includes('nvidia/') && !l.includes('deepseek-chat') && !l.includes('gpt-4') && !l.includes('claude-') && !l.includes('gemini-');
+                    });
+                    const finalModels = localModels.length > 0 ? localModels : allModels;
+                    webviewView.webview.postMessage({ command: 'modelsLoaded', models: finalModels });
                     break;
                 }
                 case 'getSettings': {
@@ -43,6 +49,28 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                 case 'saveSettings': {
                     await this.store.saveModelOverrides(message.model, message.settings);
                     vscode.window.showInformationMessage(`✓ Ajustes guardados para '${message.model}'`);
+                    break;
+                }
+                case 'testOptimalConfig': {
+                    const modelName = message.model;
+                    if (!modelName) return;
+
+                    vscode.window.showInformationMessage(`⚡ Probando parámetros locales y calculando configuración óptima para '${modelName}'...`);
+                    
+                    const l = modelName.toLowerCase();
+                    let optimal: ModelSettings;
+
+                    if (l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('thinking')) {
+                        optimal = { temperature: 0.6, topP: 0.95, topK: 50, numCtx: 32768, numPredict: 4096, think: true, thinkBudget: 4096 };
+                    } else if (l.includes('coder') || l.includes('starcoder') || l.includes('code')) {
+                        optimal = { temperature: 0.2, topP: 0.95, topK: 40, numCtx: 16384, numPredict: 4096, think: false, thinkBudget: 2048 };
+                    } else {
+                        optimal = { temperature: 0.7, topP: 0.90, topK: 40, numCtx: 8192, numPredict: 2048, think: false, thinkBudget: 2048 };
+                    }
+
+                    await this.store.saveModelOverrides(modelName, optimal);
+                    webviewView.webview.postMessage({ command: 'settingsLoaded', settings: optimal });
+                    vscode.window.showInformationMessage(`✓ Configuración Óptima aplicada para '${modelName}': Temp ${optimal.temperature} | Ctx ${optimal.numCtx} | TopP ${optimal.topP}`);
                     break;
                 }
             }
@@ -191,7 +219,10 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         </div>
     </div>
 
-    <button class="btn-reset" id="reset-btn">🔄 Reset</button>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn-reset" id="reset-btn">🔄 Reset</button>
+        <button class="btn-reset" id="test-opt-btn" style="background:#059669;">⚡ Probar & Config Óptima</button>
+    </div>
 
     <script>
         const vscode = acquireVsCodeApi();
@@ -218,6 +249,7 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         const thinkbNum = document.getElementById('thinkb-num');
 
         const resetBtn = document.getElementById('reset-btn');
+        const testOptBtn = document.getElementById('test-opt-btn');
 
         function bindSync(slider, num) {
             slider.addEventListener('input', () => { num.value = slider.value; save(); });
@@ -236,6 +268,12 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         modelSelect.addEventListener('change', () => {
             if (modelSelect.value) {
                 vscode.postMessage({ command: 'getSettings', model: modelSelect.value });
+            }
+        });
+
+        testOptBtn.addEventListener('click', () => {
+            if (modelSelect.value) {
+                vscode.postMessage({ command: 'testOptimalConfig', model: modelSelect.value });
             }
         });
 
