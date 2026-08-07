@@ -207,6 +207,38 @@ export class ConnectionStore {
         return list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag) || null;
     }
 
+    /** Robust API key lookup: tries exact tag match, active connection, then any saved secret in SecretStorage */
+    async getAnyRemoteApiKey(providerTag?: string): Promise<{ apiKey: string; url?: string } | null> {
+        const list = this._getRawList();
+        const cleanTag = (providerTag || '').toLowerCase().trim();
+
+        // 1. Exact tag match
+        if (cleanTag) {
+            const tagConn = list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag);
+            if (tagConn && tagConn.secretRef) {
+                const key = await this.context.secrets.get(tagConn.secretRef);
+                if (key && key.trim()) return { apiKey: key.trim(), url: tagConn.url };
+            }
+        }
+
+        // 2. Active connection
+        const active = this.getActive();
+        if (active && active.secretRef) {
+            const key = await this.context.secrets.get(active.secretRef);
+            if (key && key.trim()) return { apiKey: key.trim(), url: active.url };
+        }
+
+        // 3. Any saved connection with a secret in SecretStorage
+        for (const conn of list) {
+            if (conn.secretRef) {
+                const key = await this.context.secrets.get(conn.secretRef);
+                if (key && key.trim()) return { apiKey: key.trim(), url: conn.url };
+            }
+        }
+
+        return null;
+    }
+
     /** Retrieve the API token for the active connection, if any */
     async getActiveToken(): Promise<string | null> {
         const active = this.getActive();

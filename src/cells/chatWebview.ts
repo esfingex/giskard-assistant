@@ -331,23 +331,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const isRemoteConnection = !targetModel.startsWith('local:');
 
         let apiKey = '';
-        const allConns = this._store.getAll();
+        let resolvedRemoteUrl = activeConn?.url;
 
         if (isRemoteConnection) {
             const providerTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
-            // 1:1 Exact Provider Tag lookup (e.g. tag === 'nvidia', tag === 'openai', tag === 'deepseek')
-            let targetConn = this._store.getConnectionByTag(providerTag);
-            if (!targetConn && activeConn && activeConn.type === 'remote') {
-                targetConn = activeConn;
-            }
-            if (!targetConn) {
-                targetConn = allConns.find(c => c.type === 'remote') || null;
-            }
-
-            if (targetConn) {
-                activeConn = targetConn;
-                activeTag = (targetConn.tag || 'remote').toLowerCase();
-                apiKey = (await this._store.getApiKey(targetConn.id)) || '';
+            const resolved = await this._store.getAnyRemoteApiKey(providerTag);
+            if (resolved) {
+                apiKey = resolved.apiKey;
+                if (resolved.url) resolvedRemoteUrl = resolved.url;
             }
         } else if (activeConn && activeConn.id) {
             apiKey = (await this._store.getApiKey(activeConn.id)) || '';
@@ -388,7 +379,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 });
                 return;
             }
-            const remoteUrl = activeConn?.url;
+            const remoteUrl = resolvedRemoteUrl || activeConn?.url;
             if (!remoteUrl) {
                 const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
                 this._view.webview.postMessage({
