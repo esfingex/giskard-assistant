@@ -16,7 +16,7 @@ import { ConnectionStore } from './core/connectionStore';
 
 import { GiskardStatusBar } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
-import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider } from './cells/treeViewProvider';
+import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider } from './cells/treeViewProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Giskard Assistant v4.2.0 activada (GPL-3.0)');
@@ -45,18 +45,39 @@ export async function activate(context: vscode.ExtensionContext) {
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
     const localModelsTree = new GiskardLocalModelsTreeProvider(store);
     const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
+    const themePaletteTree = new GiskardThemePaletteTreeProvider();
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('giskard.chatView', provider),
         vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
-        vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree)
+        vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
+        vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree)
     );
 
     // 2. Célula de Comandos Sandbox
     registerSandboxCommands(context);
 
-    // 3. Comandos de apertura de Chat Sidebar
+    // 3. Comandos de apertura & Gestión de Servidores desde el TreeView
     context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-assistant.addServer', async () => {
+            const name = await vscode.window.showInputBox({ prompt: 'Nombre de la Conexión (ej. Mi Servidor Ollama, NVIDIA NIM, DeepSeek)', placeHolder: 'NVIDIA NIM Prod' });
+            if (!name) return;
+            const url = await vscode.window.showInputBox({ prompt: 'URL Base del Endpoint API (ej. https://integrate.api.nvidia.com/v1 o http://localhost:11434)', placeHolder: 'https://integrate.api.nvidia.com/v1' });
+            if (!url) return;
+            const tag = await vscode.window.showInputBox({ prompt: 'Tag / Proveedor (nvidia, deepseek, ollama, openai, gemini, qwen)', placeHolder: 'nvidia' });
+            if (!tag) return;
+            const apiKey = await vscode.window.showInputBox({ prompt: 'API Key (Opcional para local)', password: true });
+
+            await store.addConnection(name, 'remote', url, tag.toLowerCase(), apiKey || undefined);
+            localModelsTree.refresh();
+            remoteConnsTree.refresh();
+            vscode.window.showInformationMessage(`✓ Servidor '${name}' agregado y activado con éxito en Giskard!`);
+        }),
+        vscode.commands.registerCommand('giskard-assistant.refreshTree', () => {
+            localModelsTree.refresh();
+            remoteConnsTree.refresh();
+            vscode.window.showInformationMessage('🔄 Árboles de Servidores y Modelos actualizados.');
+        }),
         vscode.commands.registerCommand('giskard-assistant.openChat', async () => {
             await vscode.commands.executeCommand('giskard.chatView.focus');
             await vscode.commands.executeCommand('workbench.action.focusSecondarySideBar').then(undefined, () => {});

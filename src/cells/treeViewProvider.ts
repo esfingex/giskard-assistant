@@ -109,3 +109,27 @@ export class GiskardRemoteConnsTreeProvider implements vscode.TreeDataProvider<G
         return conns.map(c => new GiskardTreeItem(c.name, vscode.TreeItemCollapsibleState.None, 'remote-conn', c));
     }
 }
+
+export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    getTreeItem(element: GiskardTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
+        if (element) return [];
+        const themes = [
+            { label: '🌙 Sovereign Cyberpunk Dark', icon: 'color-mode' },
+            { label: '🔮 Deep Neon Glassmorphic', icon: 'symbol-color' },
+            { label: '☀️ Clean Studio Light', icon: 'sun' },
+            { label: '🌌 Midnight Emerald', icon: 'sparkle' }
+        ];
+        return themes.map(t => {
+            const item = new GiskardTreeItem(t.label, vscode.TreeItemCollapsibleState.None, 'header');
+            item.iconPath = new vscode.ThemeIcon(t.icon);
+            return item;
+        });
+    }
+}

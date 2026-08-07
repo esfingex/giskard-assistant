@@ -40,22 +40,9 @@
     "views": {
       "giskard-explorer": [
         {
-          "id": "giskard-local-models",
-          "name": "Local & Active LLM Models",
-          "icon": "$(server-environment)"
-        },
-        {
-          "id": "giskard-remote-connections",
-          "name": "Remote AI Connections",
-          "icon": "$(cloud)"
-        }
-      ],
-      "explorer": [
-        {
-          "type": "webview",
           "id": "giskard.chatView",
           "name": "Giskard Assistant Chat",
-          "icon": "giskard.svg"
+          "type": "webview"
         }
       ]
     },
@@ -138,6 +125,20 @@
           "description": "Interface language for Giskard Assistant (en: English [default], es: Spanish)."
         }
       }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "giskard-assistant.addServer",
+          "when": "view == giskard-remote-connections || view == giskard-local-models",
+          "group": "navigation"
+        },
+        {
+          "command": "giskard-assistant.refreshTree",
+          "when": "view == giskard-remote-connections || view == giskard-local-models",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "devDependencies": {
