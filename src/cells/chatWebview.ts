@@ -176,13 +176,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
 
             const ms = Date.now() - start;
-            const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 404));
+            const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 401 || res.status === 404 || res.status === 405));
+            let statusText = `HTTP ${res?.status}`;
+            if (res?.status === 401) statusText += ' (Requiere API Key)';
             this._view.webview.postMessage({
                 type: 'connectionTested',
                 ok,
                 status: res?.status,
                 ms,
-                error: ok ? undefined : (res ? `HTTP ${res.status}` : 'Servidor giskard-sys no responde en esa URL')
+                error: ok ? undefined : (res ? statusText : 'Servidor no responde en esa URL')
             });
         } catch (err: any) {
             const ms = Date.now() - start;
