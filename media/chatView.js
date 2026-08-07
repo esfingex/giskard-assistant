@@ -433,8 +433,7 @@
                             var combinedContent = _readFilesBatch.map(function(item) {
                                 return 'File `' + item.path + '`:\n```\n' + item.content + '\n```';
                             }).join('\n\n');
-                            var targetFile = _readFilesBatch[_readFilesBatch.length - 1].path;
-                            var followUp = 'Here is the content of the read workspace files:\n' + combinedContent + '\n\nNow, generate the complete updated file code block starting line 1 with `// ' + targetFile + '` to implement the requested changes and improvements: ' + _lastUserPrompt;
+                            var followUp = '[Contenido de los archivos leídos del workspace]:\n\n' + combinedContent + '\n\nCon base en la información de estos archivos del proyecto, responde a la solicitud del usuario:\n' + _lastUserPrompt;
                             _readFilesBatch = [];
                             if (promptInput) {
                                 promptInput.value = followUp;
