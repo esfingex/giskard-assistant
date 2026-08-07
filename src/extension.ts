@@ -43,8 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // 1. Célula Webview Sidebar Chat
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('giskard.chatView', provider),
-        vscode.window.registerWebviewViewProvider('giskard.chatViewExplorer', provider)
+        vscode.window.registerWebviewViewProvider('giskard.chatView', provider)
     );
 
     // 2. Célula de Comandos Sandbox

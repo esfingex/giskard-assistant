@@ -25,7 +25,6 @@
   },
   "activationEvents": [
     "onView:giskard.chatView",
-    "onView:giskard.chatViewExplorer",
     "*"
   ],
   "contributes": {
@@ -34,7 +33,7 @@
         {
           "id": "giskard-sidebar",
           "title": "Giskard Assistant",
-          "icon": "$(robot)"
+          "icon": "resources/icon.png"
         }
       ]
     },
@@ -43,8 +42,8 @@
         {
           "type": "webview",
           "id": "giskard.chatView",
-          "name": "Giskard Assistant Chat",
-          "icon": "$(robot)"
+          "name": "Giskard Assistant",
+          "icon": "resources/icon.png"
         }
       ]
     },
