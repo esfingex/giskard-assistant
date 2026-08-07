@@ -110,9 +110,10 @@ export class ConnectionStore {
         }
 
         const list = this._getRawList();
-        const newId = Date.now();
-        const isFirst = list.length === 0;
+        // Deactivate previous connections so the newly created profile becomes the active one
+        list.forEach(c => c.isActive = false);
 
+        const newId = Date.now();
         const newConn: Connection = {
             id: newId,
             name: name.trim(),
@@ -120,7 +121,7 @@ export class ConnectionStore {
             url: url.trim().replace(/\/$/, ''),
             tag: tag.trim(),
             secretRef,
-            isActive: isFirst, // Automatically activate if it's the first connection
+            isActive: true,
             createdAt: new Date().toISOString()
         };
 
