@@ -93,6 +93,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         await this._sendConnectionsList();
         await this._sendModelsList();
         await sendMcpServersList(this._view, this._store);
+        if (this._view) {
+            const patterns = this._store.getExclusionPatterns();
+            this._view.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+        }
     }
 
     public injectCodeContext(contextBlock: { relativePath: string; startLine: number; endLine: number; code: string; lang: string }) {
@@ -873,6 +877,18 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         this._view.webview.postMessage({ type: 'contextCleared' });
                     }
                     break;
+                case 'getExclusionPatterns': {
+                    const patterns = this._store.getExclusionPatterns();
+                    webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+                    break;
+                }
+                case 'saveExclusionPatterns': {
+                    await this._store.saveExclusionPatterns(data.patterns || []);
+                    vscode.window.showInformationMessage('✓ Patrones de exclusión de workspace guardados.');
+                    const patterns = this._store.getExclusionPatterns();
+                    webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+                    break;
+                }
                 case 'actionBtn':
                     await this._handleAction(data.action);
                     break;

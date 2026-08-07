@@ -135,6 +135,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                 <button type="button" class="tab-btn active" id="tab-btn-local">${i18n.tabs.local}</button>
                 <button type="button" class="tab-btn" id="tab-btn-remote">${i18n.tabs.remote}</button>
                 <button type="button" class="tab-btn" id="tab-btn-mcp">${i18n.tabs.mcp}</button>
+                <button type="button" class="tab-btn" id="tab-btn-exclusions">🚫 Exclusiones</button>
                 <button type="button" class="tab-btn" id="tab-btn-palette">${i18n.tabs.palette}</button>
             </div>
 
@@ -233,7 +234,22 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                 </div>
             </div>
 
-            <!-- Tab 4: Color Palette -->
+            <!-- Tab 4: Exclusion Patterns -->
+            <div class="tab-content" id="tab-content-exclusions">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-weight: bold; font-size: 11px; color: #f87171;">🚫 Directorios & Patrones Excluidos (Exclusion Patterns):</label>
+                    <span style="font-size: 9.5px; opacity: 0.85; line-height: 1.4;">
+                        Los archivos y directorios indicados abajo serán <b>omitidos e ignorados automáticamente</b> al escanear o leer el workspace (separados por comas o saltos de línea):
+                    </span>
+                    <textarea id="exclusion-patterns-input" rows="5" style="font-family: monospace; font-size: 10px; width: 100%; box-sizing: border-box; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; padding: 6px;" placeholder="node_modules, out, dist, target, build, coverage, .git, .gemini, .cache, venv, .venv"></textarea>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                        <button type="button" id="reset-exclusions-btn" style="background: transparent; border: 1px solid var(--vscode-input-border); color: var(--vscode-foreground); padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">Restaurar Defecto</button>
+                        <button type="button" id="save-exclusions-btn" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">Guardar Exclusiones</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 5: Color Palette -->
             <div class="tab-content" id="tab-content-palette">
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 10px; font-weight: bold;">${i18n.palette.presets}</label>

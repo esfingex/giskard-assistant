@@ -94,9 +94,12 @@
         modelSelect.addEventListener('change', updateTokenCounter);
     }
 
+    const tabBtnExclusions = document.getElementById('tab-btn-exclusions');
+    const tabContentExclusions = document.getElementById('tab-content-exclusions');
+
     function switchTab(activeBtn, activeContent) {
-        [tabBtnLocal, tabBtnRemote, tabBtnMcp, tabBtnPalette].forEach(b => { if (b) b.classList.remove('active'); });
-        [tabContentLocal, tabContentRemote, tabContentMcp, tabContentPalette].forEach(c => { if (c) c.classList.remove('active'); });
+        [tabBtnLocal, tabBtnRemote, tabBtnMcp, tabBtnExclusions, tabBtnPalette].forEach(b => { if (b) b.classList.remove('active'); });
+        [tabContentLocal, tabContentRemote, tabContentMcp, tabContentExclusions, tabContentPalette].forEach(c => { if (c) c.classList.remove('active'); });
         if (activeBtn) activeBtn.classList.add('active');
         if (activeContent) activeContent.classList.add('active');
     }
@@ -104,6 +107,7 @@
     if (tabBtnLocal) tabBtnLocal.addEventListener('click', () => switchTab(tabBtnLocal, tabContentLocal));
     if (tabBtnRemote) tabBtnRemote.addEventListener('click', () => switchTab(tabBtnRemote, tabContentRemote));
     if (tabBtnMcp) tabBtnMcp.addEventListener('click', () => switchTab(tabBtnMcp, tabContentMcp));
+    if (tabBtnExclusions) tabBtnExclusions.addEventListener('click', () => { switchTab(tabBtnExclusions, tabContentExclusions); vscode.postMessage({ type: 'getExclusionPatterns' }); });
     if (tabBtnPalette) tabBtnPalette.addEventListener('click', () => switchTab(tabBtnPalette, tabContentPalette));
 
     if (promptInput) promptInput.value = '';

@@ -38,6 +38,12 @@ export interface McpServer {
 
 const STORAGE_KEY = 'giskard_connections_v1';
 const MCP_STORAGE_KEY = 'giskard_mcp_servers_v1';
+const EXCLUSION_STORAGE_KEY = 'giskard_exclusion_patterns_v1';
+
+export const DEFAULT_EXCLUSIONS = [
+    'node_modules', 'out', 'dist', 'target', 'build', 'coverage',
+    '.git', '.gemini', '.cache', 'venv', '.venv'
+];
 
 export class ConnectionStore {
     constructor(private readonly context: vscode.ExtensionContext) { }
@@ -326,6 +332,19 @@ export class ConnectionStore {
                 await this.context.globalState.update(MCP_STORAGE_KEY, list);
             }
         }
+    }
+
+    // ── Exclusion Patterns Storage ─────────────────────────────────────────────
+
+    getExclusionPatterns(): string[] {
+        return this.context.globalState.get<string[]>(EXCLUSION_STORAGE_KEY, DEFAULT_EXCLUSIONS);
+    }
+
+    async saveExclusionPatterns(patterns: string[]): Promise<void> {
+        const clean = patterns
+            .map(p => p.trim().replace(/^\*\*\//, '').replace(/\/$/, ''))
+            .filter(Boolean);
+        await this.context.globalState.update(EXCLUSION_STORAGE_KEY, clean);
     }
 
     dispose(): void {

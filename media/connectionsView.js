@@ -377,4 +377,34 @@ function renderConnectionsList(connections) {
             if (connTokenInp) connTokenInp.value = '';
         });
     }
+
+    // Exclusion patterns UI handlers
+    const saveExclusionsBtn = document.getElementById('save-exclusions-btn');
+    const resetExclusionsBtn = document.getElementById('reset-exclusions-btn');
+    const exclusionPatternsInput = document.getElementById('exclusion-patterns-input');
+
+    if (saveExclusionsBtn && exclusionPatternsInput) {
+        saveExclusionsBtn.addEventListener('click', () => {
+            const raw = exclusionPatternsInput.value || '';
+            const patterns = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            vscode.postMessage({ type: 'saveExclusionPatterns', patterns });
+        });
+    }
+
+    if (resetExclusionsBtn && exclusionPatternsInput) {
+        resetExclusionsBtn.addEventListener('click', () => {
+            const defaultExclusions = ['node_modules', 'out', 'dist', 'target', 'build', 'coverage', '.git', '.gemini', '.cache', 'venv', '.venv'];
+            exclusionPatternsInput.value = defaultExclusions.join(', ');
+            vscode.postMessage({ type: 'saveExclusionPatterns', patterns: defaultExclusions });
+        });
+    }
+
+    window.addEventListener('message', event => {
+        const message = event.data;
+        if (message.type === 'exclusionPatternsLoaded') {
+            if (exclusionPatternsInput && Array.isArray(message.patterns)) {
+                exclusionPatternsInput.value = message.patterns.join(', ');
+            }
+        }
+    });
 })();
