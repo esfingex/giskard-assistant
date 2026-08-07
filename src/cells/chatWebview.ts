@@ -705,8 +705,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             if (b.code.length > best.code.length) best = b;
         }
 
-        const targetPath = best.filePath || extractedPath;
-        if (targetPath) {
+        let targetPath = best.filePath || extractedPath;
+        if (!targetPath) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document && editor.document.uri.scheme === 'file') {
+                targetPath = vscode.workspace.asRelativePath(editor.document.uri);
+            }
+        }
+
+        if (best && best.code && best.code.trim().length > 10) {
             await this._handleOpenDiff(best.code, targetPath);
         }
     }
