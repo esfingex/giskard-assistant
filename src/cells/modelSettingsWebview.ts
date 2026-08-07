@@ -74,8 +74,33 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                     const modelName = message.model;
                     if (!modelName) return;
 
-                    vscode.window.showInformationMessage(`⚡ Probando parámetros locales y calculando configuración óptima para '${modelName}'...`);
+                    vscode.window.showInformationMessage(`⚡ Ejecutando benchmark en vivo para '${modelName}'...`);
                     
+                    const startTime = Date.now();
+                    let tokensPerSec = 0;
+                    let ttftMs = 0;
+
+                    try {
+                        const testRes = await fetchWithTimeout('http://127.0.0.1:11434/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: modelName,
+                                prompt: 'fn hello() { return 42; }',
+                                stream: false,
+                                options: { num_predict: 20 }
+                            })
+                        }, 10000);
+
+                        if (testRes.ok) {
+                            const data: any = await testRes.json();
+                            const elapsedSec = (Date.now() - startTime) / 1000;
+                            const evalCount = data.eval_count || 20;
+                            tokensPerSec = Math.round(evalCount / elapsedSec);
+                            ttftMs = Math.round((data.prompt_eval_duration || 100000000) / 1000000);
+                        }
+                    } catch {}
+
                     const l = modelName.toLowerCase();
                     let optimal: ModelSettings;
 
@@ -89,7 +114,9 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
 
                     await this.store.saveModelOverrides(modelName, optimal);
                     webviewView.webview.postMessage({ command: 'settingsLoaded', settings: optimal });
-                    vscode.window.showInformationMessage(`✓ Configuración Óptima aplicada para '${modelName}': Temp ${optimal.temperature} | Ctx ${optimal.numCtx} | TopP ${optimal.topP}`);
+
+                    const statsMsg = tokensPerSec > 0 ? ` [Rendimiento: ${tokensPerSec} tok/s | Latencia: ${ttftMs}ms]` : '';
+                    vscode.window.showInformationMessage(`✓ Benchmark completado${statsMsg} — Configuración óptima guardada para '${modelName}'!`);
                     break;
                 }
             }
