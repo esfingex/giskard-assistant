@@ -183,34 +183,19 @@
     "menus": {
       "view/title": [
         {
-          "command": "giskard-assistant.manageApiKey",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "command": "giskard-assistant.filterCapabilities",
+          "when": "view == giskard-local-models",
           "group": "navigation@1"
         },
         {
-          "command": "giskard-assistant.filterCapabilities",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
+          "command": "giskard-assistant.searchModels",
+          "when": "view == giskard-local-models",
           "group": "navigation@2"
         },
         {
-          "command": "giskard-assistant.searchModels",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
-          "group": "navigation@3"
-        },
-        {
-          "command": "giskard-assistant.addServer",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
-          "group": "navigation@4"
-        },
-        {
           "command": "giskard-assistant.refreshTree",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
-          "group": "navigation@5"
-        },
-        {
-          "command": "giskard-assistant.openSettingsModal",
-          "when": "view == giskard-remote-connections || view == giskard-local-models || view == giskard-model-settings",
-          "group": "navigation@6"
+          "when": "view == giskard-local-models || view == giskard-remote-connections",
+          "group": "navigation@3"
         }
       ]
     }
