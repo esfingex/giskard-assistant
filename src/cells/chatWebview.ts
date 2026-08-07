@@ -382,9 +382,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // 2. Active Connection is DIRECT REMOTE profile (user activated a direct remote API key in Settings)
-        if (activeConn && activeConn.type === 'remote' && apiKey) {
-            const remoteUrl = activeConn.url || 'https://integrate.api.nvidia.com/v1';
+        // 2. REMOTE AI MODELS (Direct communication with remote AI provider endpoints)
+        if (isRemoteConnection) {
+            if (!apiKey || !apiKey.trim()) {
+                const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    error: `⚠️ API Key missing for ${targetModel}.\n\n💡 Go to Settings ⚙️ -> Saved AI Connections, add a connection with Tag '${vendorTag}', paste your API Key and click 'Activate'.`
+                });
+                return;
+            }
+            const providerTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+            let remoteUrl = activeConn?.url;
+            if (!remoteUrl || remoteUrl.includes('localhost') || remoteUrl.includes('3500')) {
+                if (providerTag === 'nvidia') remoteUrl = 'https://integrate.api.nvidia.com/v1';
+                else if (providerTag === 'deepseek') remoteUrl = 'https://api.deepseek.com/v1';
+                else if (providerTag === 'google') remoteUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
+                else if (providerTag === 'kimi' || providerTag === 'moonshot') remoteUrl = 'https://api.moonshot.cn/v1';
+                else remoteUrl = 'https://api.openai.com/v1';
+            }
             await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
             return;
         }
