@@ -547,6 +547,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const decoder = new TextDecoder('utf-8');
             let accumulated = '';
             let buffer = '';
+            let cachedExtractor: ((j: any) => string) | null = null;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -569,28 +570,44 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         try {
                             const json = JSON.parse(tokenStr.trim());
                             let contentToken = '';
-                            const choice = json.choices && json.choices[0];
-                            const delta = choice?.delta;
-                            const msg = choice?.message;
 
-                            if (delta?.content) {
-                                contentToken = delta.content;
-                            } else if (delta?.text) {
-                                contentToken = delta.text;
-                            } else if (delta?.reasoning_content) {
-                                contentToken = delta.reasoning_content;
-                            } else if (delta?.reasoning) {
-                                contentToken = delta.reasoning;
-                            } else if (choice?.text) {
-                                contentToken = choice.text;
-                            } else if (msg?.content) {
-                                contentToken = msg.content;
-                            } else if (msg?.reasoning_content) {
-                                contentToken = msg.reasoning_content;
-                            } else if (json.content) {
-                                contentToken = json.content;
-                            } else if (json.text) {
-                                contentToken = json.text;
+                            if (cachedExtractor) {
+                                contentToken = cachedExtractor(json);
+                            }
+
+                            if (!contentToken) {
+                                const choice = json.choices && json.choices[0];
+                                const delta = choice?.delta;
+                                const msg = choice?.message;
+
+                                if (delta?.content) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.delta?.content || '';
+                                    contentToken = delta.content;
+                                } else if (delta?.text) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.delta?.text || '';
+                                    contentToken = delta.text;
+                                } else if (delta?.reasoning_content) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.delta?.reasoning_content || '';
+                                    contentToken = delta.reasoning_content;
+                                } else if (delta?.reasoning) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.delta?.reasoning || '';
+                                    contentToken = delta.reasoning;
+                                } else if (choice?.text) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.text || '';
+                                    contentToken = choice.text;
+                                } else if (msg?.content) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.message?.content || '';
+                                    contentToken = msg.content;
+                                } else if (msg?.reasoning_content) {
+                                    cachedExtractor = (j) => j.choices?.[0]?.message?.reasoning_content || '';
+                                    contentToken = msg.reasoning_content;
+                                } else if (json.content) {
+                                    cachedExtractor = (j) => j.content || '';
+                                    contentToken = json.content;
+                                } else if (json.text) {
+                                    cachedExtractor = (j) => j.text || '';
+                                    contentToken = json.text;
+                                }
                             }
 
                             if (contentToken) {
