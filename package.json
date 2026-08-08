@@ -277,9 +277,14 @@
       ],
       "view/item/context": [
         {
+          "command": "giskard-assistant.toggleMcpServerTree",
+          "when": "view == giskard-mcp-servers && viewItem == mcpServer",
+          "group": "inline@1"
+        },
+        {
           "command": "giskard-assistant.removeMcpServerTree",
           "when": "view == giskard-mcp-servers && viewItem == mcpServer",
-          "group": "inline"
+          "group": "inline@2"
         },
         {
           "command": "giskard-assistant.removeExclusionPatternTree",

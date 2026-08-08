@@ -393,13 +393,16 @@ export class ConnectionStore {
         await this.context.globalState.update(MCP_STORAGE_KEY, list);
     }
 
-    async toggleMcpServer(id: number): Promise<void> {
-        const list = this.getMcpServers();
+    async toggleMcpServer(id: number): Promise<boolean> {
+        const list = [...this.getMcpServers()];
         const target = list.find(s => s.id === id);
+        let newState = false;
         if (target) {
             target.isActive = !target.isActive;
+            newState = target.isActive;
             await this.context.globalState.update(MCP_STORAGE_KEY, list);
         }
+        return newState;
     }
 
     async updateMcpTools(id: number, tools: McpTool[]): Promise<void> {

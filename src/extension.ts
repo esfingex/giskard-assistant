@@ -110,11 +110,13 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('✓ Servidor MCP eliminado del árbol.');
         }),
         vscode.commands.registerCommand('giskard-assistant.toggleMcpServerTree', async (arg: any) => {
-            const serverId = typeof arg === 'string' || typeof arg === 'number' ? arg : (arg?.rawData?.id || arg?.id);
+            const serverId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
             if (!serverId) return;
-            await store.toggleMcpServer(Number(serverId));
+            const newState = await store.toggleMcpServer(Number(serverId));
             mcpServersTree.refresh();
             provider.postMessage({ type: 'mcpServersLoaded' });
+            const statusStr = newState ? 'activado 🟢' : 'desactivado ⚪';
+            vscode.window.showInformationMessage(`✓ Servidor MCP ${statusStr}.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.removeExclusionPatternTree', async (arg: any) => {
             const pattern = typeof arg === 'string' ? arg : (arg?.rawData || arg?.label || '').replace(/^🚫\s*/, '');

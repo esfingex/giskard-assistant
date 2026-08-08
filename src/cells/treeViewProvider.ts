@@ -220,19 +220,16 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
             }
             return servers.map(s => {
                 const item = new GiskardTreeItem(
-                    `${s.isActive ? '🟢' : '⚪'} ${s.name}`,
+                    s.name,
                     s.tools && s.tools.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
                     'header',
                     s
                 );
-                item.description = `[${s.type.toUpperCase()}] ${s.commandOrUrl}`;
-                item.iconPath = new vscode.ThemeIcon('tools');
+                item.description = s.isActive ? `🟢 Activo [${s.type.toUpperCase()}] ${s.commandOrUrl}` : `⚪ Desactivado [${s.type.toUpperCase()}] ${s.commandOrUrl}`;
+                item.iconPath = s.isActive
+                    ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
+                    : new vscode.ThemeIcon('circle-outline');
                 item.contextValue = 'mcpServer';
-                item.command = {
-                    command: 'giskard-assistant.toggleMcpServerTree',
-                    title: 'Activar / Desactivar Servidor MCP',
-                    arguments: [s.id]
-                };
                 return item;
             });
         }
