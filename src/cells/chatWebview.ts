@@ -89,6 +89,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         await this.refreshState();
     }
 
+    public get view(): vscode.WebviewView | undefined {
+        return this._view;
+    }
+
     public async refreshState() {
         if (this._view) {
             const enabledModels = this._store.getEnabledModels();

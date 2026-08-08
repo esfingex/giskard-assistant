@@ -17,6 +17,7 @@ import { ConnectionStore } from './core/connectionStore';
 import { GiskardStatusBar } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
 import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider, GiskardMcpServersTreeProvider, GiskardFileExclusionsTreeProvider } from './cells/treeViewProvider';
+import { handleDiscoverMcpTools } from './cells/mcpHandlers';
 import { GiskardModelSettingsWebviewProvider } from './cells/modelSettingsWebview';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -74,6 +75,31 @@ export async function activate(context: vscode.ExtensionContext) {
             await vscode.commands.executeCommand('giskard.chatView.focus');
             provider.postMessage({ type: 'clearMessages' });
             vscode.window.showInformationMessage('💬✨ Nuevo contexto de chat iniciado.');
+        }),
+        vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
+            const name = await vscode.window.showInputBox({ prompt: 'Nombre de la Conexión IA', placeHolder: 'ej. DeepSeek API / Ollama / NVIDIA NIM' });
+            if (!name) return;
+            const type = await vscode.window.showQuickPick(['remote', 'local'], { placeHolder: 'Tipo de Conexión' });
+            if (!type) return;
+            const url = await vscode.window.showInputBox({ prompt: 'URL Base del Servicio IA', placeHolder: 'ej. https://api.deepseek.com o http://localhost:11434' });
+            if (!url) return;
+            const tag = await vscode.window.showInputBox({ prompt: 'Etiqueta Identificadora (Tag)', placeHolder: 'ej. deepseek, nvidia, ollama' });
+
+            await store.addConnection(name, type as any, url, tag || 'ai');
+            remoteConnsTree.refresh();
+            provider.postMessage({ type: 'connectionsLoaded' });
+            vscode.window.showInformationMessage(`✓ Conexión IA "${name}" agregada.`);
+        }),
+        vscode.commands.registerCommand('giskard-assistant.testMcpServerTree', async (arg: any) => {
+            const serverId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            if (!serverId) return;
+
+            const server = store.getMcpServers().find(s => s.id === Number(serverId));
+            if (!server) return;
+
+            vscode.window.showInformationMessage(`🧪 Probando conexión y descubriendo herramientas para '${server.name}'...`);
+            await handleDiscoverMcpTools(provider.view, store, Number(serverId));
+            mcpServersTree.refresh();
         }),
         vscode.commands.registerCommand('giskard-assistant.addMcpServerTree', async () => {
             const name = await vscode.window.showInputBox({ prompt: 'Nombre del Servidor MCP', placeHolder: 'ej. filesystem' });

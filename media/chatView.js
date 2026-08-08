@@ -582,6 +582,14 @@
                 }
                 break;
 
+            case 'selectTheme':
+                const themePreset = (message.theme || message.preset || '').toLowerCase();
+                if (themePreset.includes('white') || themePreset.includes('light')) setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a');
+                else if (themePreset.includes('cyan') || themePreset.includes('neon')) setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7');
+                else if (themePreset.includes('emerald') || themePreset.includes('midnight')) setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22');
+                else setPaletteValues('#faf5ff', '#ffffff', '#c084fc', '#9333ea', '#3b0764', '#1e1b4b');
+                break;
+
             case 'clearMessages':
                 if (messagesDiv) {
                     messagesDiv.innerHTML = '';

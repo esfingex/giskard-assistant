@@ -179,19 +179,19 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
     async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
         if (element) return [];
         const themes = [
-            { label: '🌙 Sovereign Cyberpunk Dark', icon: 'color-mode' },
-            { label: '🔮 Deep Neon Glassmorphic', icon: 'symbol-color' },
-            { label: '☀️ Clean Studio Light', icon: 'sun' },
-            { label: '🌌 Midnight Emerald', icon: 'sparkle' }
+            { label: '🌙 Sovereign Cyberpunk Dark', icon: 'color-mode', preset: 'purple' },
+            { label: '🔮 Deep Neon Glassmorphic', icon: 'symbol-color', preset: 'cyan' },
+            { label: '☀️ Clean Studio Light', icon: 'sun', preset: 'white' },
+            { label: '🌌 Midnight Emerald', icon: 'sparkle', preset: 'emerald' }
         ];
         return themes.map(t => {
-            const item = new GiskardTreeItem(t.label, vscode.TreeItemCollapsibleState.None, 'header');
+            const item = new GiskardTreeItem(t.label, vscode.TreeItemCollapsibleState.None, 'header', t);
             item.iconPath = new vscode.ThemeIcon(t.icon);
             item.contextValue = 'themeItem';
             item.command = {
                 command: 'giskard-assistant.selectThemeTree',
                 title: 'Aplicar Tema Visual',
-                arguments: [t.label]
+                arguments: [t.preset]
             };
             return item;
         });
