@@ -191,3 +191,83 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
         });
     }
 }
+
+export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    constructor(private readonly store: ConnectionStore) {}
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: GiskardTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
+        if (!element) {
+            const servers = this.store.getMcpServers();
+            if (servers.length === 0) {
+                return [new GiskardTreeItem('No MCP Servers configured', vscode.TreeItemCollapsibleState.None, 'header')];
+            }
+            return servers.map(s => {
+                const item = new GiskardTreeItem(
+                    `${s.isActive ? '🟢' : '⚪'} ${s.name}`,
+                    s.tools && s.tools.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                    'header',
+                    s
+                );
+                item.description = `[${s.type.toUpperCase()}] ${s.commandOrUrl}`;
+                item.iconPath = new vscode.ThemeIcon('tools');
+                return item;
+            });
+        }
+
+        if (element.rawData && element.rawData.tools) {
+            const tools = element.rawData.tools;
+            return tools.map((t: any) => {
+                const item = new GiskardTreeItem(
+                    t.name,
+                    vscode.TreeItemCollapsibleState.None,
+                    'header',
+                    t
+                );
+                item.description = t.description || 'MCP Tool';
+                item.iconPath = new vscode.ThemeIcon('symbol-method');
+                return item;
+            });
+        }
+
+        return [];
+    }
+}
+
+export class GiskardFileExclusionsTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    constructor(private readonly store: ConnectionStore) {}
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: GiskardTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
+        if (element) return [];
+        const patterns = this.store.getExclusionPatterns();
+        if (patterns.length === 0) {
+            return [new GiskardTreeItem('No exclusion patterns configured', vscode.TreeItemCollapsibleState.None, 'header')];
+        }
+        return patterns.map(p => {
+            const item = new GiskardTreeItem(`🚫 ${p}`, vscode.TreeItemCollapsibleState.None, 'header', p);
+            item.iconPath = new vscode.ThemeIcon('exclude');
+            return item;
+        });
+    }
+}

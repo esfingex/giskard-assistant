@@ -16,7 +16,7 @@ import { ConnectionStore } from './core/connectionStore';
 
 import { GiskardStatusBar } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
-import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider } from './cells/treeViewProvider';
+import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider, GiskardMcpServersTreeProvider, GiskardFileExclusionsTreeProvider } from './cells/treeViewProvider';
 import { GiskardModelSettingsWebviewProvider } from './cells/modelSettingsWebview';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -26,6 +26,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const localModelsTree = new GiskardLocalModelsTreeProvider(store);
     const remoteConnsTree = new GiskardRemoteConnsTreeProvider(store);
     const themePaletteTree = new GiskardThemePaletteTreeProvider();
+    const mcpServersTree = new GiskardMcpServersTreeProvider(store);
+    const fileExclusionsTree = new GiskardFileExclusionsTreeProvider(store);
     const modelSettingsProvider = new GiskardModelSettingsWebviewProvider(context.extensionUri, store);
 
     // 0. Register Tree View Providers synchronously so VS Code finds them immediately
@@ -33,6 +35,8 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
         vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
         vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree),
+        vscode.window.registerTreeDataProvider('giskard-mcp-servers', mcpServersTree),
+        vscode.window.registerTreeDataProvider('giskard-file-exclusions', fileExclusionsTree),
         vscode.window.registerWebviewViewProvider('giskard-model-settings', modelSettingsProvider)
     );
 
@@ -70,6 +74,32 @@ export async function activate(context: vscode.ExtensionContext) {
             await vscode.commands.executeCommand('giskard.chatView.focus');
             provider.postMessage({ type: 'clearMessages' });
             vscode.window.showInformationMessage('💬✨ Nuevo contexto de chat iniciado.');
+        }),
+        vscode.commands.registerCommand('giskard-assistant.addMcpServerTree', async () => {
+            const name = await vscode.window.showInputBox({ prompt: 'Nombre del Servidor MCP', placeHolder: 'ej. filesystem' });
+            if (!name) return;
+            const type = await vscode.window.showQuickPick(['stdio', 'sse'], { placeHolder: 'Tipo de Servidor MCP' });
+            if (!type) return;
+            const commandOrUrl = await vscode.window.showInputBox({ prompt: 'Comando o URL del Servidor MCP', placeHolder: 'ej. npx -y @modelcontextprotocol/server-filesystem .' });
+            if (!commandOrUrl) return;
+
+            await store.addMcpServer(name, type as any, commandOrUrl);
+            mcpServersTree.refresh();
+            provider.postMessage({ type: 'mcpServersLoaded' });
+            vscode.window.showInformationMessage(`✓ Servidor MCP "${name}" agregado al árbol.`);
+        }),
+        vscode.commands.registerCommand('giskard-assistant.addExclusionPatternTree', async () => {
+            const pattern = await vscode.window.showInputBox({ prompt: 'Patrón de Exclusión o Gitignore', placeHolder: 'ej. *.log o build/' });
+            if (!pattern) return;
+
+            const current = store.getExclusionPatterns();
+            if (!current.includes(pattern)) {
+                current.push(pattern);
+                await store.saveExclusionPatterns(current);
+                fileExclusionsTree.refresh();
+                provider.postMessage({ type: 'exclusionPatternsLoaded', patterns: current });
+                vscode.window.showInformationMessage(`✓ Patrón "${pattern}" agregado a exclusiones.`);
+            }
         }),
         vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (arg: any) => {
             let modelName = '';

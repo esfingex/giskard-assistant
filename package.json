@@ -28,6 +28,8 @@
     "onView:giskard-local-models",
     "onView:giskard-remote-connections",
     "onView:giskard-model-settings",
+    "onView:giskard-mcp-servers",
+    "onView:giskard-file-exclusions",
     "onView:giskard-theme-palette",
     "*"
   ],
@@ -59,6 +61,16 @@
           "type": "webview"
         },
         {
+          "id": "giskard-mcp-servers",
+          "name": "🛠️ MCP Servers & Tools",
+          "icon": "$(tools)"
+        },
+        {
+          "id": "giskard-file-exclusions",
+          "name": "🚫 File Exclusions & Gitignore",
+          "icon": "$(exclude)"
+        },
+        {
           "id": "giskard-theme-palette",
           "name": "🎨 Visual Palette & UI Theme",
           "icon": "$(symbol-color)"
@@ -71,6 +83,16 @@
       ]
     },
     "commands": [
+      {
+        "command": "giskard-assistant.addMcpServerTree",
+        "title": "➕ Agregar Servidor MCP",
+        "icon": "$(add)"
+      },
+      {
+        "command": "giskard-assistant.addExclusionPatternTree",
+        "title": "➕ Agregar Patrón de Exclusión",
+        "icon": "$(add)"
+      },
       {
         "command": "giskard-assistant.newChatContext",
         "title": "Nuevo Contexto de Chat (💬✨)",
@@ -221,6 +243,16 @@
           "command": "giskard-assistant.openSettingsModal",
           "when": "view == giskard-local-models",
           "group": "navigation@5"
+        },
+        {
+          "command": "giskard-assistant.addMcpServerTree",
+          "when": "view == giskard-mcp-servers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "giskard-assistant.addExclusionPatternTree",
+          "when": "view == giskard-file-exclusions",
+          "group": "navigation@1"
         }
       ]
     }
