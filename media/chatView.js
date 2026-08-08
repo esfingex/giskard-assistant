@@ -4,17 +4,95 @@
  */
 
 (function() {
-    const sendBtn = document.getElementById('send-btn');
-    const promptInput = document.getElementById('prompt');
-    const modelSelect = document.getElementById('model-select');
-    const chatModelSelect = document.getElementById('chat-model-select');
-    const messagesDiv = document.getElementById('messages');
-    const incFileCheckbox = document.getElementById('inc-file');
+    const modelPickerBtn = document.getElementById('model-picker-btn');
+    const modelPopoverCard = document.getElementById('model-popover-card');
+    const popoverSearchInput = document.getElementById('popover-search-input');
+    const popoverModelList = document.getElementById('popover-model-list');
+    const popoverOtherToggle = document.getElementById('popover-other-toggle');
+    const popoverOtherList = document.getElementById('popover-other-list');
+    const activeModelName = document.getElementById('active-model-name');
+    const accordionArrow = document.getElementById('accordion-arrow');
 
-    if (chatModelSelect) {
-        chatModelSelect.addEventListener('change', function() {
-            currentActiveModel = chatModelSelect.value;
-            vscode.postMessage({ type: 'modelChanged', model: chatModelSelect.value });
+    let _enabledModelsCache = [];
+    let _allModelsCache = [];
+
+    if (modelPickerBtn && modelPopoverCard) {
+        modelPickerBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            modelPopoverCard.classList.toggle('open');
+            if (modelPopoverCard.classList.contains('open') && popoverSearchInput) {
+                popoverSearchInput.focus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (modelPopoverCard && !modelPopoverCard.contains(e.target) && !modelPickerBtn.contains(e.target)) {
+                modelPopoverCard.classList.remove('open');
+            }
+        });
+    }
+
+    if (popoverOtherToggle && popoverOtherList) {
+        popoverOtherToggle.addEventListener('click', function() {
+            popoverOtherList.classList.toggle('open');
+            if (accordionArrow) {
+                accordionArrow.textContent = popoverOtherList.classList.contains('open') ? '▾' : '›';
+            }
+        });
+    }
+
+    if (popoverSearchInput) {
+        popoverSearchInput.addEventListener('input', function() {
+            renderPopoverLists();
+        });
+    }
+
+    function renderPopoverLists() {
+        if (!popoverModelList) return;
+        const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
+
+        const filteredEnabled = _enabledModelsCache.filter(m => m.toLowerCase().includes(q));
+        if (filteredEnabled.length === 0) {
+            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:6px;">Sin modelos activos. Actívalos en el Tree 👈</div>';
+        } else {
+            popoverModelList.innerHTML = filteredEnabled.map(m => {
+                const isSel = m === currentActiveModel;
+                const selClass = isSel ? 'selected' : '';
+                const checkMark = isSel ? '✓ ' : '';
+                return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
+                    <span>${checkMark}${escapeHtml(m)}</span>
+                    <span class="popover-model-badge">Activo</span>
+                </div>`;
+            }).join('');
+        }
+
+        if (popoverOtherList) {
+            const otherModels = _allModelsCache.filter(m => !_enabledModelsCache.includes(m) && m.toLowerCase().includes(q));
+            if (otherModels.length === 0) {
+                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No hay más modelos</div>';
+            } else {
+                popoverOtherList.innerHTML = otherModels.map(m => {
+                    const isSel = m === currentActiveModel;
+                    const selClass = isSel ? 'selected' : '';
+                    return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
+                        <span>${escapeHtml(m)}</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        const items = document.querySelectorAll('.popover-model-item');
+        items.forEach(el => {
+            el.addEventListener('click', function() {
+                const selected = el.getAttribute('data-model');
+                if (selected) {
+                    currentActiveModel = selected;
+                    if (activeModelName) activeModelName.textContent = '🤖 ' + selected;
+                    vscode.postMessage({ type: 'modelChanged', model: selected });
+                    if (modelPopoverCard) modelPopoverCard.classList.remove('open');
+                    renderPopoverLists();
+                }
+            });
         });
     }
     const addCtxBtn = document.getElementById('add-ctx-btn');
@@ -439,18 +517,20 @@
                 break;
 
             case 'setEnabledModels':
-                if (chatModelSelect && Array.isArray(message.enabledModels)) {
-                    const list = message.enabledModels;
-                    if (list.length === 0) {
-                        chatModelSelect.innerHTML = '<option value="">🤖 Activa modelos en el Tree 👈</option>';
-                        currentActiveModel = '';
-                    } else {
-                        chatModelSelect.innerHTML = list.map(m => `<option value="${escapeHtml(m)}">🤖 ${escapeHtml(m)}</option>`).join('');
-                        if (!list.includes(chatModelSelect.value)) {
-                            chatModelSelect.value = list[0];
-                        }
-                        currentActiveModel = chatModelSelect.value;
+                if (Array.isArray(message.enabledModels)) {
+                    _enabledModelsCache = message.enabledModels;
+                    if (_enabledModelsCache.length > 0 && !currentActiveModel) {
+                        currentActiveModel = _enabledModelsCache[0];
+                        if (activeModelName) activeModelName.textContent = '🤖 ' + currentActiveModel;
                     }
+                    renderPopoverLists();
+                }
+                break;
+
+            case 'modelsLoaded':
+                if (Array.isArray(message.models)) {
+                    _allModelsCache = message.models;
+                    renderPopoverLists();
                 }
                 break;
 

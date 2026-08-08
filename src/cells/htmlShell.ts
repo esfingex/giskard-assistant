@@ -84,41 +84,165 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .modal-card { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 14px; border-radius: 8px; width: 94%; max-width: 520px; max-height: 88vh; resize: both; overflow: auto; min-width: 280px; min-height: 320px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.7); }
         .modal-card h4 { margin: 0; font-size: 12px; }
         .field { display: flex; flex-direction: column; gap: 3px; font-size: 10px; }
-        .model-select-container {
+        .model-picker-wrapper {
+            position: relative;
             flex: 1;
+        }
+        .model-picker-btn {
             display: flex;
             align-items: center;
-        }
-        #chat-model-select {
+            justify-content: space-between;
             width: 100%;
             background: var(--vscode-input-background, #1e293b);
-            color: var(--vscode-input-foreground, #38bdf8);
+            color: #38bdf8;
             border: 1px solid var(--vscode-input-border, #334155);
-            border-radius: 4px;
-            padding: 4px 8px;
+            border-radius: 6px;
+            padding: 5px 10px;
             font-size: 11px;
             font-weight: 600;
             cursor: pointer;
             outline: none;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
         }
-        #chat-model-select optgroup {
-            background: var(--vscode-editor-background);
-            color: var(--vscode-foreground);
+        .model-picker-btn:hover {
+            border-color: #38bdf8;
+        }
+        .model-popover-card {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            width: 100%;
+            min-width: 260px;
+            max-height: 340px;
+            background: var(--vscode-editor-background, #111827);
+            border: 1px solid var(--vscode-input-border, #374151);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            z-index: 999;
+            padding: 8px;
+            flex-direction: column;
+            gap: 6px;
+            user-select: none;
+        }
+        .model-popover-card.open {
+            display: flex;
+        }
+        .popover-search-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--vscode-input-border, #1f2937);
+        }
+        .popover-search-row input {
+            flex: 1;
+            background: var(--vscode-input-background, #1f2937);
+            color: var(--vscode-input-foreground, #f9fafb);
+            border: 1px solid var(--vscode-input-border, #374151);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            outline: none;
+        }
+        .popover-gear-btn {
+            background: transparent;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .popover-gear-btn:hover {
+            color: #ffffff;
+        }
+        .popover-model-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .popover-model-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--vscode-foreground, #e5e7eb);
+            transition: background 0.15s ease;
+        }
+        .popover-model-item:hover {
+            background: rgba(56, 189, 248, 0.1);
+        }
+        .popover-model-item.selected {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
             font-weight: bold;
         }
-        #chat-model-select option {
-            background: var(--vscode-editor-background);
-            color: var(--vscode-foreground);
+        .popover-model-badge {
+            font-size: 9px;
+            color: #9ca3af;
+        }
+        .popover-accordion-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            background: var(--vscode-input-background, #1f2937);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+        .popover-accordion-header:hover {
+            color: #ffffff;
+        }
+        .popover-accordion-content {
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 4px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .popover-accordion-content.open {
+            display: flex;
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="header">
-            <div class="model-select-container">
-                <select id="chat-model-select" title="Selecciona modelo activo para chatear (Vinculado a los activados en el Tree)">
-                    <option value="">🤖 Activa modelos en el Tree 👈</option>
-                </select>
+            <div class="model-picker-wrapper">
+                <button class="model-picker-btn" id="model-picker-btn" type="button">
+                    <span id="active-model-name">🤖 Seleccionar Modelo</span>
+                    <span>▾</span>
+                </button>
+
+                <!-- OPilot Popover Popup Card -->
+                <div class="model-popover-card" id="model-popover-card">
+                    <div class="popover-search-row">
+                        <input type="text" id="popover-search-input" placeholder="Search models...">
+                        <button class="popover-gear-btn" id="open-settings-btn" title="Abrir Ajustes">⚙️</button>
+                    </div>
+
+                    <div class="popover-model-list" id="popover-model-list">
+                        <!-- Populated with models enabled in the TreeView -->
+                    </div>
+
+                    <div class="popover-accordion-header" id="popover-other-toggle">
+                        <span id="accordion-arrow">›</span>
+                        <span>Other Models</span>
+                    </div>
+                    <div class="popover-accordion-content" id="popover-other-list">
+                        <!-- All other detected models -->
+                    </div>
+                </div>
             </div>
             <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
