@@ -86,23 +86,21 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .field { display: flex; flex-direction: column; gap: 3px; font-size: 10px; }
         .model-picker-wrapper {
             position: relative;
-            flex: 1;
+            display: inline-block;
         }
         .model-picker-btn {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            width: 100%;
+            gap: 4px;
             background: var(--vscode-input-background, #1e293b);
             color: #38bdf8;
             border: 1px solid var(--vscode-input-border, #334155);
-            border-radius: 6px;
-            padding: 5px 10px;
-            font-size: 11px;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 10px;
             font-weight: 600;
             cursor: pointer;
             outline: none;
-            backdrop-filter: blur(8px);
             transition: all 0.2s ease;
         }
         .model-picker-btn:hover {
@@ -111,15 +109,14 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .model-popover-card {
             display: none;
             position: absolute;
-            top: calc(100% + 4px);
+            bottom: calc(100% + 8px);
             left: 0;
-            width: 100%;
-            min-width: 260px;
+            width: 270px;
             max-height: 340px;
             background: var(--vscode-editor-background, #111827);
             border: 1px solid var(--vscode-input-border, #374151);
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.8);
             z-index: 999;
             padding: 8px;
             flex-direction: column;
@@ -175,10 +172,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             transition: background 0.15s ease;
         }
         .popover-model-item:hover {
-            background: rgba(56, 189, 248, 0.1);
+            background: rgba(56, 189, 248, 0.15);
         }
         .popover-model-item.selected {
-            background: rgba(56, 189, 248, 0.2);
+            background: rgba(56, 189, 248, 0.25);
             color: #38bdf8;
             font-weight: bold;
         }
@@ -218,32 +215,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
 <body>
     <div class="chat-container">
         <div class="header">
-            <div class="model-picker-wrapper">
-                <button class="model-picker-btn" id="model-picker-btn" type="button">
-                    <span id="active-model-name">🤖 Seleccionar Modelo</span>
-                    <span>▾</span>
-                </button>
-
-                <!-- OPilot Popover Popup Card -->
-                <div class="model-popover-card" id="model-popover-card">
-                    <div class="popover-search-row">
-                        <input type="text" id="popover-search-input" placeholder="Search models...">
-                        <button class="popover-gear-btn" id="open-settings-btn" title="Abrir Ajustes">⚙️</button>
-                    </div>
-
-                    <div class="popover-model-list" id="popover-model-list">
-                        <!-- Populated with models enabled in the TreeView -->
-                    </div>
-
-                    <div class="popover-accordion-header" id="popover-other-toggle">
-                        <span id="accordion-arrow">›</span>
-                        <span>Other Models</span>
-                    </div>
-                    <div class="popover-accordion-content" id="popover-other-list">
-                        <!-- All other detected models -->
-                    </div>
-                </div>
-            </div>
+            <div style="font-size: 11px; font-weight: 600; color: #38bdf8;">🤖 Giskard Assistant</div>
             <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
 
@@ -264,6 +236,35 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             <textarea id="prompt" rows="2" placeholder="${i18n.chat.placeholder}"></textarea>
             <div class="toolbar">
                 <button class="btn-add" id="add-ctx-btn">+ Context</button>
+
+                <!-- OPilot Model Picker next to + Context -->
+                <div class="model-picker-wrapper">
+                    <button class="model-picker-btn" id="model-picker-btn" type="button">
+                        <span id="active-model-name">🤖 Modelo</span>
+                        <span style="font-size:9px;">▾</span>
+                    </button>
+
+                    <!-- OPilot Popover Popup Card -->
+                    <div class="model-popover-card" id="model-popover-card">
+                        <div class="popover-search-row">
+                            <input type="text" id="popover-search-input" placeholder="Search models...">
+                            <button class="popover-gear-btn" id="open-settings-btn" title="Abrir Ajustes">⚙️</button>
+                        </div>
+
+                        <div class="popover-model-list" id="popover-model-list">
+                            <!-- Populated with active models -->
+                        </div>
+
+                        <div class="popover-accordion-header" id="popover-other-toggle">
+                            <span id="accordion-arrow">›</span>
+                            <span>Other Models</span>
+                        </div>
+                        <div class="popover-accordion-content" id="popover-other-list">
+                            <!-- All other models -->
+                        </div>
+                    </div>
+                </div>
+
                 <button id="send-btn" class="btn-send">${i18n.chat.send}</button>
                 <button id="stop-btn" class="btn-send" style="display: none; background: #ef4444; border-color: #ef4444; color: #ffffff;">${i18n.chat.stop}</button>
             </div>

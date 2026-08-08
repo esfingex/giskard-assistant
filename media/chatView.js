@@ -528,8 +528,12 @@
                 break;
 
             case 'modelsLoaded':
+            case 'modelsList':
                 if (Array.isArray(message.models)) {
                     _allModelsCache = message.models;
+                    renderPopoverLists();
+                } else if (Array.isArray(message.localModels)) {
+                    _allModelsCache = message.localModels;
                     renderPopoverLists();
                 }
                 break;
