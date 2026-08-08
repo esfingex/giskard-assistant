@@ -194,7 +194,7 @@
       "view/title": [
         {
           "command": "giskard-assistant.newChatContext",
-          "when": "view == giskard-local-models || view == giskard-remote-connections || view == giskard-model-settings || view == giskard-theme-palette",
+          "when": "view == giskard-local-models",
           "group": "navigation@1"
         },
         {
@@ -209,7 +209,7 @@
         },
         {
           "command": "giskard-assistant.refreshTree",
-          "when": "view == giskard-local-models || view == giskard-remote-connections",
+          "when": "view == giskard-local-models",
           "group": "navigation@4"
         }
       ]
