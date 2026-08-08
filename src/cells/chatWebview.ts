@@ -873,6 +873,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'testConnectionUrl':
                     await this._handleTestConnectionUrl(data.url);
                     break;
+                case 'webviewReady':
+                    await this.refreshState();
+                    break;
                 case 'fetchModels':
                     await this._sendModelsList();
                     break;
