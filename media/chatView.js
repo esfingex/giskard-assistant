@@ -147,6 +147,65 @@
     if (tabBtnExclusions) tabBtnExclusions.addEventListener('click', () => switchSettingsTab(tabBtnExclusions, 'tab-content-exclusions'));
     if (tabBtnPalette) tabBtnPalette.addEventListener('click', () => switchSettingsTab(tabBtnPalette, 'tab-content-palette'));
 
+    // 🎨 Live Custom Palette Color Event Listeners
+    const palTextColor = document.getElementById('palette-text-color');
+    const palHeaderColor = document.getElementById('palette-header-color');
+    const palAccentColor = document.getElementById('palette-accent-color');
+    const palUserBg = document.getElementById('palette-user-bg');
+    const palBotBg = document.getElementById('palette-bot-bg');
+    const palThinkBg = document.getElementById('palette-think-bg');
+
+    function applyCustomPalette() {
+        const root = document.documentElement;
+        if (palAccentColor) root.style.setProperty('--accent-color', palAccentColor.value);
+        if (palUserBg) root.style.setProperty('--user-bg', palUserBg.value);
+        if (palBotBg) root.style.setProperty('--bot-bg', palBotBg.value);
+        if (palThinkBg) root.style.setProperty('--think-bg', palThinkBg.value);
+        if (palTextColor) root.style.setProperty('--text-color', palTextColor.value);
+
+        const savedPalette = {
+            textColor: palTextColor ? palTextColor.value : '',
+            headerColor: palHeaderColor ? palHeaderColor.value : '',
+            accentColor: palAccentColor ? palAccentColor.value : '',
+            userBg: palUserBg ? palUserBg.value : '',
+            botBg: palBotBg ? palBotBg.value : '',
+            thinkBg: palThinkBg ? palThinkBg.value : ''
+        };
+        try { localStorage.setItem('giskard_custom_palette', JSON.stringify(savedPalette)); } catch(e) {}
+    }
+
+    [palTextColor, palHeaderColor, palAccentColor, palUserBg, palBotBg, palThinkBg].forEach(input => {
+        if (input) {
+            input.addEventListener('input', applyCustomPalette);
+            input.addEventListener('change', applyCustomPalette);
+        }
+    });
+
+    const btnWhite = document.getElementById('preset-white');
+    const btnCyan = document.getElementById('preset-cyan');
+    const btnEmerald = document.getElementById('preset-emerald');
+    const btnPurple = document.getElementById('preset-purple');
+
+    function setPaletteValues(text, header, accent, userBg, botBg, thinkBg) {
+        if (palTextColor) palTextColor.value = text;
+        if (palHeaderColor) palHeaderColor.value = header;
+        if (palAccentColor) palAccentColor.value = accent;
+        if (palUserBg) palUserBg.value = userBg;
+        if (palBotBg) palBotBg.value = botBg;
+        if (palThinkBg) palThinkBg.value = thinkBg;
+        applyCustomPalette();
+    }
+
+    if (btnWhite) btnWhite.addEventListener('click', () => setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a'));
+    if (btnCyan) btnCyan.addEventListener('click', () => setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7'));
+    if (btnEmerald) btnEmerald.addEventListener('click', () => setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22'));
+    if (btnPurple) btnPurple.addEventListener('click', () => setPaletteValues('#faf5ff', '#ffffff', '#c084fc', '#9333ea', '#3b0764', '#1e1b4b'));
+
+    try {
+        const saved = JSON.parse(localStorage.getItem('giskard_custom_palette') || '{}');
+        if (saved.accentColor) setPaletteValues(saved.textColor, saved.headerColor, saved.accentColor, saved.userBg, saved.botBg, saved.thinkBg);
+    } catch(e) {}
+
     let currentBotMsgDiv = null;
     let currentBotRawText = '';
     let currentActiveModel = '';
