@@ -89,9 +89,29 @@
         "icon": "$(add)"
       },
       {
+        "command": "giskard-assistant.removeMcpServerTree",
+        "title": "Eliminar Servidor MCP",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "giskard-assistant.toggleMcpServerTree",
+        "title": "Activar / Desactivar Servidor MCP",
+        "icon": "$(sync)"
+      },
+      {
         "command": "giskard-assistant.addExclusionPatternTree",
         "title": "➕ Agregar Patrón de Exclusión",
         "icon": "$(add)"
+      },
+      {
+        "command": "giskard-assistant.removeExclusionPatternTree",
+        "title": "Eliminar Patrón de Exclusión",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "giskard-assistant.selectThemeTree",
+        "title": "Aplicar Tema Visual",
+        "icon": "$(color-mode)"
       },
       {
         "command": "giskard-assistant.newChatContext",
@@ -253,6 +273,18 @@
           "command": "giskard-assistant.addExclusionPatternTree",
           "when": "view == giskard-file-exclusions",
           "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "giskard-assistant.removeMcpServerTree",
+          "when": "view == giskard-mcp-servers && viewItem == mcpServer",
+          "group": "inline"
+        },
+        {
+          "command": "giskard-assistant.removeExclusionPatternTree",
+          "when": "view == giskard-file-exclusions && viewItem == exclusionPattern",
+          "group": "inline"
         }
       ]
     }

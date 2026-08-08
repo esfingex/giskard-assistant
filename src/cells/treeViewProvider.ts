@@ -187,6 +187,12 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
         return themes.map(t => {
             const item = new GiskardTreeItem(t.label, vscode.TreeItemCollapsibleState.None, 'header');
             item.iconPath = new vscode.ThemeIcon(t.icon);
+            item.contextValue = 'themeItem';
+            item.command = {
+                command: 'giskard-assistant.selectThemeTree',
+                title: 'Aplicar Tema Visual',
+                arguments: [t.label]
+            };
             return item;
         });
     }
@@ -221,6 +227,12 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
                 );
                 item.description = `[${s.type.toUpperCase()}] ${s.commandOrUrl}`;
                 item.iconPath = new vscode.ThemeIcon('tools');
+                item.contextValue = 'mcpServer';
+                item.command = {
+                    command: 'giskard-assistant.toggleMcpServerTree',
+                    title: 'Activar / Desactivar Servidor MCP',
+                    arguments: [s.id]
+                };
                 return item;
             });
         }
@@ -267,6 +279,12 @@ export class GiskardFileExclusionsTreeProvider implements vscode.TreeDataProvide
         return patterns.map(p => {
             const item = new GiskardTreeItem(`🚫 ${p}`, vscode.TreeItemCollapsibleState.None, 'header', p);
             item.iconPath = new vscode.ThemeIcon('exclude');
+            item.contextValue = 'exclusionPattern';
+            item.command = {
+                command: 'giskard-assistant.removeExclusionPatternTree',
+                title: 'Eliminar Patrón de Exclusión',
+                arguments: [p]
+            };
             return item;
         });
     }

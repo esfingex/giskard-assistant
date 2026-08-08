@@ -101,6 +101,36 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage(`✓ Patrón "${pattern}" agregado a exclusiones.`);
             }
         }),
+        vscode.commands.registerCommand('giskard-assistant.removeMcpServerTree', async (arg: any) => {
+            const serverId = typeof arg === 'string' || typeof arg === 'number' ? arg : (arg?.rawData?.id || arg?.id);
+            if (!serverId) return;
+            await store.removeMcpServer(Number(serverId));
+            mcpServersTree.refresh();
+            provider.postMessage({ type: 'mcpServersLoaded' });
+            vscode.window.showInformationMessage('✓ Servidor MCP eliminado del árbol.');
+        }),
+        vscode.commands.registerCommand('giskard-assistant.toggleMcpServerTree', async (arg: any) => {
+            const serverId = typeof arg === 'string' || typeof arg === 'number' ? arg : (arg?.rawData?.id || arg?.id);
+            if (!serverId) return;
+            await store.toggleMcpServer(Number(serverId));
+            mcpServersTree.refresh();
+            provider.postMessage({ type: 'mcpServersLoaded' });
+        }),
+        vscode.commands.registerCommand('giskard-assistant.removeExclusionPatternTree', async (arg: any) => {
+            const pattern = typeof arg === 'string' ? arg : (arg?.rawData || arg?.label || '').replace(/^🚫\s*/, '');
+            if (!pattern) return;
+            let current = store.getExclusionPatterns();
+            current = current.filter(p => p !== pattern);
+            await store.saveExclusionPatterns(current);
+            fileExclusionsTree.refresh();
+            provider.postMessage({ type: 'exclusionPatternsLoaded', patterns: current });
+            vscode.window.showInformationMessage(`✓ Patrón "${pattern}" eliminado de exclusiones.`);
+        }),
+        vscode.commands.registerCommand('giskard-assistant.selectThemeTree', async (themeLabel: string) => {
+            if (!themeLabel) return;
+            provider.postMessage({ type: 'selectTheme', theme: themeLabel });
+            vscode.window.showInformationMessage(`🎨 Tema visual aplicado: ${themeLabel}`);
+        }),
         vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (arg: any) => {
             let modelName = '';
             if (typeof arg === 'string') {
