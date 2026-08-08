@@ -96,6 +96,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (this._view) {
             const patterns = this._store.getExclusionPatterns();
             this._view.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+
+            const enabledModels = this._store.getEnabledModels();
+            this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
         }
     }
 

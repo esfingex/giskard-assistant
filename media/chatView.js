@@ -7,8 +7,16 @@
     const sendBtn = document.getElementById('send-btn');
     const promptInput = document.getElementById('prompt');
     const modelSelect = document.getElementById('model-select');
+    const chatModelSelect = document.getElementById('chat-model-select');
     const messagesDiv = document.getElementById('messages');
     const incFileCheckbox = document.getElementById('inc-file');
+
+    if (chatModelSelect) {
+        chatModelSelect.addEventListener('change', function() {
+            currentActiveModel = chatModelSelect.value;
+            vscode.postMessage({ type: 'modelChanged', model: chatModelSelect.value });
+        });
+    }
     const addCtxBtn = document.getElementById('add-ctx-btn');
     const compressBtn = document.getElementById('compress-btn');
     const tokenCounter = document.getElementById('token-counter');
@@ -430,12 +438,27 @@
                 }
                 break;
 
+            case 'setEnabledModels':
+                if (chatModelSelect && Array.isArray(message.enabledModels)) {
+                    const list = message.enabledModels;
+                    if (list.length === 0) {
+                        chatModelSelect.innerHTML = '<option value="">🤖 Activa modelos en el Tree 👈</option>';
+                        currentActiveModel = '';
+                    } else {
+                        chatModelSelect.innerHTML = list.map(m => `<option value="${escapeHtml(m)}">🤖 ${escapeHtml(m)}</option>`).join('');
+                        if (!list.includes(chatModelSelect.value)) {
+                            chatModelSelect.value = list[0];
+                        }
+                        currentActiveModel = chatModelSelect.value;
+                    }
+                }
+                break;
+
             case 'setSelectedModel':
                 if (message.model) {
                     currentActiveModel = message.model;
-                    const activeModelDisplay = document.getElementById('active-model-display');
-                    if (activeModelDisplay) {
-                        activeModelDisplay.textContent = '🤖 ' + message.model;
+                    if (chatModelSelect) {
+                        chatModelSelect.value = message.model;
                     }
                 }
                 break;

@@ -84,23 +84,42 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .modal-card { background: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 14px; border-radius: 8px; width: 94%; max-width: 520px; max-height: 88vh; resize: both; overflow: auto; min-width: 280px; min-height: 320px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.7); }
         .modal-card h4 { margin: 0; font-size: 12px; }
         .field { display: flex; flex-direction: column; gap: 3px; font-size: 10px; }
-        .active-model-badge {
-            font-size: 11px;
-            font-weight: 600;
-            color: #38bdf8;
+        .model-select-container {
+            flex: 1;
             display: flex;
             align-items: center;
-            gap: 6px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        }
+        #chat-model-select {
+            width: 100%;
+            background: var(--vscode-input-background, #1e293b);
+            color: var(--vscode-input-foreground, #38bdf8);
+            border: 1px solid var(--vscode-input-border, #334155);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+        }
+        #chat-model-select optgroup {
+            background: var(--vscode-editor-background);
+            color: var(--vscode-foreground);
+            font-weight: bold;
+        }
+        #chat-model-select option {
+            background: var(--vscode-editor-background);
+            color: var(--vscode-foreground);
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="header">
-            <div class="active-model-badge" id="active-model-display">🤖 Giskard Assistant</div>
+            <div class="model-select-container">
+                <select id="chat-model-select" title="Selecciona modelo activo para chatear (Vinculado a los activados en el Tree)">
+                    <option value="">🤖 Activa modelos en el Tree 👈</option>
+                </select>
+            </div>
             <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
         </div>
 
