@@ -168,7 +168,8 @@ export class ConnectionStore {
 
     /** Toggle multi-selected enabled state for a model */
     async toggleModelEnabled(modelName: string): Promise<boolean> {
-        let list = this.getEnabledModels();
+        const current = this.getEnabledModels();
+        let list = [...current];
         const index = list.indexOf(modelName);
         let newState = false;
         if (index >= 0) {

@@ -90,16 +90,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     public async refreshState() {
+        if (this._view) {
+            const enabledModels = this._store.getEnabledModels();
+            this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
+
+            const patterns = this._store.getExclusionPatterns();
+            this._view.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+        }
         await this._sendConnectionsList();
         await this._sendModelsList();
         await sendMcpServersList(this._view, this._store);
-        if (this._view) {
-            const patterns = this._store.getExclusionPatterns();
-            this._view.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
-
-            const enabledModels = this._store.getEnabledModels();
-            this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
-        }
     }
 
     public postMessage(message: any) {
@@ -222,6 +222,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
     private async _sendModelsList() {
         if (!this._view) return;
+
+        // Immediately send cached enabled models without waiting for network calls
+        const enabledModels = this._store.getEnabledModels();
+        this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
+
         const activeConn = this._store.getActive();
         const activeTag = activeConn?.tag || 'giskard-sys';
         const activeName = activeConn?.name || (activeConn?.type === 'remote' ? 'Remote API' : 'Giskard-Sys');
@@ -243,9 +248,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             activeName,
             currentUrl: getConnectorUrl()
         });
-
-        const enabledModels = this._store.getEnabledModels();
-        this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
     }
 
     private async _handleSaveSettings(provider: string, baseUrl?: string, apiKey?: string) {
