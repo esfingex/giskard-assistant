@@ -105,23 +105,47 @@
     const settingsModal = document.getElementById('settings-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
 
+    if (openSettingsBtn && settingsModal) {
+        openSettingsBtn.addEventListener('click', function() {
+            settingsModal.style.display = 'flex';
+        });
+    }
+
     if (openSettingsBtnHdr && settingsModal) {
         openSettingsBtnHdr.addEventListener('click', function() {
             settingsModal.style.display = 'flex';
         });
     }
+
+    if (closeModalBtn && settingsModal) {
+        closeModalBtn.addEventListener('click', function() {
+            settingsModal.style.display = 'none';
+        });
+    }
+
     const offlineBadge = document.getElementById('offline-badge');
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const clearCtxBtn = document.getElementById('clear-ctx-btn');
 
     const tabBtnLocal = document.getElementById('tab-btn-local');
     const tabBtnRemote = document.getElementById('tab-btn-remote');
-    const tabContentLocal = document.getElementById('tab-content-local');
-    const tabContentRemote = document.getElementById('tab-content-remote');
-    const tabBtnPalette = document.getElementById('tab-btn-palette');
-    const tabContentPalette = document.getElementById('tab-content-palette');
     const tabBtnMcp = document.getElementById('tab-btn-mcp');
-    const tabContentMcp = document.getElementById('tab-content-mcp');
+    const tabBtnExclusions = document.getElementById('tab-btn-exclusions');
+    const tabBtnPalette = document.getElementById('tab-btn-palette');
+
+    function switchSettingsTab(btn, targetId) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        const target = document.getElementById(targetId);
+        if (target) target.classList.add('active');
+    }
+
+    if (tabBtnLocal) tabBtnLocal.addEventListener('click', () => switchSettingsTab(tabBtnLocal, 'tab-content-local'));
+    if (tabBtnRemote) tabBtnRemote.addEventListener('click', () => switchSettingsTab(tabBtnRemote, 'tab-content-remote'));
+    if (tabBtnMcp) tabBtnMcp.addEventListener('click', () => switchSettingsTab(tabBtnMcp, 'tab-content-mcp'));
+    if (tabBtnExclusions) tabBtnExclusions.addEventListener('click', () => switchSettingsTab(tabBtnExclusions, 'tab-content-exclusions'));
+    if (tabBtnPalette) tabBtnPalette.addEventListener('click', () => switchSettingsTab(tabBtnPalette, 'tab-content-palette'));
 
     let currentBotMsgDiv = null;
     let currentBotRawText = '';
