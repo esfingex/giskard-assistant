@@ -416,6 +416,12 @@
                 }
                 break;
 
+            case 'openSettings':
+                if (settingsModal) {
+                    settingsModal.style.display = 'flex';
+                }
+                break;
+
             case 'clearMessages':
                 if (messagesDiv) {
                     messagesDiv.innerHTML = '';
