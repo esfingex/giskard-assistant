@@ -71,12 +71,20 @@ export async function activate(context: vscode.ExtensionContext) {
             provider.postMessage({ type: 'clearMessages' });
             vscode.window.showInformationMessage('💬✨ Nuevo contexto de chat iniciado.');
         }),
-        vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (modelName: string) => {
+        vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (arg: any) => {
+            let modelName = '';
+            if (typeof arg === 'string') {
+                modelName = arg;
+            } else if (arg && typeof arg === 'object') {
+                modelName = typeof arg.label === 'string' ? arg.label : (typeof arg.rawData === 'string' ? arg.rawData : '');
+            }
             if (!modelName) return;
+
             const isNowEnabled = await store.toggleModelEnabled(modelName);
             const enabledList = store.getEnabledModels();
 
             provider.postMessage({ type: 'setEnabledModels', enabledModels: enabledList });
+            await provider.refreshState();
             localModelsTree.refresh();
 
             const statusStr = isNowEnabled ? 'activado 🟢 en el desplegable del Chat' : 'desactivado ⚪ del Chat';

@@ -157,7 +157,8 @@ export class ConnectionStore {
 
     /** Get array of multi-selected enabled models for Chat dropdown */
     getEnabledModels(): string[] {
-        return this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1') || [];
+        const raw = this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1') || [];
+        return raw.filter(m => typeof m === 'string' && m.trim().length > 0 && m !== '[object Object]');
     }
 
     /** Check if a specific model is enabled (Default: FALSE / Disabled) */
