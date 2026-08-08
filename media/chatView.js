@@ -101,8 +101,15 @@
     const ctxMenu = document.getElementById('context-menu');
 
     const openSettingsBtn = document.getElementById('open-settings-btn');
+    const openSettingsBtnHdr = document.getElementById('open-settings-btn-hdr');
     const settingsModal = document.getElementById('settings-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
+
+    if (openSettingsBtnHdr && settingsModal) {
+        openSettingsBtnHdr.addEventListener('click', function() {
+            settingsModal.style.display = 'flex';
+        });
+    }
     const offlineBadge = document.getElementById('offline-badge');
     const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const clearCtxBtn = document.getElementById('clear-ctx-btn');

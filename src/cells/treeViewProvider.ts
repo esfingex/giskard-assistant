@@ -24,7 +24,7 @@ export class GiskardTreeItem extends vscode.TreeItem {
             if (caps.vision) badges += '👁️ ';
             if (caps.embedding) badges += '🧩 ';
 
-            const isEnabled = rawData?.isEnabled !== false;
+            const isEnabled = Boolean(rawData?.isEnabled);
             this.description = isEnabled ? `🟢 Activo en Chat ${badges}`.trim() : `⚪ Desactivado ${badges}`.trim();
             this.iconPath = isEnabled
                 ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))

@@ -216,7 +216,10 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     <div class="chat-container">
         <div class="header">
             <div style="font-size: 11px; font-weight: 600; color: #38bdf8;">🤖 Giskard Assistant</div>
-            <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <button class="btn-settings" id="open-settings-btn-hdr" title="${i18n.status.settings}" style="background:transparent;border:none;cursor:pointer;font-size:13px;padding:2px 4px;">⚙️</button>
+                <button class="btn-clear" id="clear-ctx-btn" title="${i18n.status.clearContext}">🗑️</button>
+            </div>
         </div>
 
         <div class="status-bar">
