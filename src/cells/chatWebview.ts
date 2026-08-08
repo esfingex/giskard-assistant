@@ -243,6 +243,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             activeName,
             currentUrl: getConnectorUrl()
         });
+
+        const enabledModels = this._store.getEnabledModels();
+        this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
     }
 
     private async _handleSaveSettings(provider: string, baseUrl?: string, apiKey?: string) {

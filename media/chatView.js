@@ -529,13 +529,11 @@
 
             case 'modelsLoaded':
             case 'modelsList':
-                if (Array.isArray(message.models)) {
-                    _allModelsCache = message.models;
-                    renderPopoverLists();
-                } else if (Array.isArray(message.localModels)) {
-                    _allModelsCache = message.localModels;
-                    renderPopoverLists();
-                }
+                let list = [];
+                if (Array.isArray(message.models)) list = list.concat(message.models);
+                if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
+                _allModelsCache = Array.from(new Set(list));
+                renderPopoverLists();
                 break;
 
             case 'setSelectedModel':
@@ -625,4 +623,5 @@
 
     // Send ready signal to host on startup
     vscode.postMessage({ type: 'webviewReady' });
+    vscode.postMessage({ type: 'fetchModels' });
 })();
