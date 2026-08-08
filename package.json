@@ -99,6 +99,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "giskard-assistant.toggleMcpToolTree",
+        "title": "Activar / Desactivar Herramienta MCP",
+        "icon": "$(sync)"
+      },
+      {
         "command": "giskard-assistant.addExclusionPatternTree",
         "title": "➕ Agregar Patrón de Exclusión",
         "icon": "$(add)"
@@ -285,6 +290,11 @@
           "command": "giskard-assistant.removeMcpServerTree",
           "when": "view == giskard-mcp-servers && viewItem == mcpServer",
           "group": "inline@2"
+        },
+        {
+          "command": "giskard-assistant.toggleMcpToolTree",
+          "when": "view == giskard-mcp-servers && viewItem == mcpTool",
+          "group": "inline"
         },
         {
           "command": "giskard-assistant.removeExclusionPatternTree",

@@ -235,16 +235,27 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
         }
 
         if (element.rawData && element.rawData.tools) {
+            const serverId = element.rawData.id;
             const tools = element.rawData.tools;
             return tools.map((t: any) => {
+                const isEnabled = t.enabled !== false;
+                const toolId = t.id || t.name;
                 const item = new GiskardTreeItem(
                     t.name,
                     vscode.TreeItemCollapsibleState.None,
                     'header',
-                    t
+                    { serverId, toolId, tool: t }
                 );
-                item.description = t.description || 'MCP Tool';
-                item.iconPath = new vscode.ThemeIcon('symbol-method');
+                item.description = isEnabled ? `🟢 Activo — ${t.description || 'Herramienta MCP'}` : `⚪ Desactivado — ${t.description || 'Herramienta MCP'}`;
+                item.iconPath = isEnabled
+                    ? new vscode.ThemeIcon('symbol-method', new vscode.ThemeColor('testing.iconPassed'))
+                    : new vscode.ThemeIcon('circle-outline');
+                item.contextValue = 'mcpTool';
+                item.command = {
+                    command: 'giskard-assistant.toggleMcpToolTree',
+                    title: 'Activar / Desactivar Herramienta MCP',
+                    arguments: [{ serverId, toolId }]
+                };
                 return item;
             });
         }

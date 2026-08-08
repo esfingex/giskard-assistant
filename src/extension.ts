@@ -114,9 +114,19 @@ export async function activate(context: vscode.ExtensionContext) {
             if (!serverId) return;
             const newState = await store.toggleMcpServer(Number(serverId));
             mcpServersTree.refresh();
-            provider.postMessage({ type: 'mcpServersLoaded' });
             const statusStr = newState ? 'activado 🟢' : 'desactivado ⚪';
             vscode.window.showInformationMessage(`✓ Servidor MCP ${statusStr}.`);
+        }),
+        vscode.commands.registerCommand('giskard-assistant.toggleMcpToolTree', async (arg: any) => {
+            const serverId = arg?.serverId || arg?.rawData?.serverId;
+            const toolId = arg?.toolId || arg?.rawData?.toolId;
+            if (!serverId || !toolId) return;
+
+            const newState = await store.toggleMcpTool(Number(serverId), String(toolId));
+            mcpServersTree.refresh();
+            provider.postMessage({ type: 'mcpServersLoaded' });
+            const statusStr = newState ? 'activada 🟢' : 'desactivada ⚪';
+            vscode.window.showInformationMessage(`✓ Herramienta MCP '${toolId}' ${statusStr}.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.removeExclusionPatternTree', async (arg: any) => {
             const pattern = typeof arg === 'string' ? arg : (arg?.rawData || arg?.label || '').replace(/^🚫\s*/, '');

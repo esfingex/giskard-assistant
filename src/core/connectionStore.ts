@@ -414,16 +414,19 @@ export class ConnectionStore {
         }
     }
 
-    async toggleMcpTool(serverId: number, toolId: string): Promise<void> {
-        const list = this.getMcpServers();
+    async toggleMcpTool(serverId: number, toolId: string): Promise<boolean> {
+        const list = [...this.getMcpServers()];
         const target = list.find(s => s.id === serverId);
+        let newState = false;
         if (target && target.tools) {
-            const tool = target.tools.find(t => t.id === toolId);
+            const tool = target.tools.find(t => t.id === toolId || t.name === toolId);
             if (tool) {
-                tool.enabled = !tool.enabled;
+                tool.enabled = tool.enabled === false ? true : false;
+                newState = tool.enabled;
                 await this.context.globalState.update(MCP_STORAGE_KEY, list);
             }
         }
+        return newState;
     }
 
     // ── Exclusion Patterns Storage ─────────────────────────────────────────────
