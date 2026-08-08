@@ -77,6 +77,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "giskard-assistant.openSettingsModal",
+        "title": "Abrir Ajustes de Configuración",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "giskard-assistant.toggleModelForChat",
         "title": "Activar / Desactivar Modelo para Chat (Multi-Select)",
         "icon": "$(check)"
@@ -211,6 +216,11 @@
           "command": "giskard-assistant.refreshTree",
           "when": "view == giskard-local-models",
           "group": "navigation@4"
+        },
+        {
+          "command": "giskard-assistant.openSettingsModal",
+          "when": "view == giskard-local-models",
+          "group": "navigation@5"
         }
       ]
     }
