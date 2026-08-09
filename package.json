@@ -85,107 +85,102 @@
     "commands": [
       {
         "command": "giskard-assistant.addRemoteConnectionTree",
-        "title": "➕ Agregar Conexión IA (Remota/Local)",
+        "title": "➕ Add AI Connection (Remote/Local)",
         "icon": "$(add)"
       },
       {
         "command": "giskard-assistant.addMcpServerTree",
-        "title": "➕ Agregar Servidor MCP",
+        "title": "➕ Add MCP Server",
         "icon": "$(add)"
       },
       {
         "command": "giskard-assistant.testMcpServerTree",
-        "title": "🧪 Probar Conexión MCP y Descubrir Herramientas",
+        "title": "🧪 Test MCP Connection & Discover Tools",
         "icon": "$(beaker)"
       },
       {
         "command": "giskard-assistant.removeMcpServerTree",
-        "title": "Eliminar Servidor MCP",
+        "title": "Delete MCP Server",
         "icon": "$(trash)"
       },
       {
         "command": "giskard-assistant.toggleMcpServerTree",
-        "title": "Activar / Desactivar Servidor MCP",
+        "title": "Enable / Disable MCP Server",
         "icon": "$(sync)"
       },
       {
         "command": "giskard-assistant.toggleMcpToolTree",
-        "title": "Activar / Desactivar Herramienta MCP",
+        "title": "Enable / Disable MCP Tool",
         "icon": "$(sync)"
       },
       {
         "command": "giskard-assistant.addExclusionPatternTree",
-        "title": "➕ Agregar Patrón de Exclusión",
+        "title": "➕ Add Exclusion Pattern",
         "icon": "$(add)"
       },
       {
         "command": "giskard-assistant.removeExclusionPatternTree",
-        "title": "Eliminar Patrón de Exclusión",
+        "title": "Delete Exclusion Pattern",
         "icon": "$(trash)"
       },
       {
         "command": "giskard-assistant.selectThemeTree",
-        "title": "Aplicar Tema Visual",
+        "title": "Apply Visual Theme",
         "icon": "$(color-mode)"
       },
       {
         "command": "giskard-assistant.newChatContext",
-        "title": "Nuevo Contexto de Chat (💬✨)",
+        "title": "New Chat Context (💬✨)",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "giskard-assistant.openSettingsModal",
-        "title": "Abrir Ajustes de Configuración",
+        "title": "Open Configuration Settings",
         "icon": "$(settings-gear)"
       },
       {
         "command": "giskard-assistant.toggleModelForChat",
-        "title": "Activar / Desactivar Modelo para Chat (Multi-Select)",
+        "title": "Toggle Model for Chat (Multi-Select)",
         "icon": "$(check)"
       },
       {
         "command": "giskard-assistant.manageApiKey",
-        "title": "Gestionar API Keys y Tokens de Autenticación",
+        "title": "Manage API Keys & Auth Tokens",
         "icon": "$(key)"
       },
       {
         "command": "giskard-assistant.filterCapabilities",
-        "title": "Filtrar Modelos por Capacidad (🧠 🛠️ 👁️ 🧩)",
+        "title": "Filter Models by Capability (🧠 🛠️ 👁️ 🧩)",
         "icon": "$(filter)"
       },
       {
         "command": "giskard-assistant.searchModels",
-        "title": "Buscar y Filtrar Modelos por Nombre",
+        "title": "Search Models by Name",
         "icon": "$(search)"
       },
       {
         "command": "giskard-assistant.addServer",
-        "title": "Agregar Servidor / Conexión IA",
+        "title": "Add AI Server / Connection",
         "icon": "$(add)"
       },
       {
         "command": "giskard-assistant.refreshTree",
-        "title": "Refrescar Servidores y Modelos",
+        "title": "Refresh Servers & Models",
         "icon": "$(refresh)"
       },
       {
-        "command": "giskard-assistant.openSettingsModal",
-        "title": "Abrir Ajustes de Extensión",
-        "icon": "$(settings-gear)"
-      },
-      {
         "command": "giskard-assistant.openChat",
-        "title": "Giskard Assistant: Abrir Chat en Barra Principal (Izquierda)",
+        "title": "Giskard Assistant: Open Chat in Primary Sidebar",
         "icon": "$(robot)"
       },
       {
         "command": "giskard-assistant.openChatRight",
-        "title": "Giskard Assistant: Abrir Chat en Barra Secundaria (Derecha)",
+        "title": "Giskard Assistant: Open Chat in Secondary Sidebar",
         "icon": "$(robot)"
       },
       {
         "command": "giskard-assistant.syncState",
-        "title": "Giskard Assistant: Sincronizar Estado"
+        "title": "Giskard Assistant: Synchronize State"
       },
       {
         "command": "giskard-assistant.listSandbox",
@@ -197,7 +192,7 @@
       },
       {
         "command": "giskard-assistant.attachCodeToChat",
-        "title": "Giskard Assistant: Adjuntar Código Seleccionado al Chat (Ctrl+L)",
+        "title": "Giskard Assistant: Attach Selected Code to Chat (Ctrl+L)",
         "icon": "$(code)"
       }
     ],
@@ -214,32 +209,32 @@
         "giskard-assistant.connectorUrl": {
           "type": "string",
           "default": "http://localhost:3500",
-          "description": "URL del backend al que se conecta el asistente."
+          "description": "Backend API URL for Giskard Assistant."
         },
         "giskard-assistant.clientId": {
           "type": "string",
           "default": "VSCode-Copilot",
-          "description": "Identificador de cliente enviado en la cabecera X-Client-Id."
+          "description": "Client identifier sent in X-Client-Id header."
         },
         "giskard-assistant.defaultModel": {
           "type": "string",
           "default": "auto",
-          "description": "Modelo por defecto seleccionado en el chat ('auto' detecta el primer modelo activo disponible)."
+          "description": "Default selected model in chat ('auto' detects first available active model)."
         },
         "giskard-assistant.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "Sincronización automática de estado y modelos."
+          "description": "Automatic synchronization of state and models."
         },
         "giskard-assistant.mcpConfigPath": {
           "type": "string",
           "default": "./mcp_conf.js",
-          "description": "Ruta al archivo de configuración de servidores MCP (mcp_conf.js o config.json)."
+          "description": "Path to MCP servers configuration file (mcp_conf.js or config.json)."
         },
         "giskard-assistant.ollamaBaseUrl": {
           "type": "string",
           "default": "http://localhost:11434",
-          "description": "URL base de la instancia local de Ollama."
+          "description": "Base URL of local Ollama instance."
         },
         "giskard-assistant.language": {
           "type": "string",
