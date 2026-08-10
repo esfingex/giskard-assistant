@@ -31,33 +31,21 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'loadModels': {
-                    let localOllamaModels: string[] = [];
-                    try {
-                        // Query local Ollama API directly (http://127.0.0.1:11434/api/tags)
-                        const res = await fetchWithTimeout('http://127.0.0.1:11434/api/tags', {}, 3000);
-                        if (res.ok) {
-                            const data: any = await res.json();
-                            if (data && Array.isArray(data.models)) {
-                                localOllamaModels = data.models.map((m: any) => m.name || m.model);
-                            }
-                        }
-                    } catch {}
+                    const groups = await fetchLlmModelsGrouped().catch(() => []);
+                    let activeModels: string[] = [];
 
-                    if (localOllamaModels.length === 0) {
-                        // Fallback: search groups for local Ollama / Giskard-Sys connection
-                        const groups = await fetchLlmModelsGrouped().catch(() => []);
-                        const localGrp = groups.find(g =>
-                            g.connectionUrl.includes('11434') ||
-                            g.connectionUrl.includes('3500') ||
-                            (g.connectionTag || '').toLowerCase().includes('ollama') ||
-                            (g.connectionTag || '').toLowerCase().includes('giskard-sys')
-                        );
-                        if (localGrp) {
-                            localOllamaModels = localGrp.models;
-                        }
-                    }
+                    groups.forEach(g => {
+                        g.models.forEach(m => {
+                            if (!activeModels.includes(m)) activeModels.push(m);
+                        });
+                    });
 
-                    webviewView.webview.postMessage({ command: 'modelsLoaded', models: localOllamaModels });
+                    const enabled = this.store.getEnabledModels();
+                    enabled.forEach(m => {
+                        if (!activeModels.includes(m)) activeModels.push(m);
+                    });
+
+                    webviewView.webview.postMessage({ command: 'modelsLoaded', models: activeModels });
                     break;
                 }
                 case 'getSettings': {
