@@ -1106,7 +1106,7 @@ export function createNewChatPanelTab(context: vscode.ExtensionContext, store: C
     const panel = vscode.window.createWebviewPanel(
         'giskard-chat-tab',
         panelTitle,
-        vscode.ViewColumn.Active,
+        vscode.ViewColumn.Beside,
         {
             enableScripts: true,
             retainContextWhenHidden: true,

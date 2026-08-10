@@ -124,16 +124,7 @@
     const newChatBtn = document.getElementById('new-chat-btn');
     if (newChatBtn) {
         newChatBtn.addEventListener('click', function() {
-            if (messagesDiv) messagesDiv.innerHTML = '';
-            currentBotMsgDiv = null;
-            currentBotRawText = '';
-            if (tokenCounter) tokenCounter.textContent = 'Tokens: 0';
-            vscode.postMessage({ type: 'clearContext' });
-
-            const welcomeDiv = document.createElement('div');
-            welcomeDiv.className = 'msg bot';
-            welcomeDiv.textContent = '✨ Nueva conversación iniciada. Selecciona cualquier modelo en el menú [🤖 Modelo ▾] para interactuar.';
-            if (messagesDiv) messagesDiv.appendChild(welcomeDiv);
+            vscode.postMessage({ type: 'createNewChatTab' });
         });
     }
 
