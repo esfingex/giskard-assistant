@@ -111,8 +111,8 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             position: absolute;
             bottom: calc(100% + 8px);
             left: 0;
-            width: 270px;
-            max-height: 340px;
+            width: 290px;
+            max-height: 380px;
             background: var(--vscode-editor-background, #111827);
             border: 1px solid var(--vscode-input-border, #374151);
             border-radius: 8px;
@@ -157,8 +157,23 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             display: flex;
             flex-direction: column;
             gap: 2px;
-            max-height: 180px;
+            max-height: 300px;
             overflow-y: auto;
+            padding-right: 2px;
+        }
+        .popover-model-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .popover-model-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+        .popover-model-list::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.4);
+            border-radius: 3px;
+        }
+        .popover-model-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.8);
         }
         .popover-model-item {
             display: flex;
@@ -305,21 +320,12 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                     </button>
 
                     <!-- OPilot Popover Popup Card -->
-                    <div class="model-popover-card" id="model-popover-card">
                         <div class="popover-search-row">
-                            <input type="text" id="popover-search-input" placeholder="Search models...">
+                            <input type="text" id="popover-search-input" placeholder="🔍 Buscar modelo...">
                         </div>
 
                         <div class="popover-model-list" id="popover-model-list">
-                            <!-- Populated with active models -->
-                        </div>
-
-                        <div class="popover-accordion-header" id="popover-other-toggle">
-                            <span id="accordion-arrow">›</span>
-                            <span>Other Models</span>
-                        </div>
-                        <div class="popover-accordion-content" id="popover-other-list">
-                            <!-- All other models -->
+                            <!-- Populated with all active tree models -->
                         </div>
                     </div>
                 </div>
