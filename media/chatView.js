@@ -51,25 +51,28 @@
         if (!popoverModelList) return;
         const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
 
-        const filteredEnabled = _enabledModelsCache.filter(m => m.toLowerCase().includes(q));
-        if (filteredEnabled.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:6px;">Sin modelos activos. Actívalos en el Tree 👈</div>';
+        // Active / Enabled models from TreeView (or fallback to all models if none checked yet)
+        const activeModelsSource = _enabledModelsCache.length > 0 ? _enabledModelsCache : _allModelsCache;
+        const filteredActive = activeModelsSource.filter(m => m.toLowerCase().includes(q));
+
+        if (filteredActive.length === 0) {
+            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;">No active models. Enable in Tree 👈</div>';
         } else {
-            popoverModelList.innerHTML = filteredEnabled.map(m => {
+            popoverModelList.innerHTML = filteredActive.map(m => {
                 const isSel = m === currentActiveModel;
                 const selClass = isSel ? 'selected' : '';
                 const checkMark = isSel ? '✓ ' : '';
                 return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                     <span>${checkMark}${escapeHtml(m)}</span>
-                    <span class="popover-model-badge">Activo</span>
+                    <span class="popover-model-badge">Active</span>
                 </div>`;
             }).join('');
         }
 
         if (popoverOtherList) {
-            const otherModels = _allModelsCache.filter(m => !_enabledModelsCache.includes(m) && m.toLowerCase().includes(q));
+            const otherModels = _allModelsCache.filter(m => !activeModelsSource.includes(m) && m.toLowerCase().includes(q));
             if (otherModels.length === 0) {
-                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No hay más modelos</div>';
+                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No additional models</div>';
             } else {
                 popoverOtherList.innerHTML = otherModels.map(m => {
                     const isSel = m === currentActiveModel;
@@ -95,36 +98,12 @@
             });
         });
     }
+
     const addCtxBtn = document.getElementById('add-ctx-btn');
     const compressBtn = document.getElementById('compress-btn');
     const tokenCounter = document.getElementById('token-counter');
     const ctxMenu = document.getElementById('context-menu');
-
-    const openSettingsBtn = document.getElementById('open-settings-btn');
-    const openSettingsBtnHdr = document.getElementById('open-settings-btn-hdr');
-    const settingsModal = document.getElementById('settings-modal');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-
-    if (openSettingsBtn && settingsModal) {
-        openSettingsBtn.addEventListener('click', function() {
-            settingsModal.style.display = 'flex';
-        });
-    }
-
-    if (openSettingsBtnHdr && settingsModal) {
-        openSettingsBtnHdr.addEventListener('click', function() {
-            settingsModal.style.display = 'flex';
-        });
-    }
-
-    if (closeModalBtn && settingsModal) {
-        closeModalBtn.addEventListener('click', function() {
-            settingsModal.style.display = 'none';
-        });
-    }
-
     const offlineBadge = document.getElementById('offline-badge');
-    const cfgConnectorUrl = document.getElementById('cfg-connector-url');
     const clearCtxBtn = document.getElementById('clear-ctx-btn');
 
     const tabBtnLocal = document.getElementById('tab-btn-local');

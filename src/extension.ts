@@ -231,8 +231,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.openSettingsModal', async () => {
-            await vscode.commands.executeCommand('giskard.chatView.focus');
-            provider.postMessage({ type: 'openSettings' });
+            await vscode.commands.executeCommand('workbench.view.extension.giskard-explorer');
         }),
         vscode.commands.registerCommand('giskard-assistant.addServer', async () => {
             const name = await vscode.window.showInputBox({ prompt: 'Nombre de la Conexión (ej. Mi Servidor Ollama, NVIDIA NIM, DeepSeek)', placeHolder: 'NVIDIA NIM Prod' });
