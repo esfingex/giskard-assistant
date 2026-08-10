@@ -86,20 +86,23 @@ export class ConnectionStore {
     constructor(private readonly context: vscode.ExtensionContext) { }
 
     async init(): Promise<void> {
-        // Check if there are saved connections. If empty, seed default local backend.
-        const connections = this._getRawList();
-        if (connections.length === 0) {
-            const defaultConn: Connection = {
-                id: 1,
-                name: 'Backend Local (Default)',
-                type: 'local',
-                url: 'http://localhost:3500',
-                tag: 'giskard-sys',
-                secretRef: null,
-                isActive: true,
-                createdAt: new Date().toISOString()
-            };
-            await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
+        const isInitialized = this.context.globalState.get<boolean>('giskard_initialized_v1', false);
+        if (!isInitialized) {
+            const connections = this._getRawList();
+            if (connections.length === 0) {
+                const defaultConn: Connection = {
+                    id: 1,
+                    name: 'Backend Local (Default)',
+                    type: 'local',
+                    url: 'http://localhost:3500',
+                    tag: 'giskard-sys',
+                    secretRef: null,
+                    isActive: true,
+                    createdAt: new Date().toISOString()
+                };
+                await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
+            }
+            await this.context.globalState.update('giskard_initialized_v1', true);
         }
 
         // Seed default local sovereign MCP server if empty
