@@ -18,10 +18,16 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
     public async refresh() {
         if (this._view) {
             const groups = await fetchLlmModelsGrouped().catch(() => []);
+            const localGroups = groups.filter(g => {
+                const tag = (g.connectionTag || '').toLowerCase();
+                const url = (g.connectionUrl || '').toLowerCase();
+                return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
+            });
+
             const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
-            groups.forEach(g => {
-                const tagUpper = (g.connectionTag || 'AI').toUpperCase();
+            localGroups.forEach(g => {
+                const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
                 g.models.forEach(m => {
                     modelList.push({
                         id: m,
@@ -53,10 +59,16 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
             switch (message.command) {
                 case 'loadModels': {
                     const groups = await fetchLlmModelsGrouped().catch(() => []);
+                    const localGroups = groups.filter(g => {
+                        const tag = (g.connectionTag || '').toLowerCase();
+                        const url = (g.connectionUrl || '').toLowerCase();
+                        return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
+                    });
+
                     const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
-                    groups.forEach(g => {
-                        const tagUpper = (g.connectionTag || 'AI').toUpperCase();
+                    localGroups.forEach(g => {
+                        const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
                         g.models.forEach(m => {
                             modelList.push({
                                 id: m,
@@ -214,9 +226,9 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
 </head>
 <body>
     <div class="control-group">
-        <label for="model-select">Model</label>
+        <label for="model-select">Local Model (Ollama / Giskard-Sys Engine)</label>
         <select id="model-select">
-            <option value="">Cargando modelos...</option>
+            <option value="">Cargando modelos locales...</option>
         </select>
     </div>
 
@@ -374,7 +386,7 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                     modelSelect.value = firstVal;
                     vscode.postMessage({ command: 'getSettings', model: firstVal });
                 } else {
-                    modelSelect.innerHTML = '<option value="">No active models detected</option>';
+                    modelSelect.innerHTML = '<option value="">No local active models (Ollama / Giskard-Sys)</option>';
                 }
             } else if (msg.command === 'settingsLoaded') {
                 const s = msg.settings || { temperature: 0.8, topP: 0.9, topK: 40, numCtx: 2048, numPredict: -1, think: false, thinkBudget: 2048 };
