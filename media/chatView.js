@@ -407,7 +407,7 @@
         messagesDiv.querySelectorAll('.msg').forEach(m => totalChars += m.textContent.length);
         const totalEstTokens = Math.ceil(totalChars / 4);
 
-        const currentModel = modelSelect ? modelSelect.value : '';
+        const currentModel = currentActiveModel || '';
         const maxTokens = getModelMaxContext(currentModel);
 
         tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / ' + maxTokens.toLocaleString();
@@ -560,7 +560,7 @@
         messagesDiv.appendChild(bMsg);
         currentBotMsgDiv = bMsg;
         currentBotRawText = '';
-        currentActiveModel = modelSelect ? modelSelect.value : '';
+        currentActiveModel = currentActiveModel || (_enabledModelsCache[0] || '');
 
         if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
         updateTokenCounter();
@@ -568,7 +568,7 @@
         vscode.postMessage({
             type: 'sendPrompt',
             prompt: prompt,
-            model: modelSelect ? modelSelect.value : '',
+            model: currentActiveModel,
             includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : false,
             contextType: selectedContextType
         });
