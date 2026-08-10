@@ -49,39 +49,55 @@
         });
     }
 
+    function cleanModelName(m) {
+        if (!m) return '';
+        if (typeof m === 'string') return m.trim();
+        if (typeof m === 'object') return (m.name || m.id || m.label || m.model || '').trim();
+        return String(m).trim();
+    }
+
     function renderPopoverLists() {
         if (!popoverModelList) return;
         const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
 
-        // Active / Enabled models checked in TreeView (or fallback to all models if none checked yet)
-        let activeModelsSource = _enabledModelsCache.filter(m => typeof m === 'string' && m.trim().length > 0);
+        const cleanedEnabled = _enabledModelsCache.map(cleanModelName).filter(Boolean);
+        const cleanedAll = _allModelsCache.map(cleanModelName).filter(Boolean);
+        const allAvailable = Array.from(new Set([...cleanedEnabled, ...cleanedAll]));
+
+        console.log('[Giskard Popover Debug] cleanedEnabled:', cleanedEnabled);
+        console.log('[Giskard Popover Debug] cleanedAll:', cleanedAll);
+        console.log('[Giskard Popover Debug] allAvailable:', allAvailable);
+
+        let activeModelsSource = cleanedEnabled;
         if (activeModelsSource.length === 0) {
-            activeModelsSource = _allModelsCache;
+            activeModelsSource = allAvailable;
         }
 
         const filteredActive = activeModelsSource.filter(m => m.toLowerCase().includes(q));
 
         if (filteredActive.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;text-align:center;">No active models selected.<br>Enable in Tree 👈</div>';
+            popoverModelList.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:8px 6px;text-align:center;">No hay modelos disponibles.<br>Verifica conexiones locales o remota 👈</div>';
         } else {
             popoverModelList.innerHTML = filteredActive.map(m => {
-                const isSel = m === currentActiveModel;
+                const isSel = (m === currentActiveModel);
+                const isCheckedInTree = cleanedEnabled.includes(m);
                 const selClass = isSel ? 'selected' : '';
                 const checkMark = isSel ? '✓ ' : '';
+                const badgeText = isSel ? 'Activo' : (isCheckedInTree ? 'Habilitado' : 'Disponible');
                 return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                     <span>${checkMark}${escapeHtml(m)}</span>
-                    <span class="popover-model-badge">${isSel ? 'Active' : 'Enabled'}</span>
+                    <span class="popover-model-badge">${badgeText}</span>
                 </div>`;
             }).join('');
         }
 
         if (popoverOtherList) {
-            const otherModels = _allModelsCache.filter(m => !activeModelsSource.includes(m) && m.toLowerCase().includes(q));
+            const otherModels = allAvailable.filter(m => !activeModelsSource.includes(m) && m.toLowerCase().includes(q));
             if (otherModels.length === 0) {
-                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No additional models</div>';
+                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No hay modelos adicionales</div>';
             } else {
                 popoverOtherList.innerHTML = otherModels.map(m => {
-                    const isSel = m === currentActiveModel;
+                    const isSel = (m === currentActiveModel);
                     const selClass = isSel ? 'selected' : '';
                     return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                         <span>${escapeHtml(m)}</span>
@@ -102,6 +118,22 @@
                     renderPopoverLists();
                 }
             });
+        });
+    }
+
+    const newChatBtn = document.getElementById('new-chat-btn');
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', function() {
+            if (messagesDiv) messagesDiv.innerHTML = '';
+            currentBotMsgDiv = null;
+            currentBotRawText = '';
+            if (tokenCounter) tokenCounter.textContent = 'Tokens: 0';
+            vscode.postMessage({ type: 'clearContext' });
+
+            const welcomeDiv = document.createElement('div');
+            welcomeDiv.className = 'msg bot';
+            welcomeDiv.textContent = '✨ Nueva conversación iniciada. Selecciona cualquier modelo en el menú [🤖 Modelo ▾] para interactuar.';
+            if (messagesDiv) messagesDiv.appendChild(welcomeDiv);
         });
     }
 
@@ -584,11 +616,14 @@
                 break;
 
             case 'setEnabledModels':
+                console.log('[Giskard Webview] setEnabledModels payload:', message.enabledModels);
                 if (Array.isArray(message.enabledModels)) {
-                    _enabledModelsCache = message.enabledModels;
+                    _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
                     if (_enabledModelsCache.length > 0 && !currentActiveModel) {
                         currentActiveModel = _enabledModelsCache[0];
-                        if (activeModelName) activeModelName.textContent = '🤖 ' + currentActiveModel;
+                    }
+                    if (activeModelName) {
+                        activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
                     }
                     renderPopoverLists();
                 }
@@ -596,6 +631,7 @@
 
             case 'modelsLoaded':
             case 'modelsList':
+                console.log('[Giskard Webview] modelsList payload:', message);
                 let list = [];
                 if (Array.isArray(message.models)) list = list.concat(message.models);
                 if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
@@ -606,7 +642,8 @@
                         }
                     });
                 }
-                _allModelsCache = Array.from(new Set(list.filter(m => typeof m === 'string' && m.trim().length > 0)));
+                _allModelsCache = Array.from(new Set(list.map(cleanModelName).filter(Boolean)));
+                console.log('[Giskard Webview] _allModelsCache parsed:', _allModelsCache);
                 renderPopoverLists();
                 break;
 
