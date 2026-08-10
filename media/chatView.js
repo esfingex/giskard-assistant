@@ -20,8 +20,9 @@
         modelPickerBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             modelPopoverCard.classList.toggle('open');
-            if (modelPopoverCard.classList.contains('open') && popoverSearchInput) {
-                popoverSearchInput.focus();
+            if (modelPopoverCard.classList.contains('open')) {
+                renderPopoverLists();
+                if (popoverSearchInput) popoverSearchInput.focus();
             }
         });
 
@@ -51,12 +52,16 @@
         if (!popoverModelList) return;
         const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
 
-        // Active / Enabled models from TreeView (or fallback to all models if none checked yet)
-        const activeModelsSource = _enabledModelsCache.length > 0 ? _enabledModelsCache : _allModelsCache;
+        // Active / Enabled models checked in TreeView (or fallback to all models if none checked yet)
+        let activeModelsSource = _enabledModelsCache.filter(m => typeof m === 'string' && m.trim().length > 0);
+        if (activeModelsSource.length === 0) {
+            activeModelsSource = _allModelsCache;
+        }
+
         const filteredActive = activeModelsSource.filter(m => m.toLowerCase().includes(q));
 
         if (filteredActive.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;">No active models. Enable in Tree 👈</div>';
+            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;">No active models selected.<br>Enable in Tree 👈</div>';
         } else {
             popoverModelList.innerHTML = filteredActive.map(m => {
                 const isSel = m === currentActiveModel;
@@ -593,7 +598,14 @@
                 let list = [];
                 if (Array.isArray(message.models)) list = list.concat(message.models);
                 if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
-                _allModelsCache = Array.from(new Set(list));
+                if (Array.isArray(message.groups)) {
+                    message.groups.forEach(g => {
+                        if (g && Array.isArray(g.models)) {
+                            list = list.concat(g.models);
+                        }
+                    });
+                }
+                _allModelsCache = Array.from(new Set(list.filter(m => typeof m === 'string' && m.trim().length > 0)));
                 renderPopoverLists();
                 break;
 
