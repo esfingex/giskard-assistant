@@ -112,19 +112,143 @@
                 const selected = el.getAttribute('data-model');
                 if (selected) {
                     currentActiveModel = selected;
+                    const curTab = _subTabs.find(t => t.id === _activeTabId);
+                    if (curTab) curTab.model = selected;
                     if (activeModelName) activeModelName.textContent = '🤖 ' + selected;
                     vscode.postMessage({ type: 'modelChanged', model: selected });
                     if (modelPopoverCard) modelPopoverCard.classList.remove('open');
+                    renderSubTabs();
                     renderPopoverLists();
                 }
             });
         });
     }
 
+    // ── Internal Sub-Tabs State Management ──────────────────────────────
+    let _subTabs = [
+        { id: 'tab-1', title: 'Chat 1', model: '', messagesHtml: '' }
+    ];
+    let _activeTabId = 'tab-1';
+    let _subTabCounter = 1;
+
+    const subTabBar = document.getElementById('sub-tab-bar');
+
+    function renderSubTabs() {
+        if (!subTabBar) return;
+
+        subTabBar.innerHTML = _subTabs.map(t => {
+            const isActive = t.id === _activeTabId;
+            const activeClass = isActive ? 'active' : '';
+            const modelLabel = t.model ? ` [${t.model.split('/')[0]}]` : '';
+            const closeBtnHtml = _subTabs.length > 1 ? `<span class="sub-tab-close-btn" data-close-id="${t.id}">✕</span>` : '';
+            return `<div class="sub-tab-item ${activeClass}" data-tab-id="${t.id}">
+                <span>💬 ${escapeHtml(t.title)}${escapeHtml(modelLabel)}</span>
+                ${closeBtnHtml}
+            </div>`;
+        }).join('');
+
+        subTabBar.querySelectorAll('.sub-tab-item').forEach(el => {
+            el.addEventListener('click', function(e) {
+                const closeTarget = e.target.closest('.sub-tab-close-btn');
+                if (closeTarget) {
+                    e.stopPropagation();
+                    const closeId = closeTarget.getAttribute('data-close-id');
+                    closeSubTab(closeId);
+                    return;
+                }
+                const tabId = el.getAttribute('data-tab-id');
+                if (tabId) switchSubTab(tabId);
+            });
+        });
+    }
+
+    function saveCurrentTabState() {
+        const curTab = _subTabs.find(t => t.id === _activeTabId);
+        if (curTab) {
+            if (messagesDiv) curTab.messagesHtml = messagesDiv.innerHTML;
+            curTab.model = currentActiveModel;
+        }
+    }
+
+    function switchSubTab(tabId) {
+        if (tabId === _activeTabId) return;
+
+        saveCurrentTabState();
+
+        _activeTabId = tabId;
+        const nextTab = _subTabs.find(t => t.id === _activeTabId);
+        if (!nextTab) return;
+
+        if (messagesDiv) messagesDiv.innerHTML = nextTab.messagesHtml || '';
+        currentActiveModel = nextTab.model || (_enabledModelsCache[0] || '');
+
+        if (activeModelName) {
+            activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
+        }
+
+        renderSubTabs();
+        renderPopoverLists();
+    }
+
+    function createNewSubTab() {
+        saveCurrentTabState();
+
+        _subTabCounter++;
+        const newTabId = 'tab-' + Date.now();
+        const newTitle = 'Chat ' + _subTabCounter;
+        const newModel = currentActiveModel || (_enabledModelsCache[0] || '');
+
+        const welcomeHtml = `<div class="msg bot">✨ Nuevo sub-chat #${_subTabCounter} iniciado. Selecciona cualquier modelo en <b>[ 🤖 Modelo ▾ ]</b> para interactuar en paralelo.</div>`;
+
+        _subTabs.push({
+            id: newTabId,
+            title: newTitle,
+            model: newModel,
+            messagesHtml: welcomeHtml
+        });
+
+        _activeTabId = newTabId;
+        if (messagesDiv) messagesDiv.innerHTML = welcomeHtml;
+        currentActiveModel = newModel;
+
+        if (activeModelName) {
+            activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
+        }
+
+        renderSubTabs();
+        renderPopoverLists();
+    }
+
+    function closeSubTab(tabId) {
+        if (_subTabs.length <= 1) return;
+
+        const idx = _subTabs.findIndex(t => t.id === tabId);
+        if (idx === -1) return;
+
+        _subTabs.splice(idx, 1);
+
+        if (_activeTabId === tabId) {
+            const nextIdx = Math.max(0, idx - 1);
+            _activeTabId = _subTabs[nextIdx].id;
+            const nextTab = _subTabs[nextIdx];
+            if (messagesDiv) messagesDiv.innerHTML = nextTab.messagesHtml || '';
+            currentActiveModel = nextTab.model || '';
+            if (activeModelName) {
+                activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
+            }
+        }
+
+        renderSubTabs();
+        renderPopoverLists();
+    }
+
+    // Initialize sub-tabs bar
+    renderSubTabs();
+
     const newChatBtn = document.getElementById('new-chat-btn');
     if (newChatBtn) {
         newChatBtn.addEventListener('click', function() {
-            vscode.postMessage({ type: 'createNewChatTab' });
+            createNewSubTab();
         });
     }
 

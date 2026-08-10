@@ -207,16 +207,75 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             max-height: 120px;
             overflow-y: auto;
         }
-        .popover-accordion-content.open {
+        .sub-tab-bar {
             display: flex;
+            align-items: center;
+            gap: 4px;
+            overflow-x: auto;
+            flex: 1;
+            padding-bottom: 2px;
+        }
+        .sub-tab-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            font-size: 10.5px;
+            font-weight: 500;
+            color: var(--vscode-descriptionForeground, #9ca3af);
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .sub-tab-item:hover {
+            color: var(--vscode-foreground, #e5e7eb);
+            background: rgba(255,255,255,0.08);
+        }
+        .sub-tab-item.active {
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.12);
+            border-color: rgba(56, 189, 248, 0.35);
+            font-weight: bold;
+        }
+        .sub-tab-close-btn {
+            font-size: 10px;
+            opacity: 0.6;
+            cursor: pointer;
+            padding: 0 2px;
+            margin-left: 2px;
+        }
+        .sub-tab-close-btn:hover {
+            opacity: 1;
+            color: #ef4444;
+        }
+        .btn-subtab-add {
+            background: transparent;
+            border: none;
+            color: #38bdf8;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 2px 6px;
+            display: flex;
+            align-items: center;
+            border-radius: 4px;
+        }
+        .btn-subtab-add:hover {
+            background: rgba(56, 189, 248, 0.2);
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="header">
-            <div style="display: flex; gap: 6px; align-items: center; justify-content: flex-end; width: 100%;">
-                <button class="btn-new-chat" id="new-chat-btn" title="Nuevo Chat (Nueva conversación)" style="background:transparent; border:none; cursor:pointer; font-size:13px; padding:2px 4px;">➕</button>
+            <div class="sub-tab-bar" id="sub-tab-bar">
+                <!-- Dynamically rendered sub-tabs -->
+            </div>
+            <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 6px;">
+                <button class="btn-subtab-add" id="new-chat-btn" title="Nuevo Chat (Pestaña interna)">➕</button>
                 <button class="btn-clear" id="clear-ctx-btn" title="Limpiar Conversación Activa" style="background:transparent; border:none; cursor:pointer; font-size:13px; padding:2px 4px;">🗑️</button>
             </div>
         </div>
