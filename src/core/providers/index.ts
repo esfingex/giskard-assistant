@@ -56,8 +56,9 @@ export async function fetchModelsForProvider(
         return await fetchOllamaModels(url);
     }
 
-    // Default Fallback Router: Try NVIDIA/OpenAI -> Giskard-Sys
+    // Default Fallback Router
     let models = await fetchNvidiaModels(url, apiKey);
+    if (models.length === 0) models = await fetchOllamaModels(url);
     if (models.length === 0) models = await fetchGiskardSysModels(url);
 
     return models;

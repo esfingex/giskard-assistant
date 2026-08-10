@@ -21,5 +21,5 @@ export async function fetchGiskardSysModels(baseUrl: string = GISKARD_SYS_DEFAUL
             }
         }
     } catch { }
-    return ['qwen3-coder:30b', 'phi4:14b', 'qwimi-k2.6:distill', 'aya-expanse:8b'];
+    return [];
 }
