@@ -139,18 +139,53 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" deleted.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
-            const name = await vscode.window.showInputBox({ prompt: 'AI Connection Name', placeHolder: 'e.g. DeepSeek API / Ollama / NVIDIA NIM' });
-            if (!name) return;
-            const type = await vscode.window.showQuickPick(['remote', 'local'], { placeHolder: 'Connection Type' });
-            if (!type) return;
-            const url = await vscode.window.showInputBox({ prompt: 'AI Service Base URL', placeHolder: 'e.g. https://api.deepseek.com or http://localhost:11434' });
-            if (!url) return;
-            const tag = await vscode.window.showInputBox({ prompt: 'Identifier Tag / Category', placeHolder: 'e.g. deepseek, nvidia, ollama' });
+            const providerPick = await vscode.window.showQuickPick([
+                { label: '🦙 Ollama Local', url: 'http://localhost:11434', tag: 'ollama', type: 'local', detail: 'Local Ollama instance on http://localhost:11434' },
+                { label: '🦀 Giskard-Sys Backend', url: 'http://localhost:3500', tag: 'giskard-sys', type: 'local', detail: 'Local Rust Axum server on http://localhost:3500' },
+                { label: '🐳 DeepSeek API', url: 'https://api.deepseek.com/v1', tag: 'deepseek', type: 'remote', detail: 'DeepSeek Chat & Reasoner API' },
+                { label: '🟢 NVIDIA NIM API', url: 'https://integrate.api.nvidia.com/v1', tag: 'nvidia', type: 'remote', detail: 'NVIDIA NIM API microservices' },
+                { label: '⚡ OpenAI API', url: 'https://api.openai.com/v1', tag: 'openai', type: 'remote', detail: 'OpenAI GPT-4o / o1 / o3 models' },
+                { label: '🧠 Anthropic Claude API', url: 'https://api.anthropic.com/v1', tag: 'anthropic', type: 'remote', detail: 'Claude 3.5 Sonnet / Haiku / Opus' },
+                { label: '✨ Google Gemini API', url: 'https://generativelanguage.googleapis.com/v1beta', tag: 'gemini', type: 'remote', detail: 'Gemini 1.5 Pro / Flash models' },
+                { label: '🌙 Moonshot Kimi API', url: 'https://api.moonshot.cn/v1', tag: 'kimi', type: 'remote', detail: 'Moonshot Kimi LLM API' },
+                { label: '☁️ Qwen / DashScope API', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', tag: 'qwen', type: 'remote', detail: 'Alibaba Qwen LLM models' },
+                { label: '✅ Custom AI Endpoint…', url: '', tag: 'custom', type: 'remote', detail: 'Configure any OpenAI-compatible API endpoint' }
+            ], { placeHolder: 'Select AI Provider / Connection to Add' });
 
-            await store.addConnection(name, type as any, url, tag || 'ai');
+            if (!providerPick) return;
+
+            let name = providerPick.label.replace(/^[^\s]+\s*/, '');
+            let url = providerPick.url;
+            let tag = providerPick.tag;
+            let type: 'local' | 'remote' = providerPick.type as any;
+
+            if (providerPick.tag === 'custom') {
+                const customName = await vscode.window.showInputBox({ prompt: 'Connection Profile Name', placeHolder: 'e.g. My Custom LLM Server' });
+                if (!customName) return;
+                name = customName;
+
+                const customUrl = await vscode.window.showInputBox({ prompt: 'Base URL', placeHolder: 'e.g. http://localhost:8080/v1' });
+                if (!customUrl) return;
+                url = customUrl;
+
+                const customTag = await vscode.window.showInputBox({ prompt: 'Provider Tag (e.g. custom, vllm, lm-studio)', value: 'custom' });
+                tag = customTag || 'custom';
+            } else {
+                const customUrl = await vscode.window.showInputBox({ prompt: `Base URL for ${name}`, value: url });
+                if (!customUrl) return;
+                url = customUrl;
+            }
+
+            let apiKey: string | undefined = undefined;
+            if (type === 'remote' || tag !== 'ollama') {
+                apiKey = await vscode.window.showInputBox({ prompt: `API Key / Bearer Token for ${name} (Optional for local)`, password: true });
+            }
+
+            const id = await store.addConnection(name, type, url, tag, apiKey);
             remoteConnsTree.refresh();
-            provider.postMessage({ type: 'connectionsLoaded' });
-            vscode.window.showInformationMessage(`✓ AI Connection "${name}" added.`);
+            localModelsTree.refresh();
+            await provider.refreshState();
+            vscode.window.showInformationMessage(`✓ AI Connection "${name}" added and activated.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.testMcpServerTree', async (arg: any) => {
             const serverId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));

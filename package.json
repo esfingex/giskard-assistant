@@ -285,11 +285,6 @@
           "group": "navigation@4"
         },
         {
-          "command": "giskard-assistant.addModelOrConnection",
-          "when": "view == giskard-local-models",
-          "group": "navigation@1"
-        },
-        {
           "command": "giskard-assistant.addRemoteConnectionTree",
           "when": "view == giskard-remote-connections",
           "group": "navigation@1"
