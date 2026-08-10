@@ -320,6 +320,7 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                     </button>
 
                     <!-- OPilot Popover Popup Card -->
+                    <div class="model-popover-card" id="model-popover-card">
                         <div class="popover-search-row">
                             <input type="text" id="popover-search-input" placeholder="🔍 Buscar modelo...">
                         </div>
