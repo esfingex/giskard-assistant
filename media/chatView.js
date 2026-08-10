@@ -163,8 +163,9 @@
 
     function saveCurrentTabState() {
         const curTab = _subTabs.find(t => t.id === _activeTabId);
-        if (curTab) {
-            if (messagesDiv) curTab.messagesHtml = messagesDiv.innerHTML;
+        const msgDiv = document.getElementById('messages');
+        if (curTab && msgDiv) {
+            curTab.messagesHtml = msgDiv.innerHTML;
             curTab.model = currentActiveModel;
         }
     }
@@ -178,7 +179,8 @@
         const nextTab = _subTabs.find(t => t.id === _activeTabId);
         if (!nextTab) return;
 
-        if (messagesDiv) messagesDiv.innerHTML = nextTab.messagesHtml || '';
+        const msgDiv = document.getElementById('messages');
+        if (msgDiv) msgDiv.innerHTML = nextTab.messagesHtml || '';
         currentActiveModel = nextTab.model || (_enabledModelsCache[0] || '');
 
         if (activeModelName) {
@@ -207,7 +209,8 @@
         });
 
         _activeTabId = newTabId;
-        if (messagesDiv) messagesDiv.innerHTML = welcomeHtml;
+        const msgDiv = document.getElementById('messages');
+        if (msgDiv) msgDiv.innerHTML = welcomeHtml;
         currentActiveModel = newModel;
 
         if (activeModelName) {
@@ -230,7 +233,8 @@
             const nextIdx = Math.max(0, idx - 1);
             _activeTabId = _subTabs[nextIdx].id;
             const nextTab = _subTabs[nextIdx];
-            if (messagesDiv) messagesDiv.innerHTML = nextTab.messagesHtml || '';
+            const msgDiv = document.getElementById('messages');
+            if (msgDiv) msgDiv.innerHTML = nextTab.messagesHtml || '';
             currentActiveModel = nextTab.model || '';
             if (activeModelName) {
                 activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
