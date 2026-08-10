@@ -18,13 +18,21 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
     public async refresh() {
         if (this._view) {
             const groups = await fetchLlmModelsGrouped().catch(() => []);
-            let activeModels: string[] = [];
+            const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
+
             groups.forEach(g => {
+                const tagUpper = (g.connectionTag || 'AI').toUpperCase();
                 g.models.forEach(m => {
-                    if (!activeModels.includes(m)) activeModels.push(m);
+                    modelList.push({
+                        id: m,
+                        name: m,
+                        tag: tagUpper,
+                        label: `${m} [${tagUpper}]`
+                    });
                 });
             });
-            this._view.webview.postMessage({ command: 'modelsLoaded', models: activeModels });
+
+            this._view.webview.postMessage({ command: 'modelsLoaded', models: modelList });
         }
     }
 
@@ -45,15 +53,21 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
             switch (message.command) {
                 case 'loadModels': {
                     const groups = await fetchLlmModelsGrouped().catch(() => []);
-                    let activeModels: string[] = [];
+                    const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
                     groups.forEach(g => {
+                        const tagUpper = (g.connectionTag || 'AI').toUpperCase();
                         g.models.forEach(m => {
-                            if (!activeModels.includes(m)) activeModels.push(m);
+                            modelList.push({
+                                id: m,
+                                name: m,
+                                tag: tagUpper,
+                                label: `${m} [${tagUpper}]`
+                            });
                         });
                     });
 
-                    webviewView.webview.postMessage({ command: 'modelsLoaded', models: activeModels });
+                    webviewView.webview.postMessage({ command: 'modelsLoaded', models: modelList });
                     break;
                 }
                 case 'getSettings': {
@@ -350,10 +364,17 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         window.addEventListener('message', event => {
             const msg = event.data;
             if (msg.command === 'modelsLoaded') {
-                modelSelect.innerHTML = msg.models.map(m => \`<option value="\${m}">\${m}</option>\`).join('');
-                if (msg.models.length > 0) {
-                    modelSelect.value = msg.models[0];
-                    vscode.postMessage({ command: 'getSettings', model: msg.models[0] });
+                if (msg.models && msg.models.length > 0) {
+                    modelSelect.innerHTML = msg.models.map(m => {
+                        const val = typeof m === 'object' ? m.id : m;
+                        const text = typeof m === 'object' ? (m.label || m.name || m.id) : m;
+                        return '<option value="' + val + '">' + text + '</option>';
+                    }).join('');
+                    const firstVal = typeof msg.models[0] === 'object' ? msg.models[0].id : msg.models[0];
+                    modelSelect.value = firstVal;
+                    vscode.postMessage({ command: 'getSettings', model: firstVal });
+                } else {
+                    modelSelect.innerHTML = '<option value="">No active models detected</option>';
                 }
             } else if (msg.command === 'settingsLoaded') {
                 const s = msg.settings || { temperature: 0.8, topP: 0.9, topK: 40, numCtx: 2048, numPredict: -1, think: false, thinkBudget: 2048 };
