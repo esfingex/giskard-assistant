@@ -89,6 +89,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "giskard-assistant.removeRemoteConnectionTree",
+        "title": "Delete AI Connection",
+        "icon": "$(trash)"
+      },
+      {
         "command": "giskard-assistant.addRemoteConnectionTree",
         "title": "➕ Add AI Connection (Remote/Local)",
         "icon": "$(add)"
@@ -319,6 +324,11 @@
         {
           "command": "giskard-assistant.removeExclusionPatternTree",
           "when": "view == giskard-file-exclusions && viewItem == exclusionPattern",
+          "group": "inline"
+        },
+        {
+          "command": "giskard-assistant.removeRemoteConnectionTree",
+          "when": "view == giskard-remote-connections && viewItem == remoteConn",
           "group": "inline"
         }
       ]

@@ -117,6 +117,19 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage(`✓ Giskard-Sys connection saved.`);
             }
         }),
+        vscode.commands.registerCommand('giskard-assistant.removeRemoteConnectionTree', async (arg: any) => {
+            const connId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            if (!connId) return;
+
+            const conn = store.getAll().find(c => Number(c.id) === Number(connId));
+            const nameStr = conn ? conn.name : 'AI Connection';
+
+            await store.removeConnection(Number(connId));
+            remoteConnsTree.refresh();
+            localModelsTree.refresh();
+            await provider.refreshState();
+            vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" deleted.`);
+        }),
         vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
             const name = await vscode.window.showInputBox({ prompt: 'AI Connection Name', placeHolder: 'e.g. DeepSeek API / Ollama / NVIDIA NIM' });
             if (!name) return;
