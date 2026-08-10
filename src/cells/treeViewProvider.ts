@@ -139,6 +139,19 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                     );
                     item.iconPath = new vscode.ThemeIcon('server');
                     item.contextValue = 'connectionHeaderGroup';
+
+                    let filterTag = '';
+                    if (this.activeCapabilityFilter && this.activeCapabilityFilter !== 'all') {
+                        const iconMap: Record<string, string> = { reasoning: '🧠 Reasoning', tools: '🛠️ Tools', vision: '👁️ Vision', embedding: '🧩 Embedding' };
+                        filterTag += iconMap[this.activeCapabilityFilter] || this.activeCapabilityFilter;
+                    }
+                    if (this.activeSearchQuery && this.activeSearchQuery.trim()) {
+                        filterTag += (filterTag ? ' | ' : '') + `🔍 "${this.activeSearchQuery.trim()}"`;
+                    }
+                    if (filterTag) {
+                        item.description = `[Filter: ${filterTag}]`;
+                    }
+
                     filteredGroups.push(item);
                 }
             }
@@ -236,7 +249,10 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
                     'header',
                     s
                 );
-                item.description = s.commandOrUrl;
+                const totalTools = s.tools ? s.tools.length : 0;
+                const activeTools = s.tools ? s.tools.filter((t: any) => t.enabled !== false).length : 0;
+                const toolsBadge = totalTools > 0 ? `[${activeTools}/${totalTools} active] ` : '';
+                item.description = `${toolsBadge}${s.commandOrUrl}`;
                 item.iconPath = s.isActive
                     ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
                     : new vscode.ThemeIcon('circle-outline');
