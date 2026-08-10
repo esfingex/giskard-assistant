@@ -47,12 +47,12 @@
       "giskard-explorer": [
         {
           "id": "giskard-local-models",
-          "name": "Local & Active LLM Models",
+          "name": "Active LLM Models",
           "icon": "$(server-environment)"
         },
         {
           "id": "giskard-remote-connections",
-          "name": "Remote AI Connections",
+          "name": "AI Connections & Providers",
           "icon": "$(cloud)"
         },
         {
