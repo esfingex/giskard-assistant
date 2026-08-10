@@ -135,6 +135,7 @@ export async function activate(context: vscode.ExtensionContext) {
             await store.removeConnection(connId);
             remoteConnsTree.refresh();
             localModelsTree.refresh();
+            modelSettingsProvider.refresh();
             await provider.refreshState();
             vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" deleted.`);
         }),
@@ -289,6 +290,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             await store.removeEnabledModel(modelName);
             localModelsTree.refresh();
+            modelSettingsProvider.refresh();
             await provider.refreshState();
             vscode.window.showInformationMessage(`✓ Model '${modelName}' removed.`);
         }),

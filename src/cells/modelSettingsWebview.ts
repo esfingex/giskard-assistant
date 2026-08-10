@@ -15,6 +15,19 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
         private readonly store: ConnectionStore
     ) { }
 
+    public async refresh() {
+        if (this._view) {
+            const groups = await fetchLlmModelsGrouped().catch(() => []);
+            let activeModels: string[] = [];
+            groups.forEach(g => {
+                g.models.forEach(m => {
+                    if (!activeModels.includes(m)) activeModels.push(m);
+                });
+            });
+            this._view.webview.postMessage({ command: 'modelsLoaded', models: activeModels });
+        }
+    }
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
@@ -38,11 +51,6 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                         g.models.forEach(m => {
                             if (!activeModels.includes(m)) activeModels.push(m);
                         });
-                    });
-
-                    const enabled = this.store.getEnabledModels();
-                    enabled.forEach(m => {
-                        if (!activeModels.includes(m)) activeModels.push(m);
                     });
 
                     webviewView.webview.postMessage({ command: 'modelsLoaded', models: activeModels });

@@ -273,6 +273,10 @@ export class ConnectionStore {
             list[0].isActive = true;
         }
 
+        if (list.length === 0) {
+            await this.context.globalState.update('giskard_enabled_chat_models_v1', []);
+        }
+
         await this._saveRawList(list);
     }
 
