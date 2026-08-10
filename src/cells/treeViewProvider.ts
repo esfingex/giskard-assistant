@@ -40,12 +40,15 @@ export class GiskardTreeItem extends vscode.TreeItem {
         } else if (itemType === 'remote-conn') {
             const activeTag = rawData?.tag || 'AI';
             this.description = `[${activeTag.toUpperCase()}]`;
-            this.iconPath = new vscode.ThemeIcon(rawData?.isActive ? 'cloud' : 'cloud-offline');
+            this.iconPath = rawData?.isActive
+                ? new vscode.ThemeIcon('cloud', new vscode.ThemeColor('testing.iconPassed'))
+                : new vscode.ThemeIcon('cloud-offline');
             this.contextValue = 'remoteConn';
-            this.tooltip = `Connection: ${rawData?.name}\nURL: ${rawData?.url}\nStatus: ${rawData?.isActive ? '🟢 Active' : '⚪ Standby'}`;
+            this.tooltip = `Connection: ${rawData?.name}\nURL: ${rawData?.url}\nStatus: ${rawData?.isActive ? '🟢 Active' : '⚪ Standby (Click to toggle)'}`;
             this.command = {
-                command: 'giskard-assistant.openChat',
-                title: 'Open Chat'
+                command: 'giskard-assistant.toggleConnectionActive',
+                title: 'Toggle Connection Active State',
+                arguments: [rawData?.id]
             };
         } else if (itemType === 'memory-bcf') {
             this.description = 'BCF Sovereign Graph';

@@ -84,6 +84,11 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.toggleConnectionActive",
+        "title": "Enable / Disable AI Connection",
+        "icon": "$(sync)"
+      },
+      {
         "command": "giskard-assistant.removeLocalModelTree",
         "title": "Remove / Unload Model",
         "icon": "$(trash)"
@@ -325,6 +330,11 @@
           "command": "giskard-assistant.removeExclusionPatternTree",
           "when": "view == giskard-file-exclusions && viewItem == exclusionPattern",
           "group": "inline"
+        },
+        {
+          "command": "giskard-assistant.toggleConnectionActive",
+          "when": "view == giskard-remote-connections && viewItem == remoteConn",
+          "group": "inline@1"
         },
         {
           "command": "giskard-assistant.removeRemoteConnectionTree",

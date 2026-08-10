@@ -117,6 +117,25 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage(`✓ Giskard-Sys connection saved.`);
             }
         }),
+        vscode.commands.registerCommand('giskard-assistant.toggleConnectionActive', async (arg: any) => {
+            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            if (rawId === undefined || rawId === null) return;
+
+            const connId = Number(rawId);
+            await store.toggleActive(connId);
+
+            const conn = store.getAll().find(c => Number(c.id) === connId);
+            const nameStr = conn ? conn.name : 'AI Connection';
+            const isActive = conn ? conn.isActive : false;
+
+            remoteConnsTree.refresh();
+            localModelsTree.refresh();
+            modelSettingsProvider.refresh();
+            await provider.refreshState();
+
+            const statusStr = isActive ? 'enabled 🟢 (Active)' : 'disabled ⚪ (Standby)';
+            vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" ${statusStr}.`);
+        }),
         vscode.commands.registerCommand('giskard-assistant.removeRemoteConnectionTree', async (arg: any) => {
             const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.connectionId ?? arg?.rawData?.id ?? arg?.id));
             if (rawId === undefined || rawId === null) return;
