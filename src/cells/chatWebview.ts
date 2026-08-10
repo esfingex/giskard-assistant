@@ -235,17 +235,26 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const activeTag = activeConn?.tag || 'giskard-sys';
         const activeName = activeConn?.name || (activeConn?.type === 'remote' ? 'Remote API' : 'Giskard-Sys');
 
-        const groups = await fetchLlmModelsGrouped();
-        const remoteModels = await fetchLlmModels();
+        const groups = await fetchLlmModelsGrouped().catch(() => []);
+        const remoteModels = await fetchLlmModels().catch(() => []);
 
         // Always query local Ollama models so they remain available in the model dropdown
         const ollamaConn = this._store.getAll().find(c => c.tag === 'ollama' || c.url.includes(':11434'));
         const ollamaUrl = ollamaConn?.url || 'http://127.0.0.1:11434';
         const localModels = await fetchOllamaModels(ollamaUrl).catch(() => []);
 
+        const flatGroupModels: string[] = [];
+        groups.forEach(g => {
+            if (g && Array.isArray(g.models)) {
+                flatGroupModels.push(...g.models);
+            }
+        });
+
+        const allFlatModels = Array.from(new Set([...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
+
         this._view.webview.postMessage({
             type: 'modelsList',
-            models: remoteModels,
+            models: allFlatModels,
             groups,
             localModels,
             activeTag,

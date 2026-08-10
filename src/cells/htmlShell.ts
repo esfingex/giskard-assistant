@@ -251,7 +251,6 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
                     <div class="model-popover-card" id="model-popover-card">
                         <div class="popover-search-row">
                             <input type="text" id="popover-search-input" placeholder="Search models...">
-                            <button class="popover-gear-btn" id="open-settings-btn" title="Abrir Ajustes">⚙️</button>
                         </div>
 
                         <div class="popover-model-list" id="popover-model-list">
