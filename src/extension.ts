@@ -318,7 +318,19 @@ export async function activate(context: vscode.ExtensionContext) {
             if (typeof arg === 'string') {
                 modelName = arg;
             } else if (arg && typeof arg === 'object') {
-                modelName = typeof arg.label === 'string' ? arg.label : (typeof arg.rawData === 'string' ? arg.rawData : '');
+                if (typeof arg.label === 'string') {
+                    modelName = arg.label;
+                } else if (arg.label && typeof arg.label.label === 'string') {
+                    modelName = arg.label.label;
+                } else if (typeof arg.rawData === 'string') {
+                    modelName = arg.rawData;
+                } else if (arg.rawData && typeof arg.rawData.name === 'string') {
+                    modelName = arg.rawData.name;
+                } else if (arg.rawData && typeof arg.rawData.model === 'string') {
+                    modelName = arg.rawData.model;
+                } else if (typeof arg.id === 'string') {
+                    modelName = arg.id;
+                }
             }
             if (!modelName) return;
 
@@ -328,6 +340,7 @@ export async function activate(context: vscode.ExtensionContext) {
             provider.postMessage({ type: 'setEnabledModels', enabledModels: enabledList });
             await provider.refreshState();
             localModelsTree.refresh();
+            modelSettingsProvider.refresh();
 
             const statusStr = isNowEnabled ? 'enabled 🟢 for Chat' : 'disabled ⚪ from Chat';
             vscode.window.showInformationMessage(`✓ Model '${modelName}' ${statusStr}.`);

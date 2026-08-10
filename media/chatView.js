@@ -21,6 +21,7 @@
             e.stopPropagation();
             modelPopoverCard.classList.toggle('open');
             if (modelPopoverCard.classList.contains('open')) {
+                vscode.postMessage({ type: 'getModels' });
                 renderPopoverLists();
                 if (popoverSearchInput) popoverSearchInput.focus();
             }
@@ -61,7 +62,7 @@
         const filteredActive = activeModelsSource.filter(m => m.toLowerCase().includes(q));
 
         if (filteredActive.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;">No active models selected.<br>Enable in Tree 👈</div>';
+            popoverModelList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:8px 6px;text-align:center;">No active models selected.<br>Enable in Tree 👈</div>';
         } else {
             popoverModelList.innerHTML = filteredActive.map(m => {
                 const isSel = m === currentActiveModel;
@@ -69,7 +70,7 @@
                 const checkMark = isSel ? '✓ ' : '';
                 return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                     <span>${checkMark}${escapeHtml(m)}</span>
-                    <span class="popover-model-badge">Active</span>
+                    <span class="popover-model-badge">${isSel ? 'Active' : 'Enabled'}</span>
                 </div>`;
             }).join('');
         }
