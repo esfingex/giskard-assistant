@@ -62,63 +62,54 @@
 
         const cleanedEnabled = _enabledModelsCache.map(cleanModelName).filter(Boolean);
         const cleanedAll = _allModelsCache.map(cleanModelName).filter(Boolean);
+        
+        // Single unified list: enabled models first, followed by all other available models
         const allAvailable = Array.from(new Set([...cleanedEnabled, ...cleanedAll]));
+        const filteredModels = allAvailable.filter(m => m.toLowerCase().includes(q));
 
-        console.log('[Giskard Popover Debug] cleanedEnabled:', cleanedEnabled);
-        console.log('[Giskard Popover Debug] cleanedAll:', cleanedAll);
-        console.log('[Giskard Popover Debug] allAvailable:', allAvailable);
-
-        let activeModelsSource = cleanedEnabled;
-        if (activeModelsSource.length === 0) {
-            activeModelsSource = allAvailable;
-        }
-
-        const filteredActive = activeModelsSource.filter(m => m.toLowerCase().includes(q));
-
-        if (filteredActive.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:8px 6px;text-align:center;">No hay modelos disponibles.<br>Verifica conexiones locales o remota 👈</div>';
+        if (filteredModels.length === 0) {
+            popoverModelList.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:8px 6px;text-align:center;">No hay modelos disponibles.<br>Verifica conexiones activas en la barra lateral 👈</div>';
         } else {
-            popoverModelList.innerHTML = filteredActive.map(m => {
+            popoverModelList.innerHTML = filteredModels.map(m => {
                 const isSel = (m === currentActiveModel);
                 const isCheckedInTree = cleanedEnabled.includes(m);
                 const selClass = isSel ? 'selected' : '';
                 const checkMark = isSel ? '✓ ' : '';
                 const badgeText = isSel ? 'Activo' : (isCheckedInTree ? 'Habilitado' : 'Disponible');
+                const badgeStyle = isSel ? 'background:rgba(56,189,248,0.25);color:#38bdf8;font-weight:bold;' : (isCheckedInTree ? 'background:rgba(34,197,94,0.18);color:#4ade80;font-weight:bold;' : 'opacity:0.6;');
+                
                 return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                     <span>${checkMark}${escapeHtml(m)}</span>
-                    <span class="popover-model-badge">${badgeText}</span>
+                    <span class="popover-model-badge" style="${badgeStyle}">${badgeText}</span>
                 </div>`;
             }).join('');
         }
 
         if (popoverOtherList) {
-            const otherModels = allAvailable.filter(m => !activeModelsSource.includes(m) && m.toLowerCase().includes(q));
-            if (otherModels.length === 0) {
-                popoverOtherList.innerHTML = '<div style="font-size:10px;color:#9ca3af;padding:4px 8px;">No hay modelos adicionales</div>';
-            } else {
-                popoverOtherList.innerHTML = otherModels.map(m => {
-                    const isSel = (m === currentActiveModel);
-                    const selClass = isSel ? 'selected' : '';
-                    return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
-                        <span>${escapeHtml(m)}</span>
-                    </div>`;
-                }).join('');
-            }
+            popoverOtherList.innerHTML = '';
         }
 
-        const items = document.querySelectorAll('.popover-model-item');
+        const items = popoverModelList.querySelectorAll('.popover-model-item');
         items.forEach(el => {
-            el.addEventListener('click', function() {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
                 const selected = el.getAttribute('data-model');
                 if (selected) {
                     currentActiveModel = selected;
                     const curTab = _subTabs.find(t => t.id === _activeTabId);
-                    if (curTab) curTab.model = selected;
-                    if (activeModelName) activeModelName.textContent = '🤖 ' + selected;
+                    if (curTab) {
+                        curTab.model = selected;
+                    }
+                    if (activeModelName) {
+                        activeModelName.textContent = '🤖 ' + selected;
+                    }
                     vscode.postMessage({ type: 'modelChanged', model: selected });
-                    if (modelPopoverCard) modelPopoverCard.classList.remove('open');
+                    if (modelPopoverCard) {
+                        modelPopoverCard.classList.remove('open');
+                    }
                     renderSubTabs();
                     renderPopoverLists();
+                    updateTokenCounter();
                 }
             });
         });
