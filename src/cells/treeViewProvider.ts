@@ -25,11 +25,12 @@ export class GiskardTreeItem extends vscode.TreeItem {
             if (caps.embedding) badges += '🧩 ';
 
             const isEnabled = Boolean(rawData?.isEnabled);
-            this.description = isEnabled ? `🟢 Active in Chat ${badges}`.trim() : `⚪ Disabled ${badges}`.trim();
+            this.description = badges.trim();
             this.iconPath = isEnabled
                 ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
                 : new vscode.ThemeIcon('circle-outline');
             this.contextValue = isEnabled ? 'enabledLocalModel' : 'disabledLocalModel';
+            this.tooltip = `Model: ${label}\nStatus: ${isEnabled ? '🟢 Active in Chat' : '⚪ Disabled'}`;
 
             this.command = {
                 command: 'giskard-assistant.toggleModelForChat',
@@ -38,9 +39,10 @@ export class GiskardTreeItem extends vscode.TreeItem {
             };
         } else if (itemType === 'remote-conn') {
             const activeTag = rawData?.tag || 'AI';
-            this.description = rawData?.isActive ? `🟢 Active [${activeTag.toUpperCase()}]` : `⚪ [${activeTag.toUpperCase()}]`;
+            this.description = `[${activeTag.toUpperCase()}]`;
             this.iconPath = new vscode.ThemeIcon(rawData?.isActive ? 'cloud' : 'cloud-offline');
             this.contextValue = 'remoteConn';
+            this.tooltip = `Connection: ${rawData?.name}\nURL: ${rawData?.url}\nStatus: ${rawData?.isActive ? '🟢 Active' : '⚪ Standby'}`;
             this.command = {
                 command: 'giskard-assistant.openChat',
                 title: 'Open Chat'
@@ -48,7 +50,6 @@ export class GiskardTreeItem extends vscode.TreeItem {
         } else if (itemType === 'memory-bcf') {
             this.description = 'BCF Sovereign Graph';
             this.iconPath = new vscode.ThemeIcon('graph');
-            this.contextValue = 'memoryBcf';
         }
     }
 }
@@ -66,8 +67,8 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
         this._onDidChangeTreeData.fire();
     }
 
-    setCapabilityFilter(filter: string): void {
-        this.activeCapabilityFilter = filter;
+    setCapabilityFilter(capability: string): void {
+        this.activeCapabilityFilter = capability;
         this.refresh();
     }
 
@@ -138,8 +139,8 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
             }
 
             return filteredGroups;
-        } catch {
-            return [new GiskardTreeItem('Local AI (127.0.0.1)', vscode.TreeItemCollapsibleState.None, 'header')];
+        } catch (err: any) {
+            return [new GiskardTreeItem(`Error loading models: ${err.message}`, vscode.TreeItemCollapsibleState.None, 'header')];
         }
     }
 }
@@ -190,7 +191,7 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
             item.contextValue = 'themeItem';
             item.command = {
                 command: 'giskard-assistant.selectThemeTree',
-                title: 'Aplicar Tema Visual',
+                title: 'Apply Visual Theme',
                 arguments: [t.preset]
             };
             return item;
@@ -225,11 +226,21 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
                     'header',
                     s
                 );
-                item.description = s.isActive ? `🟢 Active [${s.type.toUpperCase()}] ${s.commandOrUrl}` : `⚪ Disabled [${s.type.toUpperCase()}] ${s.commandOrUrl}`;
+                item.description = s.commandOrUrl;
                 item.iconPath = s.isActive
                     ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
                     : new vscode.ThemeIcon('circle-outline');
                 item.contextValue = 'mcpServer';
+
+                const tooltip = new vscode.MarkdownString();
+                tooltip.appendMarkdown(`**MCP Server:** ${s.name}\n\n`);
+                tooltip.appendMarkdown(`- **Type:** \`${s.type.toUpperCase()}\`\n`);
+                tooltip.appendMarkdown(`- **Status:** ${s.isActive ? '🟢 Active' : '⚪ Disabled'}\n`);
+                tooltip.appendMarkdown(`- **Command/URL:** \`${s.commandOrUrl}\`\n`);
+                if (s.tools && s.tools.length > 0) {
+                    tooltip.appendMarkdown(`- **Tools Discovered:** ${s.tools.length}\n`);
+                }
+                item.tooltip = tooltip;
                 return item;
             });
         }
@@ -246,11 +257,18 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
                     'header',
                     { serverId, toolId, tool: t }
                 );
-                item.description = isEnabled ? `🟢 Active — ${t.description || 'MCP Tool'}` : `⚪ Disabled — ${t.description || 'MCP Tool'}`;
+                item.description = t.description || 'MCP Tool';
                 item.iconPath = isEnabled
                     ? new vscode.ThemeIcon('symbol-method', new vscode.ThemeColor('testing.iconPassed'))
                     : new vscode.ThemeIcon('circle-outline');
                 item.contextValue = 'mcpTool';
+
+                const tooltip = new vscode.MarkdownString();
+                tooltip.appendMarkdown(`**MCP Tool:** \`${t.name}\`\n\n`);
+                tooltip.appendMarkdown(`- **Status:** ${isEnabled ? '🟢 Active' : '⚪ Disabled'}\n`);
+                tooltip.appendMarkdown(`- **Description:** ${t.description || 'No description provided'}\n`);
+                item.tooltip = tooltip;
+
                 item.command = {
                     command: 'giskard-assistant.toggleMcpToolTree',
                     title: 'Enable / Disable MCP Tool',
