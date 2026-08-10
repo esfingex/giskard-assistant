@@ -24,17 +24,20 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                 return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
             });
 
+            const enabledModels = this.store.getEnabledModels();
             const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
             localGroups.forEach(g => {
                 const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
                 g.models.forEach(m => {
-                    modelList.push({
-                        id: m,
-                        name: m,
-                        tag: tagUpper,
-                        label: `${m} [${tagUpper}]`
-                    });
+                    if (enabledModels.length === 0 || enabledModels.includes(m)) {
+                        modelList.push({
+                            id: m,
+                            name: m,
+                            tag: tagUpper,
+                            label: `${m} [${tagUpper}]`
+                        });
+                    }
                 });
             });
 
@@ -65,17 +68,20 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                         return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
                     });
 
+                    const enabledModels = this.store.getEnabledModels();
                     const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
                     localGroups.forEach(g => {
                         const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
                         g.models.forEach(m => {
-                            modelList.push({
-                                id: m,
-                                name: m,
-                                tag: tagUpper,
-                                label: `${m} [${tagUpper}]`
-                            });
+                            if (enabledModels.length === 0 || enabledModels.includes(m)) {
+                                modelList.push({
+                                    id: m,
+                                    name: m,
+                                    tag: tagUpper,
+                                    label: `${m} [${tagUpper}]`
+                                });
+                            }
                         });
                     });
 
