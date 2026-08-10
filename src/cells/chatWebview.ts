@@ -279,11 +279,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        const allFlatModels = Array.from(new Set([...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
+        const allFlatModels = Array.from(new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
 
         this.postMessage({
             type: 'modelsList',
             models: allFlatModels,
+            enabledModels,
             groups,
             localModels,
             activeTag,

@@ -763,6 +763,9 @@
             case 'modelsLoaded':
             case 'modelsList':
                 console.log('[Giskard Webview] modelsList payload:', message);
+                if (Array.isArray(message.enabledModels)) {
+                    _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
+                }
                 let list = [];
                 if (Array.isArray(message.models)) list = list.concat(message.models);
                 if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
@@ -774,7 +777,22 @@
                     });
                 }
                 _allModelsCache = Array.from(new Set(list.map(cleanModelName).filter(Boolean)));
-                console.log('[Giskard Webview] _allModelsCache parsed:', _allModelsCache);
+
+                if (!currentActiveModel) {
+                    currentActiveModel = _enabledModelsCache[0] || _allModelsCache[0] || '';
+                }
+
+                const activeCurTab = _subTabs.find(t => t.id === _activeTabId);
+                if (activeCurTab) {
+                    if (!activeCurTab.model && currentActiveModel) {
+                        activeCurTab.model = currentActiveModel;
+                    }
+                    if (activeModelName) {
+                        activeModelName.textContent = '🤖 ' + (activeCurTab.model || currentActiveModel || 'Modelo');
+                    }
+                }
+
+                renderSubTabs();
                 renderPopoverLists();
                 break;
 
