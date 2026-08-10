@@ -133,13 +133,13 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
         const list = _store.getAll();
         const activeConnections = list.filter(c => c.isActive);
 
-        const connsToQuery = activeConnections.length > 0
-            ? activeConnections
-            : [{ id: 0, name: 'Giskard-Sys', type: 'local' as const, url: getConnectorUrl(), tag: 'giskard-sys', isActive: true }];
+        if (activeConnections.length === 0) {
+            return [];
+        }
 
         const groups: ConnectionModelsGroup[] = [];
 
-        for (const conn of connsToQuery) {
+        for (const conn of activeConnections) {
             const apiKey = conn.id ? (await _store.getApiKey(conn.id) || '') : '';
             const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey);
             if (providerModels.length > 0) {

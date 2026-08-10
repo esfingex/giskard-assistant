@@ -118,8 +118,8 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.removeRemoteConnectionTree', async (arg: any) => {
-            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.connectionId || arg?.rawData?.id || arg?.id));
-            if (!rawId) return;
+            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.connectionId ?? arg?.rawData?.id ?? arg?.id));
+            if (rawId === undefined || rawId === null) return;
 
             const connId = Number(rawId);
             const conn = store.getAll().find(c => Number(c.id) === connId);
