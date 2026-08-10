@@ -143,21 +143,20 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     public injectCodeContext(contextBlock: { relativePath: string; startLine: number; endLine: number; code: string; lang: string }) {
-        if (!this._view) return;
-        this._view.webview.postMessage({
+        this.postMessage({
             type: 'injectCodeSnippet',
             contextBlock
         });
     }
 
     private async _sendConnectionsList() {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         const connections = this._store.getAll();
-        this._view.webview.postMessage({ type: 'connectionsLoaded', connections });
+        this.postMessage({ type: 'connectionsLoaded', connections });
     }
 
     private async _handleAddConnection(data: any) {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         try {
             const id = await this._store.addConnection(
                 data.name,
@@ -170,13 +169,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             await this._store.setActive(id);
             await this.refreshState();
         } catch (err: any) {
-            this._view.webview.postMessage({ type: 'connectionError', error: err.message });
+            this.postMessage({ type: 'connectionError', error: err.message });
             vscode.window.showErrorMessage(`Error guardando conexión: ${err.message}`);
         }
     }
 
     private async _handleRemoveConnection(id: number) {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         try {
             await this._store.removeConnection(id);
             vscode.window.showInformationMessage(`✓ Connection deleted.`);
@@ -187,7 +186,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleResetConnections() {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         try {
             const list = this._store.getAll();
             for (const c of list) {
@@ -202,7 +201,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleActivateConnection(id: number) {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         try {
             await this._store.setActive(id);
             const active = this._store.getActive();
@@ -215,7 +214,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleTestConnectionUrl(url: string) {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
         const start = Date.now();
         try {
             const cleanUrl = url.trim().replace(/\/$/, '');
@@ -231,7 +230,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 401 || res.status === 404 || res.status === 405));
             let statusText = `HTTP ${res?.status}`;
             if (res?.status === 401) statusText += ' (Requiere API Key)';
-            this._view.webview.postMessage({
+            this.postMessage({
                 type: 'connectionTested',
                 ok,
                 status: res?.status,
@@ -245,7 +244,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que el servidor esté activo';
             else if (err.message.includes('ENOTFOUND')) reason = 'Host no encontrado — verifica la URL';
 
-            this._view.webview.postMessage({
+            this.postMessage({
                 type: 'connectionTested',
                 ok: false,
                 error: reason,
@@ -255,11 +254,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _sendModelsList() {
-        if (!this._view) return;
+        if (!this._view && !this._panel) return;
 
         // Immediately send cached enabled models without waiting for network calls
         const enabledModels = this._store.getEnabledModels();
-        this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
+        this.postMessage({ type: 'setEnabledModels', enabledModels });
 
         const activeConn = this._store.getActive();
         const activeTag = activeConn?.tag || 'giskard-sys';
@@ -282,7 +281,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         const allFlatModels = Array.from(new Set([...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
 
-        this._view.webview.postMessage({
+        this.postMessage({
             type: 'modelsList',
             models: allFlatModels,
             groups,
