@@ -213,15 +213,11 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     </style>
 </head>
 <body>
+    <div class="chat-container">
         <div class="header">
-            <div style="font-size: 11px; font-weight: 600; color: #38bdf8; display:flex; align-items:center; gap:8px;">
-                <span>🤖 Giskard Assistant</span>
-                <button class="btn-new-chat" id="new-chat-btn" title="Nuevo Chat (Nueva conversación)" style="background:rgba(56, 189, 248, 0.15); border:1px solid rgba(56, 189, 248, 0.4); color:#38bdf8; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold; padding:2px 8px; display:flex; align-items:center; gap:4px;">
-                    <span>➕ Nuevo Chat</span>
-                </button>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center;">
-                <button class="btn-clear" id="clear-ctx-btn" title="Limpiar Conversación Activa" style="background:transparent;border:none;cursor:pointer;font-size:13px;padding:2px 4px;">🗑️</button>
+            <div style="display: flex; gap: 6px; align-items: center; justify-content: flex-end; width: 100%;">
+                <button class="btn-new-chat" id="new-chat-btn" title="Nuevo Chat (Nueva conversación)" style="background:transparent; border:none; cursor:pointer; font-size:13px; padding:2px 4px;">➕</button>
+                <button class="btn-clear" id="clear-ctx-btn" title="Limpiar Conversación Activa" style="background:transparent; border:none; cursor:pointer; font-size:13px; padding:2px 4px;">🗑️</button>
             </div>
         </div>
 
