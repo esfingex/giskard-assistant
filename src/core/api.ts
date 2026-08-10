@@ -137,21 +137,32 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
             return [];
         }
 
-        const groups: ConnectionModelsGroup[] = [];
-
-        for (const conn of activeConnections) {
-            const apiKey = conn.id ? (await _store.getApiKey(conn.id) || '') : '';
-            const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey);
-            if (providerModels.length > 0) {
-                groups.push({
-                    connectionId: conn.id,
-                    connectionName: conn.name,
-                    connectionTag: conn.tag,
-                    connectionUrl: conn.url,
-                    models: providerModels
-                });
+        const groupPromises = activeConnections.map(async (conn) => {
+            try {
+                const apiKey = conn.id ? (await _store!.getApiKey(conn.id) || '') : '';
+                const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey).catch(() => []);
+                if (providerModels && providerModels.length > 0) {
+                    return {
+                        connectionId: conn.id,
+                        connectionName: conn.name,
+                        connectionTag: conn.tag,
+                        connectionUrl: conn.url,
+                        models: providerModels
+                    } as ConnectionModelsGroup;
+                }
+            } catch {
+                // Ignore individual connection fetch failures
             }
-        }
+            return null;
+        });
+
+        const results = await Promise.allSettled(groupPromises);
+        const groups: ConnectionModelsGroup[] = [];
+        results.forEach(r => {
+            if (r.status === 'fulfilled' && r.value) {
+                groups.push(r.value);
+            }
+        });
 
         return groups;
     } catch {

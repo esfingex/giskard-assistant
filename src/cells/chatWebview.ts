@@ -260,6 +260,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const enabledModels = this._store.getEnabledModels();
         this.postMessage({ type: 'setEnabledModels', enabledModels });
 
+        if (enabledModels.length > 0) {
+            this.postMessage({
+                type: 'modelsList',
+                models: enabledModels,
+                enabledModels,
+                groups: [],
+                localModels: enabledModels,
+                activeTag: 'giskard-sys',
+                activeName: 'Giskard-Sys',
+                currentUrl: getConnectorUrl()
+            });
+        }
+
         const activeConn = this._store.getActive();
         const activeTag = activeConn?.tag || 'giskard-sys';
         const activeName = activeConn?.name || (activeConn?.type === 'remote' ? 'Remote API' : 'Giskard-Sys');
