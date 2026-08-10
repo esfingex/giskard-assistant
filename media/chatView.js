@@ -221,6 +221,13 @@
         renderPopoverLists();
     }
 
+    function resequenceSubTabs() {
+        _subTabs.forEach((t, i) => {
+            t.title = 'Chat ' + (i + 1);
+        });
+        _subTabCounter = _subTabs.length;
+    }
+
     function closeSubTab(tabId) {
         if (_subTabs.length <= 1) return;
 
@@ -228,6 +235,8 @@
         if (idx === -1) return;
 
         _subTabs.splice(idx, 1);
+
+        resequenceSubTabs();
 
         if (_activeTabId === tabId) {
             const nextIdx = Math.max(0, idx - 1);
