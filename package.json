@@ -84,6 +84,11 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.addModelOrConnection",
+        "title": "➕ Add / Pull AI Model (Ollama / Remote / Giskard-Sys)",
+        "icon": "$(add)"
+      },
+      {
         "command": "giskard-assistant.addRemoteConnectionTree",
         "title": "➕ Add AI Connection (Remote/Local)",
         "icon": "$(add)"
@@ -270,9 +275,9 @@
           "group": "navigation@4"
         },
         {
-          "command": "giskard-assistant.openSettingsModal",
+          "command": "giskard-assistant.addModelOrConnection",
           "when": "view == giskard-local-models",
-          "group": "navigation@5"
+          "group": "navigation@1"
         },
         {
           "command": "giskard-assistant.addRemoteConnectionTree",

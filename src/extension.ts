@@ -76,6 +76,47 @@ export async function activate(context: vscode.ExtensionContext) {
             provider.postMessage({ type: 'clearMessages' });
             vscode.window.showInformationMessage('💬✨ New chat context initialized.');
         }),
+        vscode.commands.registerCommand('giskard-assistant.addModelOrConnection', async () => {
+            const action = await vscode.window.showQuickPick([
+                { label: '🦙 Pull Local Ollama Model', detail: 'Download/Pull a model into Ollama (e.g. qwen2.5-coder, deepseek-r1:8b, llama3.2)', id: 'ollama-pull' },
+                { label: '🌐 Add Remote AI Provider', detail: 'Configure DeepSeek, NVIDIA NIM, OpenAI, Anthropic, Gemini API Key & URL', id: 'remote-conn' },
+                { label: '🦀 Connect to Giskard-Sys Backend', detail: 'Connect to Rust Axum local backend (default port 3500)', id: 'giskard-sys' }
+            ], { placeHolder: 'Select Action to Add AI Model or Provider' });
+
+            if (!action) return;
+
+            if (action.id === 'ollama-pull') {
+                const modelName = await vscode.window.showInputBox({
+                    prompt: 'Enter Ollama Model Name to Pull',
+                    placeHolder: 'e.g. qwen2.5-coder:7b, deepseek-r1:8b, llama3.2:3b, mistral'
+                });
+                if (!modelName || !modelName.trim()) return;
+
+                const targetModel = modelName.trim();
+                vscode.window.showInformationMessage(`🦙 Pulling Ollama model '${targetModel}' in background...`);
+
+                const terminal = vscode.window.createTerminal(`Ollama Pull ${targetModel}`);
+                terminal.show();
+                terminal.sendText(`ollama pull ${targetModel}`);
+
+                await store.toggleModelEnabled(targetModel);
+                localModelsTree.refresh();
+                await provider.refreshState();
+            } else if (action.id === 'remote-conn') {
+                await vscode.commands.executeCommand('giskard-assistant.addRemoteConnectionTree');
+            } else if (action.id === 'giskard-sys') {
+                const url = await vscode.window.showInputBox({
+                    prompt: 'Giskard-Sys Axum Server URL',
+                    value: 'http://localhost:3500'
+                });
+                if (!url) return;
+                await store.addConnection('Giskard-Sys Backend', 'local', url, 'giskard-sys');
+                localModelsTree.refresh();
+                remoteConnsTree.refresh();
+                await provider.refreshState();
+                vscode.window.showInformationMessage(`✓ Giskard-Sys connection saved.`);
+            }
+        }),
         vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
             const name = await vscode.window.showInputBox({ prompt: 'AI Connection Name', placeHolder: 'e.g. DeepSeek API / Ollama / NVIDIA NIM' });
             if (!name) return;
