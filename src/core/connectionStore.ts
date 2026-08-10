@@ -188,11 +188,12 @@ export class ConnectionStore {
         return newState;
     }
 
-    /** Remove a model from enabled list */
+    /** Remove a model from enabled list and purge its saved settings */
     async removeEnabledModel(modelName: string): Promise<void> {
         const current = this.getEnabledModels();
         const list = current.filter(m => m !== modelName);
         await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
+        await this.removeModelOverrides(modelName);
     }
 
     /** Add a new connection profile */
@@ -464,6 +465,15 @@ export class ConnectionStore {
         const current = allMap[modelName] || { ...DEFAULT_MODEL_SETTINGS };
         allMap[modelName] = { ...current, ...settings };
         await this.context.globalState.update(MODEL_OVERRIDES_STORAGE_KEY, allMap);
+    }
+
+    /** Delete stored hyperparameter overrides for a specific model name */
+    async removeModelOverrides(modelName: string): Promise<void> {
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        if (allMap[modelName]) {
+            delete allMap[modelName];
+            await this.context.globalState.update(MODEL_OVERRIDES_STORAGE_KEY, allMap);
+        }
     }
 
     dispose(): void {
