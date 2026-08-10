@@ -9,7 +9,7 @@
  */
 
 import * as vscode from 'vscode';
-import { GiskardChatWebviewProvider } from './cells/chatWebview';
+import { GiskardChatWebviewProvider, createNewChatPanelTab } from './cells/chatWebview';
 import { registerSandboxCommands } from './cells/sandboxCommands';
 import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore, fetchLlmModels } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
@@ -419,8 +419,11 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // 4. Comando de Sincronización de Estado
+    // 4. Comando de Sincronización de Estado y Nuevo Tab de Chat
     context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-assistant.openChatTab', () => {
+            createNewChatPanelTab(context, store);
+        }),
         vscode.commands.registerCommand('giskard-assistant.syncState', async () => {
             await provider.refreshState();
             vscode.window.showInformationMessage('✓ Estado del conector sincronizado.');

@@ -89,26 +89,56 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         await this.refreshState();
     }
 
+    private _panel?: vscode.WebviewPanel;
+
+    public async attachPanel(panel: vscode.WebviewPanel) {
+        this._panel = panel;
+        panel.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [this._extensionUri]
+        };
+
+        panel.webview.html = await getHtmlForWebview(this._extensionUri, panel.webview);
+        this._setWebviewMessageListener(panel.webview);
+
+        panel.onDidDispose(() => {
+            if (this._activeAbortController) {
+                this._activeAbortController.abort();
+            }
+            this._panel = undefined;
+        });
+
+        await this.refreshState();
+    }
+
     public get view(): vscode.WebviewView | undefined {
         return this._view;
     }
 
     public async refreshState() {
-        if (this._view) {
-            const enabledModels = this._store.getEnabledModels();
-            this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
+        const enabledModels = this._store.getEnabledModels();
+        const patterns = this._store.getExclusionPatterns();
 
-            const patterns = this._store.getExclusionPatterns();
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'setEnabledModels', enabledModels });
             this._view.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
         }
+        if (this._panel) {
+            this._panel.webview.postMessage({ type: 'setEnabledModels', enabledModels });
+            this._panel.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
+        }
+
         await this._sendConnectionsList();
         await this._sendModelsList();
-        await sendMcpServersList(this._view, this._store);
+        if (this._view) await sendMcpServersList(this._view, this._store);
     }
 
     public postMessage(message: any) {
         if (this._view) {
             this._view.webview.postMessage(message);
+        }
+        if (this._panel) {
+            this._panel.webview.postMessage(message);
         }
     }
 
@@ -891,7 +921,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'webviewReady':
                     await this.refreshState();
                     break;
+                case 'createNewChatTab':
+                    vscode.commands.executeCommand('giskard-assistant.openChatTab');
+                    break;
                 case 'fetchModels':
+                case 'getModels':
                     await this._sendModelsList();
                     break;
                 case 'saveSettings':
@@ -1062,4 +1096,26 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({ type: 'streamError', error: `Graphify error: ${err.message}` });
         }
     }
+}
+
+let _chatTabCounter = 1;
+
+export function createNewChatPanelTab(context: vscode.ExtensionContext, store: ConnectionStore, title?: string) {
+    _chatTabCounter++;
+    const panelTitle = title || `GISKARD #${_chatTabCounter}`;
+    const panel = vscode.window.createWebviewPanel(
+        'giskard-chat-tab',
+        panelTitle,
+        vscode.ViewColumn.Active,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: [context.extensionUri]
+        }
+    );
+
+    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'giskard.svg');
+
+    const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
+    provider.attachPanel(panel);
 }
