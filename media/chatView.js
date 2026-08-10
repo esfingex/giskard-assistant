@@ -131,9 +131,8 @@
     let _activeTabId = 'tab-1';
     let _subTabCounter = 1;
 
-    const subTabBar = document.getElementById('sub-tab-bar');
-
     function renderSubTabs() {
+        const subTabBar = document.getElementById('sub-tab-bar');
         if (!subTabBar) return;
 
         subTabBar.innerHTML = _subTabs.map(t => {
@@ -243,7 +242,11 @@
     }
 
     // Initialize sub-tabs bar
-    renderSubTabs();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderSubTabs);
+    } else {
+        renderSubTabs();
+    }
 
     const newChatBtn = document.getElementById('new-chat-btn');
     if (newChatBtn) {
