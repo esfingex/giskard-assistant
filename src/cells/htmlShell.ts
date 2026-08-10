@@ -276,7 +276,6 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
             </div>
             <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 6px;">
                 <button class="btn-subtab-add" id="new-chat-btn" title="Nuevo Chat (Pestaña interna)">➕</button>
-                <button class="btn-clear" id="clear-ctx-btn" title="Limpiar Conversación Activa" style="background:transparent; border:none; cursor:pointer; font-size:13px; padding:2px 4px;">🗑️</button>
             </div>
         </div>
 
