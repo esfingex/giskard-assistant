@@ -118,13 +118,21 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.removeRemoteConnectionTree', async (arg: any) => {
-            const connId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
-            if (!connId) return;
+            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.connectionId || arg?.rawData?.id || arg?.id));
+            if (!rawId) return;
 
-            const conn = store.getAll().find(c => Number(c.id) === Number(connId));
-            const nameStr = conn ? conn.name : 'AI Connection';
+            const connId = Number(rawId);
+            const conn = store.getAll().find(c => Number(c.id) === connId);
+            const nameStr = conn ? conn.name : (arg?.rawData?.connectionName || 'AI Connection');
 
-            await store.removeConnection(Number(connId));
+            const confirm = await vscode.window.showWarningMessage(
+                `Delete AI connection profile '${nameStr}'?`,
+                { modal: true },
+                'Delete Connection'
+            );
+            if (confirm !== 'Delete Connection') return;
+
+            await store.removeConnection(connId);
             remoteConnsTree.refresh();
             localModelsTree.refresh();
             await provider.refreshState();

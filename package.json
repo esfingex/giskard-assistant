@@ -333,7 +333,7 @@
         },
         {
           "command": "giskard-assistant.removeRemoteConnectionTree",
-          "when": "view == giskard-remote-connections && viewItem == remoteConn",
+          "when": "(view == giskard-remote-connections && viewItem == remoteConn) || (view == giskard-local-models && viewItem == connectionHeaderGroup)",
           "group": "inline"
         },
         {

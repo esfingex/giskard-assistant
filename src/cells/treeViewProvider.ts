@@ -85,8 +85,9 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
         const enabledModels = this.store.getEnabledModels();
 
         // If child of a connection group, return models in that group
-        if (element && element.itemType === 'header' && Array.isArray(element.rawData)) {
-            return element.rawData.map(m => new GiskardTreeItem(
+        const modelsList = Array.isArray(element?.rawData) ? element?.rawData : element?.rawData?.models;
+        if (element && element.itemType === 'header' && Array.isArray(modelsList)) {
+            return modelsList.map((m: string) => new GiskardTreeItem(
                 m,
                 vscode.TreeItemCollapsibleState.None,
                 'local-model',
@@ -127,8 +128,14 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                 if (matchingModels.length > 0) {
                     const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
                     const title = `${grp.connectionName} [${tagUpper}] (${matchingModels.length})`;
-                    const item = new GiskardTreeItem(title, vscode.TreeItemCollapsibleState.Expanded, 'header', matchingModels);
+                    const item = new GiskardTreeItem(
+                        title,
+                        vscode.TreeItemCollapsibleState.Expanded,
+                        'header',
+                        { id: grp.connectionId, connectionId: grp.connectionId, connectionName: grp.connectionName, models: matchingModels }
+                    );
                     item.iconPath = new vscode.ThemeIcon('server');
+                    item.contextValue = 'connectionHeaderGroup';
                     filteredGroups.push(item);
                 }
             }
