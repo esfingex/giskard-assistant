@@ -185,6 +185,13 @@ export class ConnectionStore {
         return newState;
     }
 
+    /** Remove a model from enabled list */
+    async removeEnabledModel(modelName: string): Promise<void> {
+        const current = this.getEnabledModels();
+        const list = current.filter(m => m !== modelName);
+        await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
+    }
+
     /** Add a new connection profile */
     async addConnection(
         name: string,

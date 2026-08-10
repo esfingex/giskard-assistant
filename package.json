@@ -84,6 +84,11 @@
     },
     "commands": [
       {
+        "command": "giskard-assistant.removeLocalModelTree",
+        "title": "Remove / Unload Model",
+        "icon": "$(trash)"
+      },
+      {
         "command": "giskard-assistant.addModelOrConnection",
         "title": "➕ Add / Pull AI Model (Ollama / Remote / Giskard-Sys)",
         "icon": "$(add)"
@@ -329,6 +334,11 @@
         {
           "command": "giskard-assistant.removeRemoteConnectionTree",
           "when": "view == giskard-remote-connections && viewItem == remoteConn",
+          "group": "inline"
+        },
+        {
+          "command": "giskard-assistant.removeLocalModelTree",
+          "when": "view == giskard-local-models && (viewItem == enabledLocalModel || viewItem == disabledLocalModel)",
           "group": "inline"
         }
       ]

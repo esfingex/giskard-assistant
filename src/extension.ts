@@ -223,6 +223,32 @@ export async function activate(context: vscode.ExtensionContext) {
             provider.postMessage({ type: 'selectTheme', theme: themeLabel });
             vscode.window.showInformationMessage(`🎨 Visual theme applied: ${themeLabel}`);
         }),
+        vscode.commands.registerCommand('giskard-assistant.removeLocalModelTree', async (arg: any) => {
+            let modelName = '';
+            if (typeof arg === 'string') {
+                modelName = arg;
+            } else if (arg && typeof arg === 'object') {
+                modelName = typeof arg.label === 'string' ? arg.label : (typeof arg.rawData === 'string' ? arg.rawData : '');
+            }
+            if (!modelName) return;
+
+            const choice = await vscode.window.showWarningMessage(
+                `Remove or unload model '${modelName}'?`,
+                'Remove from Active List',
+                'Delete Ollama Model (ollama rm)'
+            );
+            if (!choice) return;
+
+            if (choice === 'Delete Ollama Model (ollama rm)') {
+                const terminal = vscode.window.createTerminal(`Ollama Rm ${modelName}`);
+                terminal.sendText(`ollama rm ${modelName}`);
+            }
+
+            await store.removeEnabledModel(modelName);
+            localModelsTree.refresh();
+            await provider.refreshState();
+            vscode.window.showInformationMessage(`✓ Model '${modelName}' removed.`);
+        }),
         vscode.commands.registerCommand('giskard-assistant.toggleModelForChat', async (arg: any) => {
             let modelName = '';
             if (typeof arg === 'string') {
