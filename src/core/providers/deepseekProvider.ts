@@ -21,5 +21,5 @@ export async function fetchDeepseekModels(baseUrl: string = DEEPSEEK_DEFAULT_URL
             }
         }
     } catch { }
-    return ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'];
+    return [];
 }

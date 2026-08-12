@@ -7,31 +7,86 @@ import { fetchWithTimeout, CLIENT_ID } from '../api';
 
 export const NVIDIA_NIM_DEFAULT_URL = 'https://integrate.api.nvidia.com/v1';
 
-export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL, apiKey?: string): Promise<string[]> {
-    try {
-        const cleanUrl = baseUrl.replace(/\/$/, '');
-        const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
-        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+/** Session-level cache — populated on first successful fetch */
+let _cachedNvidiaModels: string[] | null = null;
 
-        const res = await fetchWithTimeout(`${cleanUrl}/models`, { headers }, 5000).catch(() => null);
+export function clearNvidiaModelCache() {
+    _cachedNvidiaModels = null;
+}
+
+export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL, apiKey?: string): Promise<string[]> {
+    if (_cachedNvidiaModels && _cachedNvidiaModels.length > 0) {
+        return _cachedNvidiaModels;
+    }
+
+    const cleanUrl = baseUrl.replace(/\/$/, '');
+    const modelsUrl = `${cleanUrl}/models`;
+
+    const filterModel = (id: string): boolean => {
+        const l = id.toLowerCase();
+        return id.includes('/') &&
+            !l.includes('embed') &&
+            !l.includes('detector') &&
+            !l.includes('translate') &&
+            !l.includes('clip') &&
+            !l.includes('guard') &&
+            !l.includes('rerank') &&
+            !l.includes('retrieve') &&
+            !l.includes('parse') &&
+            !l.includes('reward') &&
+            !l.includes('safety') &&
+            !l.includes('riva') &&
+            !l.includes('neva') &&
+            !l.includes('nvclip');
+    };
+
+    // 1. Try with API key (user-authenticated)
+    if (apiKey && apiKey.trim()) {
+        try {
+            const res = await fetchWithTimeout(modelsUrl, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey.trim()}`,
+                    'X-Client-Id': CLIENT_ID
+                }
+            }, 8000).catch(() => null);
+
+            if (res && res.ok) {
+                const data: any = await res.json().catch(() => null);
+                if (data?.data && Array.isArray(data.data)) {
+                    const models = data.data
+                        .map((m: any) => (m.id || '').trim())
+                        .filter(filterModel)
+                        .sort();
+                    if (models.length > 0) {
+                        _cachedNvidiaModels = models;
+                        return models;
+                    }
+                }
+            }
+        } catch { }
+    }
+
+    // 2. Fetch without API key (public endpoint)
+    try {
+        const res = await fetchWithTimeout(modelsUrl, {
+            headers: { 'X-Client-Id': CLIENT_ID }
+        }, 8000).catch(() => null);
+
         if (res && res.ok) {
             const data: any = await res.json().catch(() => null);
-            if (data && Array.isArray(data.data) && data.data.length > 0) {
-                const fetched = data.data
-                    .map((m: any) => m.id || m.name || String(m))
-                    .filter((id: string) => {
-                        const l = id.toLowerCase();
-                        return !l.includes('embed') && !l.includes('detector') && !l.includes('translate') && !l.includes('parse') && !l.includes('clip') && !l.includes('guard');
-                    });
-                if (fetched.length > 0) return fetched;
+            if (data?.data && Array.isArray(data.data)) {
+                const models = data.data
+                    .map((m: any) => (m.id || '').trim())
+                    .filter(filterModel)
+                    .sort();
+                if (models.length > 0) {
+                    _cachedNvidiaModels = models;
+                    return models;
+                }
             }
         }
     } catch { }
-    return [
-        'meta/llama-3.3-70b-instruct',
-        'nvidia/llama-3.1-nemotron-70b-instruct',
-        'openai/gpt-oss-120b',
-        'mistralai/codestral-22b-instruct-v0.1',
-        'ibm/granite-34b-code-instruct'
-    ];
+
+    // If fetch fails / no connection -> return empty list (no hardcoding)
+    return [];
 }

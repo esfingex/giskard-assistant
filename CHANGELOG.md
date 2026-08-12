@@ -1,5 +1,54 @@
 # CHANGELOG — Giskard Assistant (VSCode Extension)
 
+## [4.2.6] - 2026-08-10
+
+### Fixed
+- **Aislamiento Total de Conexión por Sub-Chat y Modelo (`chatWebview.ts`):**
+  - **Aislamiento 100% Independiente:** Cada pestaña de sub-chat (`Chat 1`, `Chat 2`, `Chat 3`...) resuelve su conexión destino analizando directamente la metadata del modelo seleccionado en dicha pestaña (`targetModel` ➔ `connGroup`).
+  - **Sin Interferencia Global:** Se eliminó la dependencia de la conexión activa global del sidebar (`activeConn`) para ruteos de chat. Tener seleccionada la pestaña de NVIDIA NIM API en el sidebar ya no altera ni interfiere con las peticiones de `Chat 1` ruteadas al backend local de `Giskard-Sys`.
+
+## [4.2.5] - 2026-08-10
+
+### Fixed
+- **Resolución de Tag de Modelo y Reset de Estado en `streamError` (`chatView.js` & `chatWebview.ts`):**
+  - **Fix 1 (Reset de Estado DOM):** Al producirse un `streamError`, `chatView.js` resetea inmediatamente `currentBotMsgDiv = null` y `currentBotRawText = ''`, impidiendo que errores de conexión pasados o respuestas subsiguientes concatenen texto en la misma caja de mensaje.
+  - **Fix 2 (Asignación de Tag de Modelo en Error):** `chatWebview.ts` envía `model: targetModel` en todos los mensajes de `streamError`, garantizando que la etiqueta que encabeza la caja refleje con precisión el modelo que falló (y no el modelo activo general del selector).
+  - **Fix 3 (Aislamiento de Conexión Activa Remota):** La clasificación de fallback sólo marca un modelo como remoto si la etiqueta del proveedor coincide explícitamente con la conexión remota activa (`vendorTag === activeConn.tag`), evitando que modelos locales de Ollama (`hf.co/unsloth/...`) hereden el perfil de NVIDIA NIM API cuando la pestaña de NVIDIA está seleccionada.
+
+## [4.2.4] - 2026-08-10
+
+### Refactored
+- **Limpieza de Cadenas Hardcodeadas de Puertos/IPs (`chatWebview.ts`):**
+  - **Refactorización:** Se eliminaron las comprobaciones manuales de strings con puertos e IPs (`:3500`, `:11434`, `localhost`, `127.0.0.1`) en la selección de `connectorUrl`.
+  - **Metadata de Conexión:** La resolución de la URL del backend se realiza directamente sobre el objeto `Connection` y la propiedad `type: 'local' | 'remote'` e `id` asignados al grupo del modelo (`connGroup.connectionUrl`).
+  - **Compatibilidad:** Permite que `giskard-sys` u `Ollama` funcionen transparentemente en cualquier puerto configurado o IP remota de red sin requerir código de puerto hardcodeado.
+
+## [4.2.3] - 2026-08-10
+
+### Fixed
+- **Fix de conector bloqueado ("Pensando...") para modelos Ollama / HuggingFace:**
+  - **Causa Raíz 1 (Precedencia de URL):** La expresión de `connectorUrl` mezclaba precedencia lógica enviando peticiones de modelos locales a URLs de API remota (p. ej. NVIDIA NIM), causando timeouts colgados en el streaming de red.
+  - **Causa Raíz 2 (Reemplazo indebido en fallback):** `_streamFromOllamaFallback` sobreescribía los nombres de modelo que contenían `/` (como `hf.co/unsloth/Qwen-AgentWorld...`) sustituyéndolos por el primer modelo detectado localmente.
+  - **Solución:** Se corrigió el cálculo de `connectorUrl` asegurando que siempre resuelva al conector local `http://localhost:3500` para modelos de Giskard-Sys, y se eliminó la substitución de nombres con `/` para respetar modelos de HuggingFace Hub en Ollama.
+
+## [4.2.2] - 2026-08-10
+
+### Fixed
+- **Resolución Inteligente de Proveedores por Conexión (Fix de "API Key missing for hf.co/..."):**
+  - **Causa Raíz:** En `chatWebview.ts`, la heurística previa `!targetModel.startsWith('local:')` clasificaba erróneamente cualquier modelo cuyo nombre no iniciara explícitamente por `"local:"` como un modelo de API Remota. Para los modelos de Ollama descargados desde HuggingFace Hub (p. ej. `hf.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF:Q3_K_M`), se extraía el prefijo `hf.co` como etiqueta de proveedor remoto y fallaba solicitando una API Key inexistente.
+  - **Fix Implementado:** Se introdujo `_modelConnectionMap` en `GiskardChatWebviewProvider`. Al cargar la lista de modelos (`_sendModelsList`), el webview asocia dinámicamente cada modelo a su grupo de conexión (`Giskard-Sys`, `Ollama`, `NVIDIA NIM`, `OpenAI`, `DeepSeek`, etc.).
+  - **Ruteo Dinámico:** Si el modelo pertenece a la conexión local de `Giskard-Sys` u `Ollama`, se rutea localmente sin solicitar API Key remota. Si pertenece a una conexión remota (p. ej. `NVIDIA NIM`), se utilizan las credenciales de dicho perfil.
+  - **Aumento de Timeout Remoto:** Se incrementó el tiempo de espera inicial en la API remota de 12s a 60s para acomodar modelos grandes o de razonamiento.
+
+## [4.2.1] - 2026-08-10
+
+### Fixed
+- **Chat Model Popover — "No hay modelos disponibles" bug eliminado:** El popover del selector de modelos en el chat mostraba el mensaje de error aunque los modelos estuvieran marcados con ✓ en el árbol "Active LLM Models". Causa raíz: `_sendModelsList()` enviaba la lista `enabledModels` del store, que estaba vacía si el usuario nunca había hecho click/toggle manual sobre ningún modelo.
+  - **`connectionStore.ts`**: Añadido método `setEnabledModels(models: string[])` para establecer la lista completa de modelos habilitados en un solo paso (bulk-set).
+  - **`chatWebview.ts`**: Implementado **auto-seed** en `_sendModelsList()`: si `enabledModels` está vacío pero hay modelos disponibles de proveedores activos (`allFlatModels`), se habilitan todos automáticamente y se notifica al webview con `setEnabledModels`. El `postMessage` de `setEnabledModels` ahora se envía después del fetch de red, reflejando el estado real (incluyendo los auto-habilitados).
+
+---
+
 Registro cronológico de cambios, funciones e integraciones del proyecto **Giskard Assistant** desde la versión v1.0.0.
 
 ## [4.2.0] - 2026-08-06

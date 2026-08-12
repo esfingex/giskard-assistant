@@ -1,8 +1,8 @@
 {
   "name": "giskard-assistant",
-  "displayName": "Giskard Assistant — Sovereign AI Connector",
-  "description": "Sovereign sidebar chat supporting Ollama, Gemini CLI, Claude CLI, and external AI APIs.",
-  "version": "4.2.0",
+  "displayName": "Giskard Assistant — Local AI Connector",
+  "description": "Asistente IA para VSCode con soporte nativo para Ollama local, NVIDIA NIM, DeepSeek, Moonshot Kimi, Qwen y conector opcional Giskard-Sys con Sandbox Jail.",
+  "version": "4.2.6",
   "publisher": "giskard",
   "icon": "resources/icon.png",
   "repository": {
@@ -11,7 +11,8 @@
   },
   "license": "GPL-3.0",
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.80.0",
+    "node": ">=18.0.0"
   },
   "categories": [
     "Machine Learning",
@@ -21,7 +22,7 @@
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p ./",
-    "package": "npx --yes @vscode/vsce package --no-dependencies --allow-star-activation"
+    "package": "npm run compile && npx --yes @vscode/vsce package --no-dependencies"
   },
   "activationEvents": [
     "onView:giskard.chatView",
@@ -30,8 +31,7 @@
     "onView:giskard-model-settings",
     "onView:giskard-mcp-servers",
     "onView:giskard-file-exclusions",
-    "onView:giskard-theme-palette",
-    "*"
+    "onView:giskard-theme-palette"
   ],
   "contributes": {
     "viewsContainers": {
@@ -212,14 +212,14 @@
       },
       {
         "command": "giskard-assistant.attachCodeToChat",
-        "title": "Giskard Assistant: Attach Selected Code to Chat (Ctrl+L)",
+        "title": "Giskard Assistant: Attach Selected Code to Chat (Ctrl+Shift+L)",
         "icon": "$(code)"
       }
     ],
     "keybindings": [
       {
         "command": "giskard-assistant.attachCodeToChat",
-        "key": "ctrl+l",
+        "key": "ctrl+shift+l",
         "when": "editorTextFocus"
       }
     ],
@@ -233,8 +233,13 @@
         },
         "giskard-assistant.clientId": {
           "type": "string",
-          "default": "VSCode-Copilot",
+          "default": "giskard-assistant",
           "description": "Client identifier sent in X-Client-Id header."
+        },
+        "giskard-assistant.clientToken": {
+          "type": "string",
+          "default": "",
+          "description": "Token for Giskard-Sys auth_mode=strict. If set, sent as X-Client-Token header in all Giskard-Sys calls (must match client_tokens in ~/.giskard/config.json)."
         },
         "giskard-assistant.defaultModel": {
           "type": "string",
@@ -249,7 +254,17 @@
         "giskard-assistant.mcpConfigPath": {
           "type": "string",
           "default": "./mcp_conf.js",
-          "description": "Path to MCP servers configuration file (mcp_conf.js or config.json)."
+          "description": "Path to MCP servers configuration file (mcp_conf.js or config.json, relative to workspace root)."
+        },
+        "giskard-assistant.ollama.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Direct Local Ollama Mode (http://localhost:11434)."
+        },
+        "giskard-assistant.giskardSys.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable optional Giskard-Sys Backend Connector (http://localhost:3500) for Sandbox Jail, exec and workspace mounting."
         },
         "giskard-assistant.ollamaBaseUrl": {
           "type": "string",
@@ -349,6 +364,7 @@
       ]
     }
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.80.0",

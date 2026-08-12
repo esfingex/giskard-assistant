@@ -13,6 +13,17 @@
     const activeModelName = document.getElementById('active-model-name');
     const accordionArrow = document.getElementById('accordion-arrow');
 
+    const messagesDiv = document.getElementById('messages');
+    const promptInput = document.getElementById('prompt');
+    const sendBtn = document.getElementById('send-btn');
+    const incFileCheckbox = document.getElementById('include-file') || document.getElementById('inc-file');
+    const openSettingsBtn = document.getElementById('open-settings-btn');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const cfgConnectorUrl = document.getElementById('cfg-connector-url');
+    const modelSelect = document.getElementById('model-select');
+    const chatModelSelect = document.getElementById('chat-model-select');
+
     let _enabledModelsCache = [];
     let _allModelsCache = [];
 
@@ -68,7 +79,7 @@
         const filteredModels = allAvailable.filter(m => m.toLowerCase().includes(q));
 
         if (filteredModels.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:8px 6px;text-align:center;">No hay modelos disponibles.<br>Verifica conexiones activas en la barra lateral 👈</div>';
+            popoverModelList.innerHTML = '<div style="font-size:11px;color:#f87171;padding:8px 6px;text-align:center;">⚠️ Falló la conexión al obtener los modelos.<br><span style="opacity:0.8;font-size:10px;">Verifica tus conexiones activas en Ajustes ⚙️ o en la barra lateral 👈</span></div>';
         } else {
             popoverModelList.innerHTML = filteredModels.map(m => {
                 const isSel = (m === currentActiveModel);
@@ -158,6 +169,7 @@
         if (curTab && msgDiv) {
             curTab.messagesHtml = msgDiv.innerHTML;
             curTab.model = currentActiveModel;
+            curTab.rawText = currentBotRawText;
         }
     }
 
@@ -173,11 +185,14 @@
         const msgDiv = document.getElementById('messages');
         if (msgDiv) msgDiv.innerHTML = nextTab.messagesHtml || '';
         currentActiveModel = nextTab.model || (_enabledModelsCache[0] || '');
+        currentBotRawText = nextTab.rawText || '';
+        currentBotMsgDiv = msgDiv ? msgDiv.querySelector('.msg.bot[data-streaming="true"]') : null;
 
         if (activeModelName) {
             activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
         }
 
+        setGenerationState(Boolean(nextTab.isGenerating));
         renderSubTabs();
         renderPopoverLists();
     }
@@ -352,6 +367,127 @@
     let _readFilesBatch = [];
     let _readFileTimer = null;
 
+    /** Flush accumulated tool results (files read, dirs listed, searches) back to the model */
+    function flushToolBatch() {
+        if (_readFilesBatch.length > 0 && _lastUserPrompt) {
+            var combinedContent = _readFilesBatch.map(function(item) {
+                var content = item.content || '';
+                if (content.length > 6000) {
+                    content = content.substring(0, 6000) + '\n... [Contenido truncado a 6000 caracteres para seguridad de contexto]';
+                }
+                return 'File `' + item.path + '`:\n```\n' + content + '\n```';
+            }).join('\n\n');
+            var followUp = '[Contenido de los archivos leídos del workspace]:\n\n' + combinedContent + '\n\nCon base en la información de estos archivos del proyecto, responde a la solicitud del usuario:\n' + _lastUserPrompt;
+            // Hard cap on re-injected content: keep it inside the local model context window
+            // (32K tokens ≈ 24K chars of code) so the follow-up generation never overflows.
+            if (followUp.length > 24000) {
+                followUp = followUp.substring(0, 24000) + '\n\n... [Contenido combinado truncado para no desbordar la ventana de contexto del modelo local]';
+            }
+            _readFilesBatch = [];
+            if (promptInput) {
+                promptInput.value = followUp;
+                setTimeout(function() { send(); }, 300);
+            }
+        }
+    }
+
+    /** Fase 3b: render the model's [PLAN] with Approve/Discard buttons */
+    function showPlanCard(planText, modelName, tabId) {
+        if (!messagesDiv) return;
+        const card = document.createElement('div');
+        card.className = 'msg bot system-tool-msg';
+        card.style.cssText = 'border-left:3px solid #a78bfa;padding:8px 10px;font-size:11px;margin:6px 0;';
+        card.innerHTML =
+            '<div style="font-weight:bold;color:#a78bfa;">📋 Plan propuesto por la IA' + (modelName ? ' (' + escapeHtml(modelName) + ')' : '') + '</div>' +
+            '<pre style="white-space:pre-wrap;font-size:10px;max-height:200px;overflow:auto;margin:6px 0;">' + escapeHtml(planText) + '</pre>' +
+            '<div style="display:flex;gap:6px;margin-top:4px;">' +
+            '<button id="plan-approve-btn" style="background:#16a34a;color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:bold;">✅ Aprobar y ejecutar</button>' +
+            '<button id="plan-discard-btn" style="background:transparent;color:#f87171;border:1px solid #f87171;padding:5px 12px;border-radius:4px;font-size:10px;cursor:pointer;">❌ Descartar</button>' +
+            '</div>';
+        messagesDiv.appendChild(card);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+        const approveBtn = card.querySelector('#plan-approve-btn');
+        const discardBtn = card.querySelector('#plan-discard-btn');
+        if (approveBtn) {
+            approveBtn.addEventListener('click', function() {
+                vscode.postMessage({ type: 'approvePlan', plan: planText, model: modelName, tabId: tabId });
+                card.remove();
+            });
+        }
+        if (discardBtn) {
+            discardBtn.addEventListener('click', function() { card.remove(); });
+        }
+    }
+
+    /** Fase 4a: serialize current tabs and persist them in the extension host */
+    function persistChatHistory() {
+        try {
+            const serializable = _subTabs.map(function(t) {
+                return { id: t.id, title: t.title || '', model: t.model || '', messagesHtml: t.messagesHtml || '', rawText: t.rawText || '' };
+            });
+            vscode.postMessage({ type: 'saveChatHistory', tabs: serializable });
+        } catch (e) {}
+    }
+
+    /** Fase 4a: restore persisted tabs from the extension host */
+    function restoreChatHistory(tabs) {
+        if (!Array.isArray(tabs) || tabs.length === 0) return;
+        try {
+            const restored = tabs
+                .filter(function(t) { return t && t.id && t.messagesHtml; })
+                .map(function(t) {
+                    return {
+                        id: String(t.id),
+                        title: t.title || 'Chat',
+                        model: t.model || '',
+                        messagesHtml: String(t.messagesHtml),
+                        rawText: t.rawText || '',
+                        isGenerating: false
+                    };
+                });
+            if (restored.length === 0) return;
+            _subTabs = restored;
+            _subTabCounter = restored.length;
+            _activeTabId = restored[0].id;
+
+            const firstTab = restored[0];
+            if (messagesDiv) messagesDiv.innerHTML = firstTab.messagesHtml;
+            currentActiveModel = firstTab.model || (_enabledModelsCache[0] || '');
+            currentBotRawText = firstTab.rawText || '';
+            currentBotMsgDiv = messagesDiv ? messagesDiv.querySelector('.msg.bot[data-streaming="true"]') : null;
+
+            if (activeModelName) {
+                activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
+            }
+            renderSubTabs();
+            renderPopoverLists();
+            updateTokenCounter();
+        } catch (e) {}
+    }
+
+    function getActiveBotMsgDiv(tabId) {
+        const targetTabId = tabId || _activeTabId;
+        if (targetTabId === _activeTabId) {
+            if (currentBotMsgDiv && document.body.contains(currentBotMsgDiv)) {
+                return currentBotMsgDiv;
+            }
+            const msgDiv = document.getElementById('messages');
+            if (msgDiv) {
+                let found = msgDiv.querySelector('.msg.bot[data-streaming="true"]');
+                if (!found) {
+                    const botMsgs = msgDiv.querySelectorAll('.msg.bot');
+                    if (botMsgs.length > 0) found = botMsgs[botMsgs.length - 1];
+                }
+                if (found) {
+                    currentBotMsgDiv = found;
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
     function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
         if (!div) return;
         currentBotRawText = fullText;
@@ -360,7 +496,26 @@
         const activeModel = modelName || (modelSelect ? modelSelect.value : 'model');
         const modelTagHtml = '<div class="model-tag">🏷️ ' + escapeHtml(activeModel) + '</div>';
 
-        if (clean.indexOf('</think>') !== -1) {
+        // DeepSeek-R1 / Qwen thinking format:  think ...  response
+        if (clean.includes(' response') && (clean.includes(' think') || clean.startsWith(' think'))) {
+            const parts = clean.split(' response');
+            const thinkContent = parts[0].replace(' think', '').trim();
+            const answerContent = parts.slice(1).join(' response').trim();
+            const openAttr = isStreaming ? 'open' : '';
+            div.innerHTML = modelTagHtml +
+                            '<details class="think-box" ' + openAttr + '>' +
+                            '<summary>💡 Razonamiento de la IA (Ocultar/Mostrar)</summary>' +
+                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
+                            '</details>' +
+                            '<div class="answer-content">' + formatMarkdown(answerContent) + '</div>';
+        } else if (clean.startsWith(' think') && !clean.includes(' response')) {
+            const thinkContent = clean.replace(' think', '').trim();
+            div.innerHTML = modelTagHtml +
+                            '<details class="think-box" open>' +
+                            '<summary>💡 Razonamiento de la IA (Razonando…)</summary>' +
+                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
+                            '</details>';
+        } else if (clean.indexOf('</think>') !== -1) {
             const parts = clean.split('</think>');
             const thinkContent = parts[0].replace('<think>', '').trim();
             const answerContent = parts.slice(1).join('</think>').trim();
@@ -457,7 +612,7 @@
 
             const bMsg = document.createElement('div');
             bMsg.className = 'msg bot';
-            bMsg.textContent = '🧠 Comprimiendo contexto y guardando memoria soberana BCF...';
+            bMsg.textContent = '🧠 Comprimiendo contexto y guardando memoria BCF...';
             messagesDiv.appendChild(bMsg);
             currentBotMsgDiv = bMsg;
             currentBotRawText = '';
@@ -545,8 +700,17 @@
 
         promptInput.value = '';
 
+        const activeTabId = _activeTabId;
+        const curTab = _subTabs.find(t => t.id === activeTabId);
+        if (curTab) {
+            curTab.isGenerating = true;
+            curTab.model = currentActiveModel;
+        }
+
         const bMsg = document.createElement('div');
         bMsg.className = 'msg bot';
+        bMsg.setAttribute('data-streaming', 'true');
+        bMsg.setAttribute('data-tab-id', activeTabId);
         bMsg.textContent = 'Pensando...';
         messagesDiv.appendChild(bMsg);
         currentBotMsgDiv = bMsg;
@@ -560,6 +724,7 @@
             type: 'sendPrompt',
             prompt: prompt,
             model: currentActiveModel,
+            tabId: activeTabId,
             includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : false,
             contextType: selectedContextType
         });
@@ -593,40 +758,121 @@
                     }
                 }
                 break;
-            case 'streamToken':
-                if (currentBotRawText === '' && currentBotMsgDiv) {
-                    currentBotMsgDiv.textContent = '';
+            case 'streamStatus': {
+                const targetTabId = message.tabId || _activeTabId;
+                const _phase = message.phase;
+                const _prov = escapeHtml(message.provider || 'servidor');
+                const _local = message.isLocal;
+                const _icon = _local ? '🔌' : '🌐';
+                const _icon2 = _local ? '⚙️' : '📡';
+                const statusHtml = _phase === 'connecting'
+                    ? `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon} Conectando a <b>${_prov}</b>…</span>`
+                    : `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon2} Conexión establecida — Generando respuesta…</span>`;
+
+                if (targetTabId === _activeTabId) {
+                    const targetDiv = getActiveBotMsgDiv(targetTabId);
+                    if (targetDiv) targetDiv.innerHTML = statusHtml;
+                } else {
+                    const targetTab = _subTabs.find(t => t.id === targetTabId);
+                    if (targetTab) {
+                        const tempContainer = document.createElement('div');
+                        tempContainer.innerHTML = targetTab.messagesHtml || '';
+                        let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
+                        if (!botDiv) {
+                            const botMsgs = tempContainer.querySelectorAll('.msg.bot');
+                            if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
+                        }
+                        if (botDiv) {
+                            botDiv.innerHTML = statusHtml;
+                            targetTab.messagesHtml = tempContainer.innerHTML;
+                        }
+                    }
                 }
-
-                const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
-
-                currentBotRawText += message.token;
-                updateBotMessageDisplay(currentBotMsgDiv, currentBotRawText, message.model || currentActiveModel, true);
-
-                if (messagesDiv && isNearBottom) {
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }
-                updateTokenCounter();
                 break;
+            }
+
+            case 'streamToken': {
+                const targetTabId = message.tabId || _activeTabId;
+                const targetTab = _subTabs.find(t => t.id === targetTabId);
+                if (targetTab) {
+                    targetTab.rawText = (targetTab.rawText || '') + message.token;
+                }
+
+                if (targetTabId === _activeTabId) {
+                    const targetTokenDiv = getActiveBotMsgDiv(targetTabId);
+                    const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
+
+                    currentBotRawText = (targetTab ? targetTab.rawText : currentBotRawText);
+                    if (targetTokenDiv) {
+                        updateBotMessageDisplay(targetTokenDiv, currentBotRawText, message.model || currentActiveModel, true);
+                    }
+
+                    if (messagesDiv && isNearBottom) {
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }
+                    updateTokenCounter();
+                } else if (targetTab) {
+                    const tempContainer = document.createElement('div');
+                    tempContainer.innerHTML = targetTab.messagesHtml || '';
+                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
+                    if (!botDiv) {
+                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
+                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
+                    }
+                    if (botDiv) {
+                        updateBotMessageDisplay(botDiv, targetTab.rawText, message.model || targetTab.model, true);
+                        targetTab.messagesHtml = tempContainer.innerHTML;
+                    }
+                }
+                break;
+            }
 
             case 'streamComplete': {
-                var rawFull = currentBotRawText;
+                const targetTabId = message.tabId || _activeTabId;
+                const targetTab = _subTabs.find(t => t.id === targetTabId);
+                if (targetTab) targetTab.isGenerating = false;
+
+                var rawFull = targetTab ? (targetTab.rawText || '') : currentBotRawText;
                 var parsed = parseToolCalls(rawFull);
                 var hadTools = parsed.toolCalls.length > 0;
+                var pendingPlan = extractPlan(rawFull);
                 var displayText = hadTools ? parsed.cleanText : rawFull;
-
-                if (currentBotMsgDiv) {
-                    updateBotMessageDisplay(currentBotMsgDiv, displayText, message.model || currentActiveModel, false);
+                if (pendingPlan) {
+                    displayText = displayText.replace(/\[PLAN\][\s\S]*?\[\/END_PLAN\]/g, '').trim() || '📋 La IA propuso un plan:';
                 }
 
-                currentBotMsgDiv = null;
-                currentBotRawText = '';
-                updateTokenCounter();
-                setGenerationState(false);
+                if (targetTabId === _activeTabId) {
+                    const targetCompDiv = getActiveBotMsgDiv(targetTabId);
+                    if (targetCompDiv) {
+                        targetCompDiv.removeAttribute('data-streaming');
+                        updateBotMessageDisplay(targetCompDiv, displayText, message.model || currentActiveModel, false);
+                    }
+                    currentBotMsgDiv = null;
+                    currentBotRawText = '';
+                    updateTokenCounter();
+                    setGenerationState(false);
+                } else if (targetTab) {
+                    const tempContainer = document.createElement('div');
+                    tempContainer.innerHTML = targetTab.messagesHtml || '';
+                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
+                    if (!botDiv) {
+                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
+                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
+                    }
+                    if (botDiv) {
+                        botDiv.removeAttribute('data-streaming');
+                        updateBotMessageDisplay(botDiv, displayText, message.model || targetTab.model, false);
+                        targetTab.messagesHtml = tempContainer.innerHTML;
+                    }
+                }
 
-                if (hadTools) {
+                // Fase 3b: model proposed a plan — show approve/discard UI, do NOT execute tools yet
+                if (pendingPlan && targetTabId === _activeTabId) {
+                    showPlanCard(pendingPlan, message.model || currentActiveModel, targetTabId);
+                } else if (hadTools && targetTabId === _activeTabId) {
                     setTimeout(function() { dispatchToolCalls(parsed.toolCalls); }, 80);
                 }
+                persistChatHistory();
                 break;
             }
 
@@ -634,7 +880,7 @@
                 if (messagesDiv) {
                     const bDiv = document.createElement('div');
                     bDiv.className = 'msg bot';
-                    bDiv.textContent = '🧠 Memoria comprimida y guardada en base soberana.\n\n' + message.summary + '\n\n✨ Ventana de contexto reiniciada.';
+                    bDiv.textContent = '🧠 Memoria comprimida y guardada en base local.\n\n' + message.summary + '\n\n✨ Ventana de contexto reiniciada.';
                     messagesDiv.appendChild(bDiv);
                 }
                 updateTokenCounter();
@@ -735,6 +981,11 @@
                     currentBotMsgDiv = null;
                     currentBotRawText = '';
                 }
+                persistChatHistory();
+                break;
+
+            case 'chatHistoryRestored':
+                restoreChatHistory(message.tabs);
                 break;
 
             case 'setEnabledModels':
@@ -783,6 +1034,18 @@
                     }
                 }
 
+                if (message.connectionMode && offlineBadge) {
+                    if (message.connectionMode === 'giskardSysActive') {
+                        offlineBadge.style.display = 'inline-block';
+                        offlineBadge.textContent = '🛡️ Giskard-Sys';
+                        offlineBadge.title = 'Conector Giskard-Sys activo con Sandbox Jail';
+                    } else {
+                        offlineBadge.style.display = 'inline-block';
+                        offlineBadge.textContent = '⚡ Ollama Directo';
+                        offlineBadge.title = 'Modo Ollama local directo (puerto 11434)';
+                    }
+                }
+
                 renderSubTabs();
                 renderPopoverLists();
                 break;
@@ -812,23 +1075,42 @@
                     );
                     _readFilesBatch.push(message);
                     if (_readFileTimer) clearTimeout(_readFileTimer);
-                    _readFileTimer = setTimeout(function() {
-                        if (_readFilesBatch.length > 0 && _lastUserPrompt) {
-                            var combinedContent = _readFilesBatch.map(function(item) {
-                                var content = item.content || '';
-                                if (content.length > 6000) {
-                                    content = content.substring(0, 6000) + '\n... [Contenido truncado a 6000 caracteres para seguridad de contexto]';
-                                }
-                                return 'File `' + item.path + '`:\n```\n' + content + '\n```';
-                            }).join('\n\n');
-                            var followUp = '[Contenido de los archivos leídos del workspace]:\n\n' + combinedContent + '\n\nCon base en la información de estos archivos del proyecto, responde a la solicitud del usuario:\n' + _lastUserPrompt;
-                            _readFilesBatch = [];
-                            if (promptInput) {
-                                promptInput.value = followUp;
-                                setTimeout(function() { send(); }, 300);
-                            }
-                        }
-                    }, 600);
+                    _readFileTimer = setTimeout(flushToolBatch, 600);
+                }
+                break;
+
+            case 'toolListDirResult':
+                if (message.error) {
+                    appendActivityPill('❌ Error listando <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                } else {
+                    appendActivityPill('📂 <code>' + escapeHtml(message.path) + '</code> — ' + (message.listing ? message.listing.split('\n').length : 0) + ' entradas', '📂');
+                    _readFilesBatch.push({ path: message.path + ' (listado)', content: message.listing || '(vacío)' });
+                    if (_readFileTimer) clearTimeout(_readFileTimer);
+                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
+                }
+                break;
+
+            case 'toolSearchResult':
+                if (message.error) {
+                    appendActivityPill('❌ Error buscando: ' + escapeHtml(message.error), '❌');
+                } else {
+                    var sFiles = Array.isArray(message.files) ? message.files : [];
+                    appendActivityPill('🔍 «' + escapeHtml(message.query) + '» → ' + sFiles.length + ' resultados', '🔍');
+                    _readFilesBatch.push({ path: 'search:' + message.query, content: sFiles.length ? sFiles.join('\n') : '(sin resultados)' });
+                    if (_readFileTimer) clearTimeout(_readFileTimer);
+                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
+                }
+                break;
+
+            case 'toolGlobResult':
+                if (message.error) {
+                    appendActivityPill('❌ Error en glob: ' + escapeHtml(message.error), '❌');
+                } else {
+                    var gFiles = Array.isArray(message.files) ? message.files : [];
+                    appendActivityPill('🗂️ ' + escapeHtml(message.pattern || '**/*') + ' → ' + gFiles.length + ' archivos', '🗂️');
+                    _readFilesBatch.push({ path: 'glob:' + (message.pattern || '**/*'), content: gFiles.length ? gFiles.join('\n') : '(sin resultados)' });
+                    if (_readFileTimer) clearTimeout(_readFileTimer);
+                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
                 }
                 break;
 
@@ -854,25 +1136,47 @@
                 break;
 
             case 'streamError':
-            case 'settingsError':
-                if (currentBotMsgDiv) {
-                    let errText = message.error || 'Unknown error';
-                    if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
-                        errText = `⚠️ CLI tool '${currentActiveModel.replace('cli:', '')}' is not installed.\n\n💡 Use Local Swarm models (Ollama) or configure a Remote API Key in Settings ⚙️.`;
-                    }
-                    updateBotMessageDisplay(
-                        currentBotMsgDiv,
-                        `⚠️ **Connection Error**:\n\n${errText}`,
-                        currentActiveModel,
-                        false
-                    );
+            case 'settingsError': {
+                const targetTabId = message.tabId || _activeTabId;
+                const targetTab = _subTabs.find(t => t.id === targetTabId);
+                if (targetTab) targetTab.isGenerating = false;
+
+                let errText = message.error || 'Unknown error';
+                if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
+                    errText = `⚠️ CLI tool '${(message.model || currentActiveModel).replace('cli:', '')}' is not installed.\n\n💡 Use Local Swarm models (Ollama) or configure a Remote API Key in Settings ⚙️.`;
                 }
-                setGenerationState(false);
+                const formattedErr = errText.startsWith('⚠️') ? errText : `⚠️ **Connection Error**:\n\n${errText}`;
+
+                if (targetTabId === _activeTabId) {
+                    const targetErrDiv = getActiveBotMsgDiv(targetTabId);
+                    if (targetErrDiv) {
+                        targetErrDiv.removeAttribute('data-streaming');
+                        updateBotMessageDisplay(targetErrDiv, formattedErr, message.model || currentActiveModel, false);
+                    }
+                    currentBotMsgDiv = null;
+                    currentBotRawText = '';
+                    setGenerationState(false);
+                } else if (targetTab) {
+                    const tempContainer = document.createElement('div');
+                    tempContainer.innerHTML = targetTab.messagesHtml || '';
+                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
+                    if (!botDiv) {
+                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
+                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
+                    }
+                    if (botDiv) {
+                        botDiv.removeAttribute('data-streaming');
+                        updateBotMessageDisplay(botDiv, formattedErr, message.model || targetTab.model, false);
+                        targetTab.messagesHtml = tempContainer.innerHTML;
+                    }
+                }
                 break;
+            }
         }
     });
 
     // Send ready signal to host on startup
     vscode.postMessage({ type: 'webviewReady' });
     vscode.postMessage({ type: 'fetchModels' });
+    vscode.postMessage({ type: 'restoreChatHistory' });
 })();

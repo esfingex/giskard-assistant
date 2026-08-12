@@ -8,18 +8,22 @@
  */
 
 import * as vscode from 'vscode';
+import * as os from 'os';
+import * as path from 'path';
 import {
     getConnectorUrl,
     getClientId,
     execCliCommand,
     fetchLlmModels,
     fetchLlmModelsGrouped,
+    ConnectionModelsGroup,
     fetchWithTimeout,
     checkHealth,
     resetSession
 } from '../core/api';
 import { fetchOllamaModels } from '../core/providers';
 import { ConnectionStore } from '../core/connectionStore';
+import { EventBus, EventPayload } from '../core/eventBus';
 import { getHtmlForWebview } from './htmlShell';
 import {
     sendMcpServersList,
@@ -37,9 +41,17 @@ import {
     handleToolReadFile,
     handleToolWriteFile,
     handleToolExec,
+    handleToolListDir,
+    handleToolSearch,
+    handleToolGlob,
     resolveWorkspaceFile,
-    extractCodeBlocks
+    extractCodeBlocks,
+    applyCodeToDocument,
+    extractToolCalls,
+    executeReadOnlyTool
 } from './toolHandlers';
+import { setAgentActivity, clearAgentActivity } from './statusBar';
+import { buildChatMessages, trimHistory, estimateTokens, ChatMessage } from '../core/contextWindow';
 
 const _modelContextRegistry: Map<string, number> = new Map();
 
@@ -64,11 +76,41 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
     private _lastBotResponse: string = '';
+    private _localModelStreaming: boolean = false;
+    private _modelConnectionMap: Map<string, ConnectionModelsGroup> = new Map();
+
+    /** Fase 2: per-tab chat history (messages[]) for the host-side agent loop */
+    private _tabHistory: Map<string, ChatMessage[]> = new Map();
+    private readonly _agentLoopBudget = 28000; // safe margin under the 32K local window
+
+    /** Snapshots of AI edits (original content) for one-click revert */
+    private static _editSnapshots: { uri: string; original: string; timestamp: number }[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly _store: ConnectionStore
-    ) { }
+        private readonly _store: ConnectionStore,
+        private readonly _context?: vscode.ExtensionContext
+    ) {
+        EventBus.instance.onDidChange(async (e: EventPayload) => {
+            if (e.event === 'modelsUpdated' || e.event === 'modelToggled' || e.event === 'connectionChanged') {
+                await this.refreshState();
+            }
+        });
+    }
+
+    /** Revert the most recent AI edit (Fase 3: snapshot + revert) */
+    public static revertLastAiEdit(): boolean {
+        const snap = GiskardChatWebviewProvider._editSnapshots.pop();
+        if (!snap) return false;
+        const uri = vscode.Uri.parse(snap.uri);
+        vscode.workspace.openTextDocument(uri).then(async (doc) => {
+            const edit = new vscode.WorkspaceEdit();
+            edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), snap.original);
+            await vscode.workspace.applyEdit(edit);
+            vscode.window.showInformationMessage(`↩️ Cambio de IA revertido en ${vscode.workspace.asRelativePath(uri)}`);
+        });
+        return true;
+    }
 
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -256,22 +298,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private async _sendModelsList() {
         if (!this._view && !this._panel) return;
 
-        // Immediately send cached enabled models without waiting for network calls
-        const enabledModels = this._store.getEnabledModels();
-        this.postMessage({ type: 'setEnabledModels', enabledModels });
-
-        if (enabledModels.length > 0) {
-            this.postMessage({
-                type: 'modelsList',
-                models: enabledModels,
-                enabledModels,
-                groups: [],
-                localModels: enabledModels,
-                activeTag: 'giskard-sys',
-                activeName: 'Giskard-Sys',
-                currentUrl: getConnectorUrl()
-            });
-        }
+        let enabledModels = this._store.getEnabledModels();
 
         const activeConn = this._store.getActive();
         const activeTag = activeConn?.tag || 'giskard-sys';
@@ -280,19 +307,34 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const groups = await fetchLlmModelsGrouped().catch(() => []);
         const remoteModels = await fetchLlmModels().catch(() => []);
 
-        // Always query local Ollama models so they remain available in the model dropdown
         const ollamaConn = this._store.getAll().find(c => c.tag === 'ollama' || c.url.includes(':11434'));
         const ollamaUrl = ollamaConn?.url || 'http://127.0.0.1:11434';
         const localModels = await fetchOllamaModels(ollamaUrl).catch(() => []);
 
         const flatGroupModels: string[] = [];
+        this._modelConnectionMap.clear();
         groups.forEach(g => {
             if (g && Array.isArray(g.models)) {
                 flatGroupModels.push(...g.models);
+                g.models.forEach(m => {
+                    if (m) this._modelConnectionMap.set(m, g);
+                });
             }
         });
 
         const allFlatModels = Array.from(new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
+
+        // Auto-enable if empty
+        if (enabledModels.length === 0 && allFlatModels.length > 0) {
+            enabledModels = allFlatModels;
+            this._store.setEnabledModels(enabledModels);
+        }
+
+        this.postMessage({ type: 'setEnabledModels', enabledModels });
+
+        const config = vscode.workspace.getConfiguration('giskard-assistant');
+        const isGiskardSysEnabled = config.get<boolean>('giskardSys.enabled', false);
+        const connectionMode = isGiskardSysEnabled ? 'giskardSysActive' : 'ollamaDirect';
 
         this.postMessage({
             type: 'modelsList',
@@ -302,7 +344,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             localModels,
             activeTag,
             activeName,
-            currentUrl: getConnectorUrl()
+            currentUrl: getConnectorUrl(),
+            connectionMode
         });
     }
 
@@ -334,7 +377,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         prompt: string,
         model: string,
         includeActiveFile: boolean,
-        contextType: string
+        contextType: string,
+        tabId?: string
     ) {
         if (!this._view) return;
 
@@ -351,8 +395,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             const blocks = extractCodeBlocks(this._lastBotResponse);
             if (blocks.length > 0) {
                 if (this._view) {
-                    this._view.webview.postMessage({ type: 'streamToken', token: '📦 Aplicando código propuesto en el editor...', model });
-                    this._view.webview.postMessage({ type: 'streamComplete' });
+                    this._view.webview.postMessage({ type: 'streamToken', token: '📦 Aplicando código propuesto en el editor...', model, tabId });
+                    this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
                 }
                 let best = blocks[0];
                 for (const b of blocks) {
@@ -377,9 +421,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         let systemHeader = `[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
 • TO READ A FILE: Emit [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] or {"tool": "read_file", "args": {"path": "src/extension.ts"}}. Always use actual relative workspace file paths.
 • TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).
+• TO LIST A DIRECTORY: Emit [TOOL_CALL] {"tool": "list_dir", "args": {"path": "src"}} [/END_TOOL].
+• TO SEARCH FILE CONTENTS: Emit [TOOL_CALL] {"tool": "search", "args": {"query": "functionName"}} [/END_TOOL].
+• TO GLOB FILES: Emit [TOOL_CALL] {"tool": "glob", "args": {"pattern": "src/**/*.ts"}} [/END_TOOL].
+• TO PROPOSE A PLAN BEFORE EDITING: Wrap your plan in [PLAN] ... [/END_PLAN] and WAIT for the user to approve it before emitting tool calls or code blocks.
 • IGNORED DIRECTORIES: Do NOT attempt to read non-source files or build output directories like node_modules, out/, dist/, target/, build/, or .git/. Focus exclusively on source code files (src/, package.json, README.md, etc.).\n\n`;
         if (isGiskardActive) {
-            systemHeader += `[Capa Soberana Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
+            systemHeader += `[Capa de Seguridad Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
         if (mcpContext) {
             systemHeader += `${mcpContext}\n`;
@@ -397,26 +445,74 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         let activeConn = this._store.getActive();
-        const targetModel = model || 'meta/llama-3.3-70b-instruct';
+        const targetModel = model || (this._store.getEnabledModels()[0] || '');
+        if (!targetModel) {
+            this._view.webview.postMessage({
+                type: 'streamError',
+                tabId,
+                error: '⚠️ Sin conexión ni modelos disponibles. Por favor verifica tus conexiones activas o añade una nueva en Settings ⚙️.'
+            });
+            return;
+        }
         let activeTag = (activeConn?.tag || 'ollama').toLowerCase();
         const maxContext = getModelMaxContextWindow(targetModel);
 
-        // Universal Rule: If model starts with 'local:', it is Local Ollama.
-        // Otherwise, any model is a Remote AI model!
-        const isRemoteConnection = !targetModel.startsWith('local:');
+        // Intelligent Connection-Aware Provider Resolution
+        const connGroup = this._modelConnectionMap.get(targetModel);
 
+        let isRemoteConnection = false;
+        let resolvedRemoteUrl = '';
         let apiKey = '';
-        let resolvedRemoteUrl = activeConn?.url;
+        let targetConnId: number | undefined = undefined;
+        let targetTag = '';
+
+        const isExplicitLocal = targetModel.startsWith('local:') || targetModel.startsWith('hf.co/') || targetModel.endsWith('.gguf');
+
+        if (targetModel.startsWith('local:')) {
+            isRemoteConnection = false;
+            targetTag = 'ollama';
+        } else if (targetModel.startsWith('remote:')) {
+            isRemoteConnection = true;
+            targetTag = 'remote';
+        } else if (connGroup) {
+            const targetConn = this._store.getAll().find(c => c.id === connGroup.connectionId);
+            const isLocalGroup = connGroup.connectionTag === 'giskard-sys' || connGroup.connectionTag === 'ollama' || targetConn?.type === 'local';
+            isRemoteConnection = !isLocalGroup;
+            targetTag = connGroup.connectionTag;
+            targetConnId = connGroup.connectionId;
+            resolvedRemoteUrl = connGroup.connectionUrl;
+        } else if (!isExplicitLocal) {
+            const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+            const tagMatchConn = this._store.getConnectionByTag(vendorTag);
+            const anyRemoteConn = tagMatchConn || this._store.getActiveRemote() || this._store.getAll().find(c => c.type === 'remote');
+
+            if (anyRemoteConn) {
+                isRemoteConnection = true;
+                targetTag = anyRemoteConn.tag;
+                targetConnId = anyRemoteConn.id;
+                resolvedRemoteUrl = anyRemoteConn.url;
+            } else {
+                isRemoteConnection = false;
+                targetTag = 'giskard-sys';
+            }
+        } else {
+            isRemoteConnection = false;
+            targetTag = targetModel.startsWith('local:') ? 'ollama' : 'giskard-sys';
+        }
 
         if (isRemoteConnection) {
-            const providerTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
-            const resolved = await this._store.getAnyRemoteApiKey(providerTag);
-            if (resolved) {
-                apiKey = resolved.apiKey;
-                if (resolved.url) resolvedRemoteUrl = resolved.url;
+            if (targetConnId) {
+                apiKey = (await this._store.getApiKey(targetConnId)) || '';
             }
-        } else if (activeConn && activeConn.id) {
-            apiKey = (await this._store.getApiKey(activeConn.id)) || '';
+            if (!apiKey) {
+                const resolved = await this._store.getAnyRemoteApiKey(targetTag);
+                if (resolved) {
+                    apiKey = resolved.apiKey;
+                    if (resolved.url) resolvedRemoteUrl = resolved.url;
+                }
+            }
+        } else if (targetConnId) {
+            apiKey = (await this._store.getApiKey(targetConnId)) || '';
         }
 
         if (includeActiveFile) {
@@ -436,46 +532,106 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         }
 
+        // ── Local Model Concurrency Lock ──────────────────────────────────────
+        if (!isRemoteConnection) {
+            if (this._localModelStreaming) {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    model: targetModel,
+                    tabId,
+                    error: `⚠️ Modelo local ocupado.\n\nYa hay un modelo local en ejecución en otro sub-chat. Los modelos locales requieren recursos exclusivos de cómputo.\n\n💡 Espera a que el chat anterior termine antes de iniciar otro modelo local.`
+                });
+                return;
+            }
+            this._localModelStreaming = true;
+        }
+
+        // ── Resolve Provider Display Name ─────────────────────────────────────
+        let _providerDisplay: string;
+        if (isRemoteConnection) {
+            const _tagUp = (targetTag || 'remote').toUpperCase();
+            const _knownNames: Record<string, string> = {
+                'NVIDIA': 'NVIDIA NIM API', 'OPENAI': 'OpenAI API',
+                'DEEPSEEK': 'DeepSeek API', 'KIMI': 'Kimi API',
+                'ANTHROPIC': 'Anthropic API', 'GROQ': 'Groq API',
+                'MISTRAL': 'Mistral API', 'COHERE': 'Cohere API',
+                'HF': 'Hugging Face API'
+            };
+            _providerDisplay = _knownNames[_tagUp] || `${_tagUp} API`;
+        } else {
+            _providerDisplay = targetTag === 'ollama' ? 'Ollama (local)' : 'Giskard-Sys Backend (local)';
+        }
+
+        this._view.webview.postMessage({
+            type: 'streamStatus',
+            phase: 'connecting',
+            provider: _providerDisplay,
+            isLocal: !isRemoteConnection,
+            model: targetModel,
+            tabId
+        });
+
+        try { // ── Outer try for local model lock cleanup ────────────────────────
+
         // 1. Explicit Local Ollama Model (starts with "local:")
         if (targetModel.startsWith('local:')) {
             const localModelName = targetModel.replace(/^local:/, '');
-            const ollamaUrl = (activeTag === 'ollama' && activeConn?.url) ? activeConn.url : 'http://127.0.0.1:11434';
-            await this._streamFromOllamaFallback(fullPrompt, localModelName, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
+            const ollamaUrl = (targetTag === 'ollama' && resolvedRemoteUrl) ? resolvedRemoteUrl : 'http://127.0.0.1:11434';
+            // Fase 2: host-side agent loop with real message history
+            const systemMsg = systemHeader.trim();
+            const userMsg = fullPrompt.replace(systemHeader, '').trim();
+            await this._agentLoopOllama(systemMsg, userMsg, localModelName, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
             return;
         }
 
         // 2. REMOTE AI MODELS (Direct communication with remote AI provider endpoints)
         if (isRemoteConnection) {
             if (!apiKey || !apiKey.trim()) {
-                const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+                const vendorTag = targetTag || (targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote');
+                // Try to find if the connection exists but just has no key stored
+                const existingConn = this._store.getConnectionByTag(vendorTag);
+                const hasConn = !!existingConn;
+                const connName = existingConn?.name || vendorTag.toUpperCase();
+                const errDetail = hasConn
+                    ? `La conexión **${connName}** existe pero su API Key no está guardada (o se perdió al reinstalar).\n\n💡 Ve a Settings ⚙️ → Saved AI Connections → encuentra **${connName}** → pega tu API Key y haz clic en **Guardar** o **Activate**.`
+                    : `No existe ninguna conexión con Tag '${vendorTag}'.\n\n💡 Ve a Settings ⚙️ → Saved AI Connections → crea una nueva conexión con Tag '${vendorTag}' y pega tu API Key.`;
                 this._view.webview.postMessage({
                     type: 'streamError',
-                    error: `⚠️ API Key missing for ${targetModel}.\n\n💡 Go to Settings ⚙️ -> Saved AI Connections, add a connection with Tag '${vendorTag}', paste your API Key and click 'Activate'.`
+                    model: targetModel,
+                    tabId,
+                    error: `⚠️ API Key no encontrada para **${_providerDisplay}** (${targetModel}).\n\n${errDetail}`
                 });
                 return;
             }
             const remoteUrl = resolvedRemoteUrl || activeConn?.url;
             if (!remoteUrl) {
-                const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
+                const vendorTag = targetTag || (targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote');
                 this._view.webview.postMessage({
                     type: 'streamError',
+                    model: targetModel,
+                    tabId,
                     error: `⚠️ No Base URL configured for remote connection tag '${vendorTag}'. Please check Settings ⚙️.`
                 });
                 return;
             }
-            await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile);
+            await this._streamFromRemoteApi(remoteUrl, apiKey, targetModel, fullPrompt, prompt, targetPathMatch, includeActiveFile, tabId);
             return;
         }
 
         // 3. Active Connection is OLLAMA DIRECT
-        if (activeTag === 'ollama') {
-            const ollamaUrl = activeConn?.url || 'http://127.0.0.1:11434';
-            await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile, ollamaUrl);
+        if (targetTag === 'ollama') {
+            const ollamaUrl = resolvedRemoteUrl || activeConn?.url || 'http://127.0.0.1:11434';
+            // Fase 2: host-side agent loop with real message history
+            const systemMsg = systemHeader.trim();
+            const userMsg = fullPrompt.replace(systemHeader, '').trim();
+            await this._agentLoopOllama(systemMsg, userMsg, targetModel, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
             return;
         }
 
-        // 4. DEFAULT: Route through Sovereign Backend Giskard-Sys (Port 3500)
-        const connectorUrl = (activeTag === 'giskard-sys' && activeConn?.url) ? activeConn.url : getConnectorUrl();
+        // 4. DEFAULT: Route through Giskard-Sys Backend Giskard-Sys
+        const connectorUrl = resolvedRemoteUrl || activeConn?.url || getConnectorUrl();
+
+
 
         this._activeAbortController = new AbortController();
         const signal = this._activeAbortController.signal;
@@ -502,6 +658,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 throw new Error(`Servidor respondió HTTP ${response.status}: ${errText}`);
             }
 
+            this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: true, tabId });
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let accumulated = '';
@@ -536,24 +693,30 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                                 contentToken = delta.content;
                             } else if (delta?.reasoning_content) {
                                 contentToken = delta.reasoning_content;
+                            } else if (delta?.thinking) {
+                                contentToken = delta.thinking;
                             } else if (msg?.content) {
                                 contentToken = msg.content;
                             } else if (msg?.reasoning_content) {
                                 contentToken = msg.reasoning_content;
                             } else if (json.content) {
                                 contentToken = json.content;
+                            } else if (json.response) {
+                                contentToken = json.response;
+                            } else if (json.thinking) {
+                                contentToken = json.thinking;
                             } else if (typeof json === 'string') {
                                 contentToken = json;
                             }
 
                             if (contentToken) {
                                 accumulated += contentToken;
-                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model: targetModel });
+                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model: targetModel, tabId });
                             }
                         } catch {
                             if (tokenStr) {
                                 accumulated += tokenStr;
-                                this._view.webview.postMessage({ type: 'streamToken', token: tokenStr, model: targetModel });
+                                this._view.webview.postMessage({ type: 'streamToken', token: tokenStr, model: targetModel, tabId });
                             }
                         }
                     }
@@ -561,7 +724,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
 
             this._lastBotResponse = accumulated;
-            this._view.webview.postMessage({ type: 'streamComplete' });
+            clearAgentActivity();
+            this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
             await this._maybeAutoTriggerDiff(prompt, accumulated, targetPathMatch, includeActiveFile);
 
         } catch (err: any) {
@@ -569,17 +733,26 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
             try {
                 this._view.webview.postMessage({ type: 'offlineMode', active: true });
-                await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile);
+                this._view.webview.postMessage({ type: 'streamStatus', phase: 'connecting', provider: 'Ollama (local · fallback)', isLocal: true, model: targetModel, tabId });
+                await this._streamFromOllamaFallback(fullPrompt, targetModel, prompt, targetPathMatch, includeActiveFile, undefined, tabId);
             } catch (fallbackErr: any) {
                 if (fallbackErr.name !== 'AbortError') {
                     this._view.webview.postMessage({
                         type: 'streamError',
+                        model: targetModel,
+                        tabId,
                         error: `Conexión fallida y Ollama offline: ${err.message}`
                     });
                 }
             }
         } finally {
             this._activeAbortController = null;
+        }
+
+        } finally { // ── Outer finally: clear local model lock ─────────────────────
+            if (!isRemoteConnection) {
+                this._localModelStreaming = false;
+            }
         }
     }
 
@@ -591,7 +764,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         fullPrompt: string,
         userPrompt?: string,
         extractedPath?: string,
-        includeActiveFile?: boolean
+        includeActiveFile?: boolean,
+        tabId?: string
     ) {
         if (!this._view) return;
         this._activeAbortController = new AbortController();
@@ -616,11 +790,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         const maxResponseTokens = 4096;
 
+        // Larger models (550B+) need more time to queue and start streaming on free tier
+        const modelLower = model.toLowerCase();
+        const isLargeModel = modelLower.includes('550b') || modelLower.includes('405b') ||
+                             modelLower.includes('671b') || modelLower.includes('ultra') ||
+                             modelLower.includes('235b') || modelLower.includes('200b');
+        const timeoutMs = isLargeModel ? 180000 : 90000;
+
         const timeoutId = setTimeout(() => {
             if (this._activeAbortController) {
                 this._activeAbortController.abort();
             }
-        }, 12000);
+        }, timeoutMs);
+
 
         try {
             const response = await fetch(cleanUrl, {
@@ -643,6 +825,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 throw new Error(`API Remota (${cleanUrl}) respondió HTTP ${response.status}: ${errText}`);
             }
 
+            this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: false, tabId });
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let accumulated = '';
@@ -712,7 +895,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
                             if (contentToken) {
                                 accumulated += contentToken;
-                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model });
+                                this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model, tabId });
                             }
                         } catch { }
                     }
@@ -720,20 +903,25 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             }
 
             this._lastBotResponse = accumulated;
-            this._view.webview.postMessage({ type: 'streamComplete' });
+            clearAgentActivity();
+            this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
             await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
 
         } catch (err: any) {
             if (err.name === 'AbortError') {
                 this._view.webview.postMessage({
                     type: 'streamError',
-                    error: `⚠️ Connection Timeout (12s) for remote model '${model}'. Please check your network connection or API Key in Settings ⚙️.`
+                    model,
+                    tabId,
+                    error: `⚠️ Timeout de conexión (60s) para '${model}'.\n\n💡 Verifica tu conexión de red o tu API Key en Settings ⚙️.`
                 });
                 return;
             }
             this._view.webview.postMessage({
                 type: 'streamError',
-                error: `Remote API Error (${model}): ${err.message}`
+                model,
+                tabId,
+                error: `Error de API Remota (${model}): ${err.message}`
             });
         } finally {
             this._activeAbortController = null;
@@ -746,7 +934,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         userPrompt?: string,
         extractedPath?: string,
         includeActiveFile?: boolean,
-        customOllamaUrl?: string
+        customOllamaUrl?: string,
+        tabId?: string
     ) {
         if (!this._view) return;
 
@@ -758,17 +947,29 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const ollamaBaseUrl = customOllamaUrl || config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
 
         let targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
-        if (targetModel.includes('/') || targetModel.startsWith('deepseek') || targetModel.startsWith('moonshot')) {
-            const availableLocal = await fetchOllamaModels(ollamaBaseUrl);
-            targetModel = availableLocal.length > 0 ? availableLocal[0] : 'qwen3-coder:30b';
-        }
         const url = `${ollamaBaseUrl.replace(/\/$/, '')}/api/generate`;
+
+        // Explicit context window: without num_ctx, Ollama uses the model's tiny default
+        // (often 2048-8192), which overflows as soon as we inject project file contents
+        // and kills the generation mid-stream. qwen-agentworld 35B supports 32K.
+        const modelCtx = getModelMaxContextWindow(targetModel);
+        const numCtx = Math.min(modelCtx, 32768);
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: targetModel, prompt: fullPrompt, stream: true }),
+                body: JSON.stringify({
+                    model: targetModel,
+                    prompt: fullPrompt,
+                    stream: true,
+                    keep_alive: '10m',
+                    options: {
+                        num_ctx: numCtx,
+                        num_predict: 8192,
+                        temperature: 0.7
+                    }
+                }),
                 signal
             });
 
@@ -776,6 +977,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 throw new Error(`Ollama local respondió HTTP ${response.status}`);
             }
 
+            this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: true, tabId });
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let ollamaAccumulated = '';
@@ -799,23 +1001,196 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                             token = json.response;
                         } else if (json.message?.content) {
                             token = json.message.content;
+                        } else if (json.thinking) {
+                            token = json.thinking;
+                        } else if (json.message?.reasoning_content) {
+                            token = json.message.reasoning_content;
                         }
 
                         if (token) {
                             ollamaAccumulated += token;
-                            this._view.webview.postMessage({ type: 'streamToken', token, model: targetModel });
+                            this._view.webview.postMessage({ type: 'streamToken', token, model: targetModel, tabId });
                         }
                     } catch { }
                 }
             }
 
             this._lastBotResponse = ollamaAccumulated;
-            this._view.webview.postMessage({ type: 'streamComplete' });
+            clearAgentActivity();
+            this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
             await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
 
         } catch (err: any) {
             if (err.name === 'AbortError') return;
-            throw err;
+            // Never let an Ollama error kill the conversation: surface it in the chat instead
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    model: targetModel,
+                    tabId,
+                    error: `❌ Error con el modelo local ${targetModel}: ${err?.message || err}`
+                });
+            }
+        } finally {
+            this._activeAbortController = null;
+        }
+    }
+
+    /** Fase 2: stream a chat completion from Ollama's /api/chat with a structured message history */
+    private async _streamOllamaChat(
+        messages: ChatMessage[],
+        model: string,
+        ollamaUrl: string,
+        tabId?: string
+    ): Promise<string> {
+        if (!this._view) return '';
+        this._activeAbortController = new AbortController();
+        const signal = this._activeAbortController.signal;
+        const url = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model,
+                messages,
+                stream: true,
+                keep_alive: '10m',
+                options: {
+                    num_ctx: Math.min(getModelMaxContextWindow(model), 32768),
+                    num_predict: 8192,
+                    temperature: 0.7
+                }
+            }),
+            signal
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`Ollama /api/chat respondió HTTP ${response.status}`);
+        }
+
+        this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: true, tabId });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let accumulated = '';
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                    const json = JSON.parse(trimmed);
+                    let token = '';
+                    if (json.message && json.message.content) token = json.message.content;
+                    else if (json.message && json.message.reasoning_content) token = json.message.reasoning_content;
+                    else if (json.thinking) token = json.thinking;
+                    if (token) {
+                        accumulated += token;
+                        this._view.webview.postMessage({ type: 'streamToken', token, model, tabId });
+                    }
+                } catch { }
+            }
+        }
+        return accumulated;
+    }
+
+    /** Fase 2: host-side agent loop for local Ollama models — model → read-only tools → model, with history + budget */
+    private async _agentLoopOllama(
+        system: string,
+        userContent: string,
+        model: string,
+        ollamaUrl: string,
+        userPrompt: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean,
+        tabId?: string
+    ) {
+        if (!this._view) return;
+        const key = tabId || '_main';
+        let history = this._tabHistory.get(key) || [];
+        // Presupuesto dinámico: prompt debe caber en num_ctx - num_predict - margen
+        const numCtx = Math.min(getModelMaxContextWindow(model), 32768);
+        const predictBudget = 8192;
+        const margin = 2000;
+        const loopBudget = Math.max(4000, numCtx - predictBudget - margin);
+        let messages = buildChatMessages(history, system, userContent, loopBudget);
+        let finalReply = '';
+        const maxSteps = 6;
+
+        try {
+            for (let step = 0; step < maxSteps; step++) {
+                if (step > 0) {
+                    this._view.webview.postMessage({ type: 'streamToken', token: `\n\n--- 🔧 Paso ${step + 1} del agente ---\n`, model, tabId });
+                }
+                const reply = await this._streamOllamaChat(messages, model, ollamaUrl, tabId);
+                messages = trimHistory([...messages, { role: 'assistant', content: reply }], loopBudget);
+
+                const calls = extractToolCalls(reply);
+                if (calls.length === 0) {
+                    finalReply = reply;
+                    break;
+                }
+
+                const readOnly = calls.filter(c => ['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
+                const blocking = calls.filter(c => !['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
+
+                // Blocking tools (write/exec) end the loop: the user applies via the existing UI
+                if (blocking.length > 0) {
+                    finalReply = reply;
+                    this._view.webview.postMessage({
+                        type: 'streamToken',
+                        token: `\n\n[ℹ️] El modelo pidió ${blocking.map(b => b.action).join(', ')} — aplícalo con el botón 📝 Apply Change.\n`,
+                        model, tabId
+                    });
+                    break;
+                }
+
+                for (const call of readOnly) {
+                    setAgentActivity(`${call.action} ${call.path || call.query || call.pattern || ''}…`);
+                    const res = await executeReadOnlyTool(call);
+                    messages = trimHistory([...messages, { role: 'tool', content: res.output }], loopBudget);
+                    this._view.webview.postMessage({
+                        type: 'streamToken',
+                        token: `\n\n[🔧 ${res.ok ? 'OK' : 'ERROR'} ${call.action} ${call.path || call.query || call.pattern || ''}]\n`,
+                        model, tabId
+                    });
+                }
+                setAgentActivity('razonando…');
+            }
+
+            if (!finalReply && messages.length > 0) {
+                finalReply = messages[messages.length - 1].content || '';
+            }
+
+            // Persist history (user turn + final assistant reply), keep the window fresh
+            history = trimHistory(
+                [...history, { role: 'user', content: userContent }, { role: 'assistant', content: finalReply }],
+                loopBudget
+            );
+            if (history.length > 40) history = history.slice(-40);
+            this._tabHistory.set(key, history);
+
+            this._lastBotResponse = finalReply;
+            clearAgentActivity();
+            this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
+            await this._maybeAutoTriggerDiff(userPrompt, finalReply, extractedPath, includeActiveFile);
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
+            clearAgentActivity();
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    model,
+                    tabId,
+                    error: `❌ Error en el bucle agente (${model}): ${err?.message || err}`
+                });
+            }
         } finally {
             this._activeAbortController = null;
         }
@@ -830,6 +1205,12 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const blocks = extractCodeBlocks(botResponse);
         if (blocks.length === 0) return;
 
+        // Only consider auto-apply when the user explicitly asked to edit a file
+        // (the prompt mentions an edit verb AND we know a target file).
+        const editIntent = /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|write|edit|update|apply|implement|create)\b/i.test(userPrompt);
+        const hasTarget = Boolean(extractedPath || includeActiveFile);
+        if (!editIntent || !hasTarget) return;
+
         let best = blocks[0];
         for (const b of blocks) {
             if (b.filePath) { best = b; break; }
@@ -843,8 +1224,16 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 targetPath = vscode.workspace.asRelativePath(editor.document.uri);
             }
         }
+        if (!targetPath || !best || !best.code || best.code.trim().length <= 10) return;
 
-        if (best && best.code && best.code.trim().length > 10) {
+        // Never apply silently: ask the user first
+        const choice = await vscode.window.showInformationMessage(
+            `Giskard: el modelo propuso cambios para «${targetPath}». ¿Los aplico?`,
+            { modal: false },
+            '✅ Aplicar',
+            '❌ Descartar'
+        );
+        if (choice === '✅ Aplicar') {
             await this._handleOpenDiff(best.code, targetPath);
         }
     }
@@ -875,13 +1264,39 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Open target file in 1 single editor window/tab and apply the changes directly in-place
+        // Open target file in the editor and apply changes safely (smart-apply, no destructive full-file overwrite)
         await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
-        const edit = new vscode.WorkspaceEdit();
-        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-        edit.replace(doc.uri, fullRange, code);
-        await vscode.workspace.applyEdit(edit);
-        vscode.window.showInformationMessage(`✓ Cambios de IA aplicados directamente en ${vscode.workspace.asRelativePath(doc.uri)}`);
+        const originalContent = doc.getText();
+        const result = await applyCodeToDocument(doc, code);
+        const relPath = vscode.workspace.asRelativePath(doc.uri);
+        switch (result.mode) {
+            case 'noop':
+                vscode.window.showInformationMessage(`✓ Los cambios ya estaban aplicados en ${relPath}`);
+                break;
+            case 'new':
+                vscode.window.showInformationMessage(`✓ Archivo creado: ${relPath} — revisa y guarda`);
+                break;
+            case 'full':
+            case 'partial':
+                // Fase 3c: snapshot for one-click revert + native diff review
+                GiskardChatWebviewProvider._editSnapshots.push({ uri: doc.uri.toString(), original: originalContent, timestamp: Date.now() });
+                if (GiskardChatWebviewProvider._editSnapshots.length > 20) GiskardChatWebviewProvider._editSnapshots.shift();
+                try {
+                    const proposedContent = doc.getText();
+                    const stamp = Date.now();
+                    const origTmp = vscode.Uri.file(path.join(os.tmpdir(), `giskard-orig-${stamp}.tmp`));
+                    const propTmp = vscode.Uri.file(path.join(os.tmpdir(), `giskard-prop-${stamp}.tmp`));
+                    await vscode.workspace.fs.writeFile(origTmp, Buffer.from(originalContent, 'utf8'));
+                    await vscode.workspace.fs.writeFile(propTmp, Buffer.from(proposedContent, 'utf8'));
+                    await vscode.commands.executeCommand('vscode.diff', origTmp, propTmp, `Giskard: ${relPath} — original → propuesto (guarda en el archivo para aceptar)`);
+                } catch { /* diff view is best-effort */ }
+                vscode.window.showInformationMessage(`✓ Cambios aplicados (${result.mode === 'partial' ? 'edición parcial' : 'archivo completo'}) en ${relPath} — revisa el diff, guarda para aceptar o usa "Revert AI Change" para descartar`);
+                break;
+            case 'failed':
+            default:
+                vscode.window.showWarningMessage(`⚠️ ${result.message || `No se pudieron aplicar los cambios en ${relPath}`}`);
+                break;
+        }
     }
 
     private async _handleCompressMemory(historyText: string) {
@@ -889,7 +1304,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         try {
             const res = await execCliCommand('cavemem', 'save', 'history', historyText);
             const msg = res.success
-                ? '✓ Memoria soberana BCF guardada exitosamente en Alicanto CaveMem.'
+                ? '✓ Memoria BCF guardada exitosamente en Alicanto CaveMem.'
                 : `Error guardando memoria: ${res.error}`;
             this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
             this._view.webview.postMessage({ type: 'streamComplete' });
@@ -898,11 +1313,45 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    /** Fase 3b: user approved a [PLAN] — re-prompt the model to execute it step by step */
+    private async _handleApprovePlan(plan: string, model?: string, tabId?: string) {
+        if (!plan || !plan.trim()) return;
+        const targetModel = model || (this._store.getEnabledModels()[0] || '');
+        const executionPrompt = `El usuario ha APROBADO el siguiente plan. Ejecútalo ahora paso a paso: lee los archivos que necesites, haz los cambios propuestos y verifica. NO vuelvas a pedir aprobación.\n\n[PLAN APROBADO]:\n${plan}\n\nEjecuta el plan completo.`;
+        await this._handlePrompt(executionPrompt, targetModel, false, 'none', tabId);
+    }
+
+    /** Fase 4a: persist chat tabs history in workspaceState */
+    private async _saveChatHistory(tabs: any[]) {
+        if (!this._context || !Array.isArray(tabs) || tabs.length === 0) return;
+        try {
+            // Cap payload: keep the most recent 2 tabs if the serialized history is large
+            let safeTabs = tabs;
+            const serialized = JSON.stringify(tabs);
+            if (serialized && serialized.length > 90000) {
+                safeTabs = tabs.slice(-2);
+            }
+            await this._context.workspaceState.update('giskard.chatTabs', safeTabs);
+        } catch { /* non-critical: history persistence is best-effort */ }
+    }
+
+    /** Fase 4a: restore chat tabs from workspaceState and push to the webview */
+    private async _restoreChatHistory() {
+        if (!this._context || !this._view) return;
+        try {
+            const tabs = this._context.workspaceState.get<any[]>('giskard.chatTabs', []);
+            if (Array.isArray(tabs) && tabs.length > 0) {
+                this._view.webview.postMessage({ type: 'chatHistoryRestored', tabs });
+            }
+        } catch { /* non-critical */ }
+    }
+
     private _setWebviewMessageListener(webview: vscode.Webview) {
         webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
+            try {
+                switch (data.type) {
                 case 'sendPrompt':
-                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType);
+                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType, data.tabId);
                     break;
                 case 'stopGeneration':
                     if (this._activeAbortController) {
@@ -941,6 +1390,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'getModels':
                     await this._sendModelsList();
                     break;
+                case 'modelChanged':
+                    if (data.model) {
+                        await this._store.setActiveChatModel(data.model);
+                    }
+                    break;
                 case 'saveSettings':
                     await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
                     break;
@@ -970,7 +1424,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     await this._handleAction(data.action);
                     break;
                 case 'openFile':
-                    await handleOpenFile(data.path);
+                    // Fix: el webview envía relativePath (chatView.js/chatUtils.js)
+                    await handleOpenFile(data.relativePath || data.path);
                     break;
                 case 'openDiff':
                     await this._handleOpenDiff(data.code, data.filePath);
@@ -1001,13 +1456,37 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
                 case 'toolReadFile':
+                    setAgentActivity(`leyendo ${data.path}…`);
                     await handleToolReadFile(this._view, data.path, data.id);
                     break;
                 case 'toolWriteFile':
+                    setAgentActivity(`escribiendo ${data.path}…`);
                     await handleToolWriteFile(this._view, data.path, data.content, data.id);
                     break;
+                case 'toolListDir':
+                    setAgentActivity(`listando ${data.path}…`);
+                    await handleToolListDir(this._view, data.path, data.id);
+                    break;
+                case 'toolSearch':
+                    setAgentActivity(`buscando «${data.query}»…`);
+                    await handleToolSearch(this._view, data.query, data.id);
+                    break;
+                case 'toolGlob':
+                    setAgentActivity(`glob ${data.pattern}…`);
+                    await handleToolGlob(this._view, data.pattern, data.id);
+                    break;
                 case 'toolExec':
+                    setAgentActivity(`ejecutando ${data.command}…`);
                     await handleToolExec(this._view, data.command, data.args, data.id);
+                    break;
+                case 'approvePlan':
+                    await this._handleApprovePlan(data.plan, data.model, data.tabId);
+                    break;
+                case 'saveChatHistory':
+                    await this._saveChatHistory(data.tabs);
+                    break;
+                case 'restoreChatHistory':
+                    await this._restoreChatHistory();
                     break;
                 case 'compressMemory':
                     await this._handleCompressMemory(data.historyText || '');
@@ -1024,6 +1503,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                         vscode.window.setStatusBarMessage('$(clippy) Código copiado al portapapeles', 2500);
                     }
                     break;
+                }
+            } catch (err: any) {
+                // Global error boundary: never let an unexpected exception kill the chat
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'streamError',
+                        model: data?.model,
+                        tabId: data?.tabId,
+                        error: `❌ Error inesperado en Giskard: ${err?.message || err}`
+                    });
+                }
             }
         });
     }

@@ -14,24 +14,33 @@ import os
 import json
 import time
 import subprocess
+import shutil
 import urllib.request
-import urllib.error
 import unittest
 
-CONNECTOR_URL = "http://localhost:3500"
-CLIENT_ID = "giskard-live-gui-tester"
-PEQUEN_USB_PATH = "/home/esfingex/Github/pequen-usb"
+CONNECTOR_URL = os.getenv("CONNECTOR_URL", "http://localhost:3500")
+CLIENT_ID = os.getenv("CLIENT_ID", "giskard-live-gui-tester")
+PEQUEN_USB_PATH = os.getenv("TEST_PROJECT_PATH", os.path.abspath("."))
 SCREENSHOT_PATH = os.path.join(os.path.dirname(__file__), "pequen_usb_vscode_live_test.png")
 
+@unittest.skipUnless(shutil.which("xdotool") and os.environ.get("DISPLAY"), "Requiere entorno gráfico Linux con xdotool y DISPLAY activo")
 class TestLiveVSCodeGUI(unittest.TestCase):
 
     def setUp(self):
         self.assertTrue(os.path.exists(PEQUEN_USB_PATH), f"Ruta no existe: {PEQUEN_USB_PATH}")
+        self.vscode_proc = None
+
+    def tearDown(self):
+        if self.vscode_proc:
+            try:
+                self.vscode_proc.terminate()
+            except Exception:
+                pass
 
     def test_01_launch_real_vscode_gui(self):
         """1. Lanzar VSCode real (modo con interfaz gráfica) en la carpeta del proyecto"""
-        print("\n [STEP 1] Abriendo VSCode GUI real en /home/esfingex/Github/pequen-usb...")
-        subprocess.Popen(["code", PEQUEN_USB_PATH])
+        print("\n [STEP 1] Abriendo VSCode GUI real en el workspace...")
+        self.vscode_proc = subprocess.Popen(["code", PEQUEN_USB_PATH])
         time.sleep(4) # Esperar a que el entorno gráfico se renderice
 
         # Buscar ventana activa con xdotool
@@ -90,7 +99,7 @@ class TestLiveVSCodeGUI(unittest.TestCase):
             "Analiza la estructura de pequen-usb y genera el bloque ejecutable para compilarlo con ./build.sh"
         )
         payload_stream = {
-            "model": "qwimi-k2.6:distill",
+            "model": os.getenv("TEST_MODEL_NAME", "llama3.2"),
             "prompt": prompt,
             "inject_sandbox_context": True
         }

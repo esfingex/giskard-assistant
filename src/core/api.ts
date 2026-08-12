@@ -32,6 +32,15 @@ export function getClientId(): string {
     return CLIENT_ID;
 }
 
+/**
+ * Returns the X-Client-Token if configured (giskard-sys auth_mode=strict).
+ * Configurable via the `giskard-assistant.clientToken` VS Code setting.
+ */
+export function getClientToken(): string {
+    const config = vscode.workspace.getConfiguration('giskard-assistant');
+    return config.get<string>('clientToken', '') || '';
+}
+
 /** Wrapper fetch with AbortController timeout (default 15s) */
 export async function fetchWithTimeout(
     url: string,
@@ -41,7 +50,14 @@ export async function fetchWithTimeout(
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const res = await fetch(url, { ...options, signal: controller.signal });
+        // Pendiente #2: inyecta X-Client-Token si está configurado — todas las
+        // llamadas a giskard-sys pasan por aquí (stream, exec, agents, list...).
+        const headers = new Headers(options.headers);
+        if (!headers.has('X-Client-Token')) {
+            const token = getClientToken();
+            if (token) headers.set('X-Client-Token', token);
+        }
+        const res = await fetch(url, { ...options, headers, signal: controller.signal });
         return res;
     } finally {
         clearTimeout(id);

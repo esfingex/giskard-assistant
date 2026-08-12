@@ -49,12 +49,22 @@ function parseToolCalls(text) {
                 const obj = JSON.parse(candidateStr);
                 if (obj && typeof obj === 'object' && (obj.tool || obj.action)) {
                     const action = obj.tool || obj.action;
-                    const pathStr = obj.path || (obj.args ? obj.args.path : null);
-                    if (action && pathStr && !toolCalls.some(t => t.path === pathStr && t.action === action)) {
+                    const args = obj.args || obj;
+                    const pathStr = args.path || obj.path;
+                    const queryStr = args.query || obj.query;
+                    const patternStr = args.pattern || obj.pattern;
+                    const cmdStr = args.command || obj.command;
+                    const content = args.content || obj.content;
+                    if (action && (pathStr || queryStr || patternStr || cmdStr) &&
+                        !toolCalls.some(t => t.action === action && (t.path === pathStr || t.query === queryStr || t.pattern === patternStr))) {
                         toolCalls.push({
                             action: action,
                             path: pathStr,
-                            content: obj.content || (obj.args ? obj.args.content : undefined)
+                            query: queryStr,
+                            pattern: patternStr,
+                            command: cmdStr,
+                            args: Array.isArray(args.args) ? args.args : undefined,
+                            content: content
                         });
                     }
                 }
@@ -80,6 +90,7 @@ function appendSystemMessage(html, icon) {
 
 function dispatchToolCalls(toolCalls) {
     for (const call of toolCalls) {
+        const args = call.args || call;
         switch (call.action) {
             case 'read_file':
                 appendSystemMessage('📖 Leyendo <code>' + escapeHtml(call.path) + '</code>...', '📂');
@@ -89,15 +100,35 @@ function dispatchToolCalls(toolCalls) {
                 appendSystemMessage('✏️ Preparando diff para <code>' + escapeHtml(call.path) + '</code>...', '📝');
                 vscode.postMessage({ type: 'toolWriteFile', path: call.path, content: call.content, id: Date.now() });
                 break;
+            case 'list_dir':
+                appendSystemMessage('📂 Listando <code>' + escapeHtml(call.path || '.') + '</code>...', '📂');
+                vscode.postMessage({ type: 'toolListDir', path: call.path || '.', id: Date.now() });
+                break;
+            case 'search':
+                appendSystemMessage('🔍 Buscando <code>' + escapeHtml(call.query || '') + '</code>...', '🔍');
+                vscode.postMessage({ type: 'toolSearch', query: call.query || '', id: Date.now() });
+                break;
+            case 'glob':
+                appendSystemMessage('🗂️ Glob <code>' + escapeHtml(call.pattern || '**/*') + '</code>...', '🗂️');
+                vscode.postMessage({ type: 'toolGlob', pattern: call.pattern || '**/*', id: Date.now() });
+                break;
             case 'exec':
-                var cmdStr = call.command + ' ' + (call.args || []).join(' ');
+                var cmdArgs = Array.isArray(call.args) ? call.args : (Array.isArray(args.args) ? args.args : []);
+                var cmdStr = (call.command || '') + ' ' + cmdArgs.join(' ');
                 appendSystemMessage('⚡ Ejecutando: <code>' + escapeHtml(cmdStr) + '</code>', '💻');
-                vscode.postMessage({ type: 'toolExec', command: call.command, args: call.args || [], id: Date.now() });
+                vscode.postMessage({ type: 'toolExec', command: call.command, args: cmdArgs, id: Date.now() });
                 break;
             default:
                 appendSystemMessage('⚠️ Acción desconocida: <code>' + escapeHtml(call.action) + '</code>', '⚠️');
         }
     }
+}
+
+function extractPlan(text) {
+    if (!text) return null;
+    const m = text.match(/\[PLAN\]([\s\S]*?)\[\/END_PLAN\]/);
+    if (m && m[1] && m[1].trim()) return m[1].trim();
+    return null;
 }
 
 function applyTheme(theme) {
@@ -204,17 +235,26 @@ function formatMarkdown(text) {
     return htmlText;
 }
 
+/** Real source/editor file extensions — avoids mistaking versions (v1.0.0) or package names for paths */
+const SOURCE_FILE_EXT_RE = /\.(ts|tsx|js|jsx|json|py|rs|md|mdx|html|css|scss|sass|less|c|cpp|cc|h|hpp|go|yaml|yml|toml|sh|bash|zsh|fish|sql|vue|svelte|astro|java|kt|kts|rb|php|env|ini|cfg|conf|xml|svg|txt|lock|gradle|properties|nix|tf|proto|mjs|cjs|mts|cts)$/i;
+
+function isLikelyFilePath(candidate) {
+    if (!candidate || candidate.length < 4 || candidate.indexOf(' ') !== -1) return false;
+    if (/^v?\d+(\.\d+)+$/.test(candidate)) return false; // v1.0.0 / 1.2.3
+    return SOURCE_FILE_EXT_RE.test(candidate);
+}
+
 function extractFilePathFromCode(codeText, pre) {
     if (!codeText) return null;
     const lines = codeText.split('\n').slice(0, 4);
     for (const line of lines) {
-        const match = line.match(/(?:\/\/|#|\/\*|<!--)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
-        if (match && match[1]) return match[1];
+        const match = line.match(/(?:\/\/|#|\/\*|<!--)\s*(?:file\s*:\s*|filepath\s*:\s*)?([a-zA-Z0-9_\-\.\/]+)/);
+        if (match && match[1] && isLikelyFilePath(match[1])) return match[1];
     }
     if (pre && pre.previousElementSibling) {
         const text = pre.previousElementSibling.innerText || '';
         const match = text.match(/([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
-        if (match && match[1]) return match[1];
+        if (match && match[1] && isLikelyFilePath(match[1])) return match[1];
     }
     return null;
 }

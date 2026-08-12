@@ -12,9 +12,10 @@ import time
 import urllib.request
 import urllib.error
 import unittest
+import re
 
-CONNECTOR_URL = "http://localhost:3500"
-CLIENT_ID = "giskard-test-runner"
+CONNECTOR_URL = os.getenv("CONNECTOR_URL", "http://localhost:3500")
+CLIENT_ID = os.getenv("CLIENT_ID", "giskard-test-runner")
 
 class TestGiskardBackend(unittest.TestCase):
 
@@ -95,13 +96,27 @@ class TestGiskardBackend(unittest.TestCase):
         """6. Verificar estado de la extensión de memoria soberana Graphify"""
         res = self._http_get("/extensions/graphify/check")
         self.assertIn("success", res)
-        print(" [PASS] 6. Extensión Graphify responder comprobada")
+        print(f" [PASS] 6. Extensión Graphify responder comprobada (installed: {res.get('success', False)})")
+
+    def get_available_model(self):
+        try:
+            res = self._http_get("/ollama/models")
+            models = res.get("data", [])
+            if models and len(models) > 0:
+                m = models[0]
+                if isinstance(m, dict):
+                    return m.get("name") or m.get("model") or "llama3.2"
+                return str(m)
+        except Exception:
+            pass
+        return os.getenv("TEST_MODEL_NAME", "llama3.2")
 
     def test_07_sse_llm_streaming(self):
         """7. Verificar SSE Stream de tokens con modelo local"""
+        target_model = self.get_available_model()
         url = f"{CONNECTOR_URL}/llm/stream"
         payload = {
-            "model": "qwimi-k2.6:distill",
+            "model": target_model,
             "prompt": "Responde con la palabra OK.",
             "inject_sandbox_context": False
         }
@@ -132,7 +147,7 @@ class TestMarkdownPreprocessor(unittest.TestCase):
         raw_text = "Texto explicativo.\n```bash\n/home/user/├── .planning/\n│   └── WAVES.md\n```\nTexto final."
         
         # Simular división por bloques de código
-        parts = raw_text.split(r"(```[\s\S]*?```)")
+        parts = re.split(r'```[\s\S]*?```', raw_text)
         self.assertTrue(len(parts) > 0)
         # Verificar que las líneas del árbol ASCII mantengan su formato vertical
         self.assertIn("├── .planning/", raw_text)

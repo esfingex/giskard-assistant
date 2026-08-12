@@ -11,6 +11,16 @@ import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
 
+export function resolveMcpPath(configPath: string): string {
+    if (!configPath) return '';
+    if (path.isAbsolute(configPath)) return configPath;
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length > 0) {
+        return path.resolve(folders[0].uri.fsPath, configPath);
+    }
+    return path.resolve(configPath);
+}
+
 export async function sendMcpServersList(view: vscode.WebviewView | undefined, store: ConnectionStore) {
     if (!view) return;
     const servers = store.getMcpServers();

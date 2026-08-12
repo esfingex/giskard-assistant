@@ -339,7 +339,7 @@ function renderConnectionsList(connections) {
                 if (connUrlInp) connUrlInp.value = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
                 if (connTypeRemote) connTypeRemote.checked = true;
             } else if (val === 'giskard-sys') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'Giskard-Sys Sovereign';
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'Giskard-Sys';
                 if (connUrlInp) connUrlInp.value = 'http://localhost:3500';
                 if (connTypeLocal) connTypeLocal.checked = true;
             } else if (val === 'ollama') {

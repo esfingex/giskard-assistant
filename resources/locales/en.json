@@ -1,6 +1,6 @@
 {
   "tabs": {
-    "local": "📋 List AIs",
+    "local": "📋 AI List",
     "remote": "🌐 Remote API",
     "mcp": "🔌 MCP Servers",
     "palette": "🎨 Color Theme"
@@ -9,7 +9,9 @@
     "tokens": "🔢 Tokens",
     "clearContext": "🗑️ Clear Context",
     "settings": "⚙️ Settings",
-    "offline": "⚡ OFFLINE MODE"
+    "offline": "⚡ OFFLINE MODE",
+    "ollamaDirect": "⚡ Direct Ollama",
+    "giskardSysActive": "🛡️ Giskard-Sys Active"
   },
   "connections": {
     "title": "🔌 AI Connections Management",
@@ -53,7 +55,7 @@
     "title": "🎨 Workspace Color Customization",
     "presets": "Presets:",
     "white": "Minimal White",
-    "cyan": "Sovereign Cyan",
+    "cyan": "Neon Cyan",
     "emerald": "Emerald Cyber",
     "purple": "Purple Synth",
     "userFont": "💬 User Text Color:",

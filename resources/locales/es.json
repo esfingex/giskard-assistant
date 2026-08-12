@@ -1,6 +1,6 @@
 {
   "tabs": {
-    "local": "📋 List AIs",
+    "local": "📋 Lista de IAs",
     "remote": "🌐 API Remota",
     "mcp": "🔌 Servidores MCP",
     "palette": "🎨 Tema de Color"
@@ -9,7 +9,9 @@
     "tokens": "🔢 Tokens",
     "clearContext": "🗑️ Limpiar Contexto",
     "settings": "⚙️ Ajustes",
-    "offline": "⚡ MODO OFFLINE"
+    "offline": "⚡ MODO OFFLINE",
+    "ollamaDirect": "⚡ Ollama Directo",
+    "giskardSysActive": "🛡️ Giskard-Sys Activo"
   },
   "connections": {
     "title": "🔌 Gestión de Conexiones IA",
@@ -18,7 +20,7 @@
     "url": "URL Backend / API:",
     "tag": "Etiqueta / Categoría:",
     "apiKey": "API Key / Token:",
-    "test": "🧪 Probador URL",
+    "test": "🧪 Probar URL",
     "add": "➕ Guardar Conexión",
     "active": "★ Activa",
     "activate": "Activar",
@@ -41,7 +43,7 @@
     "placeholder": "Pregunta al asistente... (Shift+Enter para nueva línea)",
     "send": "Enviar ↵",
     "stop": "Detener ⏹️",
-    "compress": "Comprimir Memoria",
+    "compress": "Compactar Contexto",
     "thinking": "Pensando...",
     "applyDiff": "📝 Aplicar Diff",
     "applyLastCode": "🚀 Aplicar último bloque de código",
@@ -53,7 +55,7 @@
     "title": "🎨 Personalización de Colores",
     "presets": "Preajustes:",
     "white": "Blanco Mínimo",
-    "cyan": "Cian Soberano",
+    "cyan": "Cian Neón",
     "emerald": "Esmeralda Cyber",
     "purple": "Púrpura Synth",
     "userFont": "💬 Color Texto Usuario:",

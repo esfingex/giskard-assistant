@@ -8,6 +8,7 @@ import { ConnectionStore } from '../core/connectionStore';
 
 export class GiskardStatusBar {
     private _item: vscode.StatusBarItem;
+    private _lastText = '';
 
     constructor(private readonly store: ConnectionStore) {
         this._item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -32,7 +33,37 @@ export class GiskardStatusBar {
         }
     }
 
+    /** Show a transient agent activity message (reading files, executing tools, etc.) */
+    public setActivity(text: string) {
+        if (!this._lastText) this._lastText = this._item.text;
+        this._item.text = `$(sync~spin) Giskard: ${text}`;
+        this._item.tooltip = 'Giskard Assistant Agent Activity';
+    }
+
+    /** Restore the previous status text */
+    public clearActivity() {
+        if (this._lastText) {
+            this._item.text = this._lastText;
+            this._lastText = '';
+            this.updateStatus(true);
+        }
+    }
+
     public dispose() {
         this._item.dispose();
     }
+}
+
+let _statusBarInstance: GiskardStatusBar | null = null;
+
+export function registerStatusBarInstance(sb: GiskardStatusBar | null) {
+    _statusBarInstance = sb;
+}
+
+export function setAgentActivity(text: string) {
+    _statusBarInstance?.setActivity(text);
+}
+
+export function clearAgentActivity() {
+    _statusBarInstance?.clearActivity();
 }

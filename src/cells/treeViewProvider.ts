@@ -51,7 +51,7 @@ export class GiskardTreeItem extends vscode.TreeItem {
                 arguments: [rawData?.id]
             };
         } else if (itemType === 'memory-bcf') {
-            this.description = 'BCF Sovereign Graph';
+            this.description = 'BCF Knowledge Graph';
             this.iconPath = new vscode.ThemeIcon('graph');
         }
     }
@@ -203,7 +203,7 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
     async getChildren(element?: GiskardTreeItem): Promise<GiskardTreeItem[]> {
         if (element) return [];
         const themes = [
-            { label: '🌙 Sovereign Cyberpunk Dark', icon: 'color-mode', preset: 'purple' },
+            { label: '🌙 Cyberpunk Dark', icon: 'color-mode', preset: 'purple' },
             { label: '🔮 Deep Neon Glassmorphic', icon: 'symbol-color', preset: 'cyan' },
             { label: '☀️ Clean Studio Light', icon: 'sun', preset: 'white' },
             { label: '🌌 Midnight Emerald', icon: 'sparkle', preset: 'emerald' }

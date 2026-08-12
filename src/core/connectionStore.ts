@@ -105,7 +105,7 @@ export class ConnectionStore {
             await this.context.globalState.update('giskard_initialized_v1', true);
         }
 
-        // Seed default local sovereign MCP server if empty
+        // Seed default local MCP server if empty
         const mcpServers = this.getMcpServers();
         if (mcpServers.length === 0) {
             const wsPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || './';
@@ -196,6 +196,13 @@ export class ConnectionStore {
         await this.removeModelOverrides(modelName);
     }
 
+    /** Bulk-set the enabled models list (replaces any existing list) */
+    setEnabledModels(models: string[]): void {
+        const clean = models.map(m => (typeof m === 'string' ? m.trim() : '')).filter(Boolean);
+        // Use synchronous update pattern — globalState.update is async but fire-and-forget is safe here
+        void this.context.globalState.update('giskard_enabled_chat_models_v1', clean);
+    }
+
     /** Add a new connection profile */
     async addConnection(
         name: string,
@@ -250,6 +257,11 @@ export class ConnectionStore {
             conn.secretRef = `conn_${id}_token`;
         }
         await this.context.secrets.store(conn.secretRef, apiKey.trim());
+        // Clear provider model caches so next fetch picks up the new key's available models
+        try {
+            const { clearNvidiaModelCache } = await import('./providers/nvidiaProvider');
+            clearNvidiaModelCache();
+        } catch { }
         await this._saveRawList(list);
     }
 

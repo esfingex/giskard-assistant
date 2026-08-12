@@ -21,5 +21,5 @@ export async function fetchQwenModels(baseUrl: string = QWEN_DEFAULT_URL, apiKey
             }
         }
     } catch { }
-    return ['qwen-coder-plus', 'qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen2.5-coder-32b-instruct'];
+    return [];
 }

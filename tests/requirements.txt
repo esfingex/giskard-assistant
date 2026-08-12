@@ -1,0 +1,3 @@
+# Dependencias para ejecutar la suite completa de pruebas en Python de Giskard Assistant
+requests>=2.28.0
+dbus-python>=1.2.18; sys_platform == "linux"

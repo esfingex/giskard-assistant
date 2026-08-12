@@ -13,8 +13,9 @@ import { GiskardChatWebviewProvider, createNewChatPanelTab } from './cells/chatW
 import { registerSandboxCommands } from './cells/sandboxCommands';
 import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore, fetchLlmModels } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
+import { EventBus } from './core/eventBus';
 
-import { GiskardStatusBar } from './cells/statusBar';
+import { GiskardStatusBar, registerStatusBarInstance } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
 import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider, GiskardMcpServersTreeProvider, GiskardFileExclusionsTreeProvider } from './cells/treeViewProvider';
 import { handleDiscoverMcpTools } from './cells/mcpHandlers';
@@ -52,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 0.2 Status Bar Heartbeat Item
     const statusBar = new GiskardStatusBar(store);
+    registerStatusBarInstance(statusBar);
     context.subscriptions.push(statusBar);
 
     // 0.3 Inline Code Completion Provider (Ghost Text / FIM)
@@ -61,9 +63,18 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // 1. Célula Webview Sidebar Chat
-    const provider = new GiskardChatWebviewProvider(context.extensionUri, store);
+    const provider = new GiskardChatWebviewProvider(context.extensionUri, store, context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('giskard.chatView', provider)
+    );
+
+    // 1.1 Fase 3c: Revert last AI edit (one-click undo of applied changes)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('giskard-assistant.revertLastAiChange', () => {
+            if (!GiskardChatWebviewProvider.revertLastAiEdit()) {
+                vscode.window.showInformationMessage('No hay cambios de IA recientes para revertir.');
+            }
+        })
     );
 
     // 2. Célula de Comandos Sandbox
@@ -341,6 +352,7 @@ export async function activate(context: vscode.ExtensionContext) {
             await provider.refreshState();
             localModelsTree.refresh();
             modelSettingsProvider.refresh();
+            EventBus.instance.fire('modelsUpdated');
 
             const statusStr = isNowEnabled ? 'enabled 🟢 for Chat' : 'disabled ⚪ from Chat';
             vscode.window.showInformationMessage(`✓ Model '${modelName}' ${statusStr}.`);
@@ -407,6 +419,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('giskard-assistant.refreshTree', () => {
             localModelsTree.refresh();
             remoteConnsTree.refresh();
+            EventBus.instance.fire('modelsUpdated');
             vscode.window.showInformationMessage('🔄 Árboles de Servidores y Modelos actualizados.');
         }),
         vscode.commands.registerCommand('giskard-assistant.openChat', async () => {

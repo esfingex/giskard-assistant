@@ -21,5 +21,5 @@ export async function fetchKimiModels(baseUrl: string = KIMI_DEFAULT_URL, apiKey
             }
         }
     } catch { }
-    return ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2.6'];
+    return [];
 }

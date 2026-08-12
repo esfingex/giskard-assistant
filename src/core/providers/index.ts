@@ -46,7 +46,7 @@ export async function fetchModelsForProvider(
         return await fetchQwenModels(url, apiKey);
     }
 
-    // 5. Giskard-Sys Sovereign Axum Connector (Port 3500)
+    // 5. Giskard-Sys Axum Connector (Port 3500)
     if (cleanUrl.includes(':3500') || cleanTag.includes('giskard')) {
         return await fetchGiskardSysModels(url);
     }

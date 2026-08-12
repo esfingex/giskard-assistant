@@ -1,5 +1,5 @@
 /**
- * Giskard Assistant VSCode Extension — Provider: Giskard-Sys Sovereign Rust Axum Connector
+ * Giskard Assistant VSCode Extension — Provider: Giskard-Sys Rust Axum Connector
  * Copyright (C) 2025-2026 Giskard Project
  */
 
