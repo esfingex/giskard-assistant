@@ -13,6 +13,7 @@ import * as path from 'path';
 import {
     getConnectorUrl,
     getClientId,
+    getClientToken,
     execCliCommand,
     fetchLlmModels,
     fetchLlmModelsGrouped,
@@ -687,7 +688,10 @@ ${projectRules}
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'text/event-stream',
-                    'X-Client-Id': getClientId()
+                    'X-Client-Id': getClientId(),
+                    // Auth simétrica con giskard-sys: en modo strict el stream
+                    // también exige el token (mismo criterio que el resto del API).
+                    'X-Client-Token': getClientToken()
                 },
                 body: JSON.stringify(payload),
                 signal
