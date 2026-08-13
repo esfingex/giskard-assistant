@@ -82,6 +82,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     /** Caché de la URL de Ollama que sirve el backend giskard-sys (GET /policy) */
     private _giskardSysOllamaCache: { url: string; value: string | null; at: number } | null = null;
 
+    /** Últimos modelo/URL/tab usados — para el bucle auto-corrector con tests */
+    private _lastModel: string = '';
+    private _lastOllamaUrl: string = '';
+    private _lastTabId: string | undefined = undefined;
+
     /** Fase 2: per-tab chat history (messages[]) for the host-side agent loop */
     private _tabHistory: Map<string, ChatMessage[]> = new Map();
     private readonly _agentLoopBudget = 28000; // safe margin under the 32K local window
@@ -413,6 +418,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         let fullPrompt = prompt;
 
+        this._lastTabId = tabId;
+
+        // Reglas de proyecto automáticas: AGENTS.md / CLAUDE.md / .cursorrules / README.md
+        const projectRules = await this._loadProjectRules();
+
         // 1. Check if Giskard-Sys active connection is present
         const giskardConn = this._store.getActiveLocal();
         const isGiskardActive = giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500'));
@@ -421,7 +431,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         const mcpContext = getActiveMcpPromptContext(this._store);
 
         // Build System Capability Context Header
-        let systemHeader = `[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
+        let systemHeader = `${projectRules ? `[PROJECT RULES — sigue estas reglas del proyecto]
+${projectRules}
+
+` : ''}[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
 • TO READ A FILE: Emit [TOOL_CALL] {"action": "read_file", "path": "src/extension.ts"} [/END_TOOL] or {"tool": "read_file", "args": {"path": "src/extension.ts"}}. Always use actual relative workspace file paths.
 • TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).
 • TO LIST A DIRECTORY: Emit [TOOL_CALL] {"tool": "list_dir", "args": {"path": "src"}} [/END_TOOL].
@@ -1174,6 +1187,29 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         return result;
     }
 
+    /**
+     * Lee las reglas del proyecto abierto (AGENTS.md, CLAUDE.md, .cursorrules,
+     * README.md) y las devuelve como bloque de texto acotado para inyectar
+     * en el system header. Sin archivos de reglas devuelve ''. 
+     */
+    private async _loadProjectRules(): Promise<string> {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) return '';
+        const root = folders[0].uri;
+        const names = ['AGENTS.md', 'CLAUDE.md', '.cursorrules', 'README.md'];
+        const parts: string[] = [];
+        for (const n of names) {
+            try {
+                const uri = vscode.Uri.joinPath(root, n);
+                const data = await vscode.workspace.fs.readFile(uri);
+                const text = new TextDecoder().decode(data);
+                const capped = text.slice(0, 2500);
+                if (capped.trim()) parts.push(`-- ${n} --\n${capped}`);
+            } catch { /* el archivo no existe */ }
+        }
+        return parts.join('\n\n');
+    }
+
     private async _agentLoopOllama(
         system: string,
         userContent: string,
@@ -1185,6 +1221,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         tabId?: string
     ) {
         if (!this._view) return;
+        this._lastModel = model;
+        this._lastOllamaUrl = ollamaUrl;
         const key = tabId || '_main';
         let history = this._tabHistory.get(key) || [];
         // Presupuesto dinámico: prompt debe caber en num_ctx - num_predict - margen
@@ -1280,7 +1318,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Only consider auto-apply when the user explicitly asked to edit a file
         // (the prompt mentions an edit verb AND we know a target file).
-        const editIntent = /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|write|edit|update|apply|implement|create)\b/i.test(userPrompt);
+        const editIntent = /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|corrige|corregir|fix|write|edit|update|apply|implement|create)\b/i.test(userPrompt);
         const hasTarget = Boolean(extractedPath || includeActiveFile);
         if (!editIntent || !hasTarget) return;
 
@@ -1370,15 +1408,71 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showWarningMessage(`⚠️ ${result.message || `No se pudieron aplicar los cambios en ${relPath}`}`);
                 break;
         }
+
+        // Wave A: verificación automática con tests (cargo/npm) tras aplicar cambios
+        this._autoVerifyAndFix().catch(() => { /* best-effort */ });
+    }
+
+    /**
+     * Corre la suite del proyecto (cargo test / npm test) vía giskard-sys /exec
+     * después de aplicar cambios. Si falla, pide UNA corrección al modelo local
+     * y muestra el diff propuesto (no se aplica automáticamente).
+     */
+    private async _autoVerifyAndFix() {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) return;
+        const root = folders[0].uri;
+        let cmd: string | null = null;
+        try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'Cargo.toml')); cmd = 'cargo'; } catch { /* no rust */ }
+        if (!cmd) { try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'package.json')); cmd = 'npm'; } catch { /* no node */ } }
+        if (!cmd || !this._view) return;
+
+        const model = this._lastModel || '';
+        const tabId = this._lastTabId;
+        this._view.webview.postMessage({ type: 'streamToken', token: `\n\n🧪 Ejecutando ${cmd} test...\n`, model, tabId });
+
+        try {
+            const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command: cmd, args: ['test'] })
+            }, 180000);
+            const data: any = await res.json();
+            if (!data || !data.success) {
+                this._view.webview.postMessage({ type: 'streamToken', token: `⚠️ No se pudieron correr tests: ${(data && data.error) || 'error'}\n`, model, tabId });
+                return;
+            }
+            const out: string = data.data || '';
+            if (out.includes('EXIT CODE: 0')) {
+                this._view.webview.postMessage({ type: 'streamToken', token: `✅ Tests pasaron.\n`, model, tabId });
+                return;
+            }
+            const tail = out.split('\n').filter(Boolean).slice(-8).join('\n');
+            this._view.webview.postMessage({ type: 'streamToken', token: `❌ Tests fallaron:\n${tail.substring(0, 900)}\n`, model, tabId });
+
+            if (this._lastModel && this._lastOllamaUrl) {
+                this._view.webview.postMessage({ type: 'streamToken', token: `\n🔧 Pidiendo una corrección al modelo local...\n`, model, tabId });
+                const systemMsg = 'You are an integrated coding agent in VS Code. Fix the failing tests by editing the relevant source file. Output ONLY the corrected code block with the file path as the first comment line.';
+                const fixPrompt = `The project tests are failing after the last edit. Test output:\n${tail.substring(0, 1500)}\n\nAnalyze the failure and fix the code.`;
+                await this._agentLoopOllama(systemMsg, fixPrompt, this._lastModel, this._lastOllamaUrl, fixPrompt, undefined, false, tabId);
+            }
+        } catch { /* verificación best-effort */ }
     }
 
     private async _handleCompressMemory(historyText: string) {
         if (!this._view) return;
         try {
-            const res = await execCliCommand('cavemem', 'save', 'history', historyText);
-            const msg = res.success
-                ? '✓ Memoria BCF guardada exitosamente en Alicanto CaveMem.'
-                : `Error guardando memoria: ${res.error}`;
+            const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
+            // Guardar vía giskard-sys /memory/add (proxya a Alicanto con el token local)
+            const res = await fetchWithTimeout(`${getConnectorUrl()}/memory/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ project: wsName, category: 'flow', content: historyText, tags: 'compressed,chat' })
+            }, 15000);
+            const data: any = await res.json().catch(() => null);
+            const msg = data && data.success
+                ? '✓ Memoria BCF guardada exitosamente en Alicanto.'
+                : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
             this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
             this._view.webview.postMessage({ type: 'streamComplete' });
         } catch (err: any) {
@@ -1616,10 +1710,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             skillsText += '\n🔒 [Habilidades Exclusivas del Backend giskard-sys (Puerto 3500)]:\n';
             if (isGiskardActive || (res && res.ok)) {
                 skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM — Activo ✅)\n';
-                skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF — Activo ✅)\n';
+                skillsText += ' • 🧠 **alicanto_bcf** (Memoria BCF de Alicanto — Activo ✅)\n';
             } else {
                 skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
-                skillsText += ' • 🧠 **cavemem_bcf** (Compresión de Memoria BCF — ⚠️ Requiere giskard-sys backend)\n';
+                skillsText += ' • 🧠 **alicanto_bcf** (Memoria BCF de Alicanto — ⚠️ Requiere giskard-sys backend)\n';
             }
 
             if (res && res.ok) {
