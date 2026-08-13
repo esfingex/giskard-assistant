@@ -79,6 +79,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _localModelStreaming: boolean = false;
     private _modelConnectionMap: Map<string, ConnectionModelsGroup> = new Map();
 
+    /** Caché de la URL de Ollama que sirve el backend giskard-sys (GET /policy) */
+    private _giskardSysOllamaCache: { url: string; value: string | null; at: number } | null = null;
+
     /** Fase 2: per-tab chat history (messages[]) for the host-side agent loop */
     private _tabHistory: Map<string, ChatMessage[]> = new Map();
     private readonly _agentLoopBudget = 28000; // safe margin under the 32K local window
@@ -631,16 +634,39 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         // 4. DEFAULT: Route through Giskard-Sys Backend Giskard-Sys
         const connectorUrl = resolvedRemoteUrl || activeConn?.url || getConnectorUrl();
 
-
+        // 4.1 MEJORA: si el backend giskard-sys sirve modelos locales de Ollama
+        // (active_provider == "ollama"), usar el bucle agente host-side con
+        // lectura real de archivos y multi-paso, en vez del streaming ciego de
+        // un solo paso. Las herramientas de escritura y /exec siguen pasando
+        // por giskard-sys (sandbox + auditoría), por lo que la seguridad se mantiene.
+        const giskardSysOllama = await this._resolveGiskardSysOllama(connectorUrl);
+        if (giskardSysOllama) {
+            const systemMsg = systemHeader.trim();
+            const userMsg = fullPrompt.replace(systemHeader, '').trim();
+            await this._agentLoopOllama(
+                systemMsg,
+                userMsg,
+                targetModel,
+                giskardSysOllama,
+                prompt,
+                targetPathMatch,
+                includeActiveFile,
+                tabId
+            );
+            return;
+        }
 
         this._activeAbortController = new AbortController();
         const signal = this._activeAbortController.signal;
 
         try {
             const streamUrl = `${connectorUrl}/llm/stream`;
+            // Historial compartido con el dashboard: session_id = nombre del workspace
+            const sessionName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
             const payload = {
                 prompt: fullPrompt,
-                model: targetModel || undefined
+                model: targetModel || undefined,
+                session_id: sessionName
             };
             const response = await fetch(streamUrl, {
                 method: 'POST',
@@ -712,6 +738,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                             if (contentToken) {
                                 accumulated += contentToken;
                                 this._view.webview.postMessage({ type: 'streamToken', token: contentToken, model: targetModel, tabId });
+                            } else if (tokenStr) {
+                                // Token JSON válido sin forma conocida (p. ej. un
+                                // tool-call inline `{"tool": ...}`): NO descartarlo.
+                                accumulated += tokenStr;
+                                this._view.webview.postMessage({ type: 'streamToken', token: tokenStr, model: targetModel, tabId });
                             }
                         } catch {
                             if (tokenStr) {
@@ -725,6 +756,17 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
             this._lastBotResponse = accumulated;
             clearAgentActivity();
+            if (!accumulated.trim()) {
+                // Red de seguridad: stream vacío sin error HTTP → dar un mensaje
+                // útil en vez de dejar la pantalla en blanco.
+                this._view.webview.postMessage({
+                    type: 'streamError',
+                    model: targetModel,
+                    tabId,
+                    error: '⚠️ El backend no devolvió ninguna respuesta. Verifica que el modelo exista en Ollama y que el motor esté corriendo (http://localhost:11434).'
+                });
+                return;
+            }
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
             await this._maybeAutoTriggerDiff(prompt, accumulated, targetPathMatch, includeActiveFile);
 
@@ -1101,6 +1143,37 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Fase 2: host-side agent loop for local Ollama models — model → read-only tools → model, with history + budget */
+    /**
+     * Resuelve la URL de Ollama que sirve el backend giskard-sys consultando
+     * GET /policy. Solo devuelve valor cuando el proveedor activo es "ollama".
+     * Cacheada 60s para no golpear el conector en cada mensaje.
+     */
+    private async _resolveGiskardSysOllama(connectorUrl: string): Promise<string | null> {
+        const now = Date.now();
+        const cache = this._giskardSysOllamaCache;
+        if (cache && cache.url === connectorUrl && now - cache.at < 60_000) {
+            return cache.value;
+        }
+        let result: string | null = null;
+        try {
+            const res = await fetchWithTimeout(`${connectorUrl}/policy`, {}, 5000);
+            if (res && res.ok) {
+                const data: any = await res.json().catch(() => null);
+                if (data && data.success && data.data) {
+                    const provider = String(data.data.active_provider || '').toLowerCase();
+                    const url = String(data.data.ollama_url || '').trim();
+                    if (provider === 'ollama' && url) {
+                        result = url;
+                    }
+                }
+            }
+        } catch {
+            // Sin conectividad con giskard-sys → caer al streaming clásico.
+        }
+        this._giskardSysOllamaCache = { url: connectorUrl, value: result, at: now };
+        return result;
+    }
+
     private async _agentLoopOllama(
         system: string,
         userContent: string,

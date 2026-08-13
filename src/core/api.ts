@@ -75,13 +75,14 @@ export async function checkHealth(baseUrl?: string): Promise<boolean> {
     }
 }
 
-/** Reset LLM session context in giskard-assistant backend */
+/** Reset LLM session context in giskard-sys (clears shared history for the workspace) */
 export async function resetSession(): Promise<void> {
     try {
+        const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
         await fetchWithTimeout(`${getConnectorUrl()}/llm/reset`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
-            body: '{}'
+            body: JSON.stringify({ session_id: wsName })
         }, 15000);
     } catch {
         // Silent — reset is best-effort
