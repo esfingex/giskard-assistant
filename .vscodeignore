@@ -5,3 +5,7 @@ tests/**
 tsconfig.json
 *.vsix
 .gitignore
+agent-framework/**
+.planning/**
+docs/**
+node_modules/**
