@@ -679,7 +679,8 @@ ${projectRules}
             const payload = {
                 prompt: fullPrompt,
                 model: targetModel || undefined,
-                session_id: sessionName
+                session_id: sessionName,
+                project: sessionName
             };
             const response = await fetch(streamUrl, {
                 method: 'POST',
