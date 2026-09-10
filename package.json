@@ -22,6 +22,8 @@
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p ./",
+    "test": "node --test tests/",
+    "verify": "npm run compile && npm test",
     "package": "npm run compile && npx --yes @vscode/vsce package --no-dependencies"
   },
   "activationEvents": [

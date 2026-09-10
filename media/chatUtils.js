@@ -17,14 +17,18 @@ function parseToolCalls(text) {
     const toolCalls = [];
     if (!text) return { cleanText: '', toolCalls: [] };
     
-    // 1. Standard [TOOL_CALL] ... [/END_TOOL] and <tool_call> ... </tool_call>
-    const regex1 = /(?:\[TOOL_CALL\]|<tool_call>)\s*([\s\S]*?)\s*(?:\[\/END_TOOL\]|<\/tool_call>)/gi;
-    let match;
-    while ((match = regex1.exec(text)) !== null) {
-        try {
-            const call = JSON.parse(match[1].trim());
-            toolCalls.push(call);
-        } catch (e) {}
+    // 1. Formato [TOOL_CALL] ... [/END_TOOL] y <tool_call> ... </tool_call>
+    //    Regex SEPARADAS por formato: un cierre de otro formato NO matchea.
+    const bracketRe = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/gi;
+    const xmlRe = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi;
+    for (const re of [bracketRe, xmlRe]) {
+        let match;
+        while ((match = re.exec(text)) !== null) {
+            try {
+                const call = JSON.parse(match[1].trim());
+                toolCalls.push(call);
+            } catch (e) {}
+        }
     }
 
     // 2. Balanced brace JSON tool call parser for nested objects like {"tool":"read_file", "args":{"path":"..."}}
@@ -148,6 +152,73 @@ function applyTheme(theme) {
     try { localStorage.setItem('giskard_theme', theme); } catch {}
 }
 
+const ALERT_LABELS = {
+    NOTE: 'Note',
+    TIP: 'Tip',
+    IMPORTANT: 'Important',
+    WARNING: 'Warning',
+    CAUTION: 'Caution'
+};
+const ALERT_ICONS = {
+    NOTE: 'ℹ️',
+    TIP: '💡',
+    IMPORTANT: '💜',
+    WARNING: '⚠️',
+    CAUTION: '🚨'
+};
+
+/**
+ * Convierte alertas GitHub (> [!NOTE] ... > lineas ...) en divs markdown-alert.
+ * Captura el bloque completo de lineas "<" contiguas y ESCAPA el contenido
+ * (escapeHtml) antes de inyectarlo: marcado inline (**bold**, `code`) se
+ * preserva, HTML crudo queda como texto literal.
+ */
+function convertAlerts(text) {
+    if (!text) return '';
+    const lines = text.split('\n');
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i);
+        if (m) {
+            const type = m[1].toUpperCase();
+            const cls = 'markdown-alert-' + type.toLowerCase();
+            const body = [m[2]];
+            // Lineas de continuacion: "> ..." contiguas (formato GitHub real)
+            while (i + 1 < lines.length && /^\s*>/.test(lines[i + 1])) {
+                i++;
+                body.push(lines[i].replace(/^\s*>\s?/, ''));
+            }
+            const icon = ALERT_ICONS[type] || '';
+            const label = ALERT_LABELS[type] || 'Note';
+            out.push('<div class="markdown-alert ' + cls + '"><div class="markdown-alert-title">' +
+                icon + ' ' + label + '</div>' + escapeHtml(body.join('\n')) + '</div>');
+        } else {
+            out.push(lines[i]);
+        }
+    }
+    return out.join('\n');
+}
+
+/**
+ * Normaliza variantes de tags de razonamiento (<thinking>, <thought>, y sus
+ * formas escapadas) a <think>/</think>, SIN tocar bloques de codigo (fences
+ * ``` e inline `). La extraccion del think-box vive en chatView.js.
+ */
+function normalizeThinkingTags(text) {
+    if (!text) return '';
+    const parts = text.split(/(```[\s\S]*?```|`[^`\n]*`)/g);
+    return parts.map(part => {
+        if (!part) return part;
+        if (part.startsWith('```') || part.startsWith('`')) return part; // codigo: no tocar
+        return part
+            .replace(/&lt;think&gt;/g, '<think>').replace(/&lt;\/think&gt;/g, '</think>')
+            .replace(/&lt;thinking&gt;/g, '<think>').replace(/&lt;\/thinking&gt;/g, '</think>')
+            .replace(/&lt;thought&gt;/g, '<think>').replace(/&lt;\/thought&gt;/g, '</think>')
+            .replace(/<thinking>/g, '<think>').replace(/<\/thinking>/g, '</think>')
+            .replace(/<thought>/g, '<think>').replace(/<\/thought>/g, '</think>');
+    }).join('');
+}
+
 function preprocessMarkdown(text) {
     if (!text) return '';
 
@@ -191,13 +262,8 @@ function preprocessMarkdown(text) {
         clean = clean.replace(/([^\n])(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
         clean = clean.replace(/([^\n])(-\s+[\*\*\wáéíóúñA-Z✔️✅❌💡▶])/g, '$1\n$2');
 
-        // GitHub Markdown Alerts (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION])
-        clean = clean
-            .replace(/^>\s*\[!NOTE\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-note"><div class="markdown-alert-title">ℹ️ Note</div>$1</div>')
-            .replace(/^>\s*\[!TIP\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-tip"><div class="markdown-alert-title">💡 Tip</div>$1</div>')
-            .replace(/^>\s*\[!IMPORTANT\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-important"><div class="markdown-alert-title">💜 Important</div>$1</div>')
-            .replace(/^>\s*\[!WARNING\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-warning"><div class="markdown-alert-title">⚠️ Warning</div>$1</div>')
-            .replace(/^>\s*\[!CAUTION\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-caution"><div class="markdown-alert-title">🚨 Caution</div>$1</div>');
+        // GitHub Markdown Alerts: bloque completo de lineas ">" contiguas, contenido escapado
+        clean = convertAlerts(clean);
 
         if (clean.includes('├──') || clean.includes('└──')) {
             clean = clean.replace(/((?:^[ \t]*(?:├──|└──|│|\/)[^\n]*\n?)+)/gm, '\n```text\n$1```\n');
