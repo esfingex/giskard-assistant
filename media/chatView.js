@@ -491,7 +491,12 @@
     function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
         if (!div) return;
         currentBotRawText = fullText;
-        let clean = fullText.replace(/&lt;think&gt;/g, '<think>').replace(/&lt;\/think&gt;/g, '</think>');
+        let clean = fullText
+            .replace(/&lt;think&gt;/g, '<think>').replace(/&lt;\/think&gt;/g, '</think>')
+            .replace(/&lt;thinking&gt;/g, '<think>').replace(/&lt;\/thinking&gt;/g, '</think>')
+            .replace(/&lt;thought&gt;/g, '<think>').replace(/&lt;\/thought&gt;/g, '</think>')
+            .replace(/<thinking>/g, '<think>').replace(/<\/thinking>/g, '</think>')
+            .replace(/<thought>/g, '<think>').replace(/<\/thought>/g, '</think>');
         
         const activeModel = modelName || (modelSelect ? modelSelect.value : 'model');
         const modelTagHtml = '<div class="model-tag">🏷️ ' + escapeHtml(activeModel) + '</div>';

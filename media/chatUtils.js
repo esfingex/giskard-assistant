@@ -17,8 +17,8 @@ function parseToolCalls(text) {
     const toolCalls = [];
     if (!text) return { cleanText: '', toolCalls: [] };
     
-    // 1. Standard [TOOL_CALL] ... [/END_TOOL]
-    const regex1 = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/END_TOOL\]/g;
+    // 1. Standard [TOOL_CALL] ... [/END_TOOL] and <tool_call> ... </tool_call>
+    const regex1 = /(?:\[TOOL_CALL\]|<tool_call>)\s*([\s\S]*?)\s*(?:\[\/END_TOOL\]|<\/tool_call>)/gi;
     let match;
     while ((match = regex1.exec(text)) !== null) {
         try {
@@ -73,7 +73,10 @@ function parseToolCalls(text) {
         idx = text.indexOf('{', idx + 1);
     }
 
-    const cleanText = text.replace(/\[TOOL_CALL\]\s*[\s\S]*?\s*\[\/END_TOOL\]/g, '').trim();
+    const cleanText = text
+        .replace(/\[TOOL_CALL\]\s*[\s\S]*?\s*\[\/END_TOOL\]/gi, '')
+        .replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/gi, '')
+        .trim();
     return { cleanText, toolCalls };
 }
 
@@ -187,6 +190,15 @@ function preprocessMarkdown(text) {
         clean = clean.replace(/([:\.\wáéíóúñA-Z])\s*(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
         clean = clean.replace(/([^\n])(\d+\.\s+[\*\*\wáéíóúñA-Z])/g, '$1\n$2');
         clean = clean.replace(/([^\n])(-\s+[\*\*\wáéíóúñA-Z✔️✅❌💡▶])/g, '$1\n$2');
+
+        // GitHub Markdown Alerts (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION])
+        clean = clean
+            .replace(/^>\s*\[!NOTE\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-note"><div class="markdown-alert-title">ℹ️ Note</div>$1</div>')
+            .replace(/^>\s*\[!TIP\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-tip"><div class="markdown-alert-title">💡 Tip</div>$1</div>')
+            .replace(/^>\s*\[!IMPORTANT\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-important"><div class="markdown-alert-title">💜 Important</div>$1</div>')
+            .replace(/^>\s*\[!WARNING\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-warning"><div class="markdown-alert-title">⚠️ Warning</div>$1</div>')
+            .replace(/^>\s*\[!CAUTION\]\s*(.*)$/gim, '<div class="markdown-alert markdown-alert-caution"><div class="markdown-alert-title">🚨 Caution</div>$1</div>');
+
         if (clean.includes('├──') || clean.includes('└──')) {
             clean = clean.replace(/((?:^[ \t]*(?:├──|└──|│|\/)[^\n]*\n?)+)/gm, '\n```text\n$1```\n');
         }

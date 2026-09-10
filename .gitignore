@@ -4,3 +4,6 @@ node_modules/
 .vscode-test/
 .DS_Store
 *.log
+
+# Repo git anidado: se preserva en disco con su propia historia, no se absorbe aqui
+agent-framework/skills/ui-ux-pro-max-skill/

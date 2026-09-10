@@ -61,6 +61,18 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
         .answer-content ul, .answer-content ol { margin: 6px 0; padding-left: 20px; }
         .answer-content li { margin: 3px 0; }
         .answer-content blockquote { border-left: 3px solid var(--user-header-color); margin: 8px 0; padding-left: 10px; opacity: 0.9; font-style: italic; }
+        .markdown-alert { padding: 6px 10px; margin: 8px 0; border-left: 3px solid; border-radius: 4px; font-size: 10.5px; background: rgba(0,0,0,0.2); }
+        .markdown-alert-title { font-weight: bold; margin-bottom: 3px; display: flex; align-items: center; gap: 4px; }
+        .markdown-alert-note { border-color: #38bdf8; background: rgba(56,189,248,0.08); }
+        .markdown-alert-note .markdown-alert-title { color: #38bdf8; }
+        .markdown-alert-tip { border-color: #34d399; background: rgba(52,211,153,0.08); }
+        .markdown-alert-tip .markdown-alert-title { color: #34d399; }
+        .markdown-alert-important { border-color: #c084fc; background: rgba(192,132,252,0.08); }
+        .markdown-alert-important .markdown-alert-title { color: #c084fc; }
+        .markdown-alert-warning { border-color: #fbbf24; background: rgba(251,191,36,0.08); }
+        .markdown-alert-warning .markdown-alert-title { color: #fbbf24; }
+        .markdown-alert-caution { border-color: #f87171; background: rgba(248,113,113,0.08); }
+        .markdown-alert-caution .markdown-alert-title { color: #f87171; }
         .tab-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--vscode-input-border); margin-bottom: 8px; padding-bottom: 4px; }
         .tab-btn { flex: 1; background: transparent; border: none; padding: 6px 4px; font-size: 10px; font-weight: bold; cursor: pointer; opacity: 0.6; border-radius: 4px; color: var(--vscode-foreground); }
         .tab-btn.active { opacity: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
