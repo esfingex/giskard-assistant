@@ -12,6 +12,42 @@ function escapeHtml(str) {
 
 let _lastUserPrompt = '';   // saved to allow re-injection after file reads
 let _toolCallDepth = 0;     // anti-loop: limit re-injection to 1 level
+let _pendingApproval = false;
+
+/**
+ * Tarjeta de aprobacion para operaciones con efecto (exec, write_file).
+ * Fail-closed: sin UI disponible NO se ejecuta. Timeout de 60s descarta.
+ */
+function showToolApprovalCard(title, detail, onApprove, onDeny) {
+    const messagesDiv = document.getElementById('messages');
+    if (!messagesDiv) { if (onDeny) onDeny(); return; }
+    const div = document.createElement('div');
+    div.className = 'msg bot system-tool-msg';
+    div.style.cssText = 'opacity:0.95;border-left:3px solid #fbbf24;padding-left:8px;font-size:10px;';
+    div.innerHTML = '<span style="color:#fbbf24;font-weight:bold;">🛡️ Aprobacion requerida</span><br><b>' + title + '</b><br>' + detail + '<br>';
+    const btnApprove = document.createElement('button');
+    btnApprove.textContent = 'Aprobar';
+    btnApprove.style.cssText = 'margin:6px 6px 0 0;padding:4px 10px;cursor:pointer;background:#34d399;color:#111;border:none;border-radius:3px;font-weight:bold;';
+    const btnDeny = document.createElement('button');
+    btnDeny.textContent = 'Descartar';
+    btnDeny.style.cssText = 'margin:6px 0 0 0;padding:4px 10px;cursor:pointer;background:#f87171;color:#111;border:none;border-radius:3px;font-weight:bold;';
+    let decided = false;
+    const finish = (approve) => {
+        if (decided) return;
+        decided = true;
+        _pendingApproval = false;
+        div.remove();
+        if (approve) { onApprove(); } else if (onDeny) { onDeny(); }
+    };
+    btnApprove.onclick = () => finish(true);
+    btnDeny.onclick = () => finish(false);
+    div.appendChild(btnApprove);
+    div.appendChild(btnDeny);
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    _pendingApproval = true;
+    setTimeout(() => { if (!decided) finish(false); }, 60000);
+}
 
 function parseToolCalls(text) {
     const toolCalls = [];
@@ -103,10 +139,21 @@ function dispatchToolCalls(toolCalls) {
                 appendSystemMessage('📖 Leyendo <code>' + escapeHtml(call.path) + '</code>...', '📂');
                 vscode.postMessage({ type: 'toolReadFile', path: call.path, id: Date.now() });
                 break;
-            case 'write_file':
-                appendSystemMessage('✏️ Preparando diff para <code>' + escapeHtml(call.path) + '</code>...', '📝');
-                vscode.postMessage({ type: 'toolWriteFile', path: call.path, content: call.content, id: Date.now() });
+            case 'write_file': {
+                // Gate real (wave 012): sin aprobacion NO se escribe.
+                const previewLen = String(call.content || '').length;
+                const preview = String(call.content || '').slice(0, 200);
+                showToolApprovalCard(
+                    'Escribir archivo: <code>' + escapeHtml(call.path) + '</code>',
+                    'Contenido: <pre style="white-space:pre-wrap;max-height:80px;overflow:auto;margin:4px 0;">' + escapeHtml(preview) + (previewLen > 200 ? '…' : '') + '</pre>',
+                    () => {
+                        appendSystemMessage('✅ Aprobado: escribiendo <code>' + escapeHtml(call.path) + '</code>...', '📝');
+                        vscode.postMessage({ type: 'toolWriteFile', path: call.path, content: call.content, id: Date.now() });
+                    },
+                    () => appendSystemMessage('⛔ Escritura descartada por el usuario para <code>' + escapeHtml(call.path) + '</code>.', '🛡️')
+                );
                 break;
+            }
             case 'list_dir':
                 appendSystemMessage('📂 Listando <code>' + escapeHtml(call.path || '.') + '</code>...', '📂');
                 vscode.postMessage({ type: 'toolListDir', path: call.path || '.', id: Date.now() });
@@ -119,12 +166,21 @@ function dispatchToolCalls(toolCalls) {
                 appendSystemMessage('🗂️ Glob <code>' + escapeHtml(call.pattern || '**/*') + '</code>...', '🗂️');
                 vscode.postMessage({ type: 'toolGlob', pattern: call.pattern || '**/*', id: Date.now() });
                 break;
-            case 'exec':
+            case 'exec': {
                 var cmdArgs = Array.isArray(call.args) ? call.args : (Array.isArray(args.args) ? args.args : []);
                 var cmdStr = (call.command || '') + ' ' + cmdArgs.join(' ');
-                appendSystemMessage('⚡ Ejecutando: <code>' + escapeHtml(cmdStr) + '</code>', '💻');
-                vscode.postMessage({ type: 'toolExec', command: call.command, args: cmdArgs, id: Date.now() });
+                // Gate real (wave 012): sin aprobacion NO se ejecuta.
+                showToolApprovalCard(
+                    'Ejecutar comando: <code>' + escapeHtml(cmdStr) + '</code>',
+                    'Se ejecutara en el sandbox de giskard-sys (jail de rutas y whitelist).',
+                    () => {
+                        appendSystemMessage('✅ Aprobado: ejecutando <code>' + escapeHtml(cmdStr) + '</code>', '💻');
+                        vscode.postMessage({ type: 'toolExec', command: call.command, args: cmdArgs, id: Date.now() });
+                    },
+                    () => appendSystemMessage('⛔ Comando descartado por el usuario: <code>' + escapeHtml(cmdStr) + '</code>.', '🛡️')
+                );
                 break;
+            }
             default:
                 appendSystemMessage('⚠️ Acción desconocida: <code>' + escapeHtml(call.action) + '</code>', '⚠️');
         }

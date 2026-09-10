@@ -23,6 +23,7 @@ import {
     resetSession
 } from '../core/api';
 import { fetchOllamaModels } from '../core/providers';
+import { getPeakInfo } from '../core/providers/deepseekProvider';
 import { ConnectionStore } from '../core/connectionStore';
 import { EventBus, EventPayload } from '../core/eventBus';
 import { getHtmlForWebview } from './htmlShell';
@@ -1470,7 +1471,7 @@ ${projectRules}
         if (!this._view) return;
         try {
             const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
-            // Guardar vía giskard-sys /memory/add (proxya a Alicanto con el token local)
+            // Guardar via giskard-sys /memory/add (memoria nativa por proyecto, wave 009)
             const res = await fetchWithTimeout(`${getConnectorUrl()}/memory/add`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
@@ -1478,7 +1479,7 @@ ${projectRules}
             }, 15000);
             const data: any = await res.json().catch(() => null);
             const msg = data && data.success
-                ? '✓ Memoria BCF guardada exitosamente en Alicanto.'
+                ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'
                 : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
             this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
             this._view.webview.postMessage({ type: 'streamComplete' });
@@ -1524,9 +1525,24 @@ ${projectRules}
         webview.onDidReceiveMessage(async (data) => {
             try {
                 switch (data.type) {
-                case 'sendPrompt':
+                case 'sendPrompt': {
+                    // Regla del usuario (2026-09-09): DeepSeek oficial solo en off-peak.
+                    const modelLower = String(data.model || '').toLowerCase();
+                    if (modelLower.startsWith('deepseek') || modelLower.includes('deepseek')) {
+                        const peak = getPeakInfo();
+                        if (peak.isPeak) {
+                            const choice = await vscode.window.showWarningMessage(
+                                `Horario PEAK de DeepSeek API (ventanas 01:00-04:00 y 06:00-10:00 UTC, lun-vie). Proxima transicion: ${peak.nextTransitionUtc} UTC. Las corridas pagadas en peak cuestan mas.`,
+                                { modal: true },
+                                'Continuar de todos modos',
+                                'Cancelar'
+                            );
+                            if (choice !== 'Continuar de todos modos') { break; }
+                        }
+                    }
                     await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType, data.tabId);
                     break;
+                }
                 case 'stopGeneration':
                     if (this._activeAbortController) {
                         this._activeAbortController.abort();
@@ -1717,10 +1733,10 @@ ${projectRules}
             skillsText += '\n🔒 [Habilidades Exclusivas del Backend giskard-sys (Puerto 3500)]:\n';
             if (isGiskardActive || (res && res.ok)) {
                 skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM — Activo ✅)\n';
-                skillsText += ' • 🧠 **alicanto_bcf** (Memoria BCF de Alicanto — Activo ✅)\n';
+                skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — Activo ✅)\n';
             } else {
                 skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
-                skillsText += ' • 🧠 **alicanto_bcf** (Memoria BCF de Alicanto — ⚠️ Requiere giskard-sys backend)\n';
+                skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — ⚠️ Requiere giskard-sys backend)\n';
             }
 
             if (res && res.ok) {

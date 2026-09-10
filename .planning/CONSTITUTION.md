@@ -14,4 +14,4 @@ This document establishes the governing laws, architectural guidelines, and styl
 ## 3. Workflow & Terminal Safety
 - All terminal/shell commands must be prefixed with `rtk` to optimize token usage.
 - Never use emojis or visual icons in project documentation, planning files, or git commits. Keep all texts plain and concise.
-- Query Alicanto before starting tasks to avoid repeating past errors or conventions.
+- Query giskard-sys (GET /memory/graph?filter=project:<nombre>) before starting tasks to avoid repeating past errors or conventions.

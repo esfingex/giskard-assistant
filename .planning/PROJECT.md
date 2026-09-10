@@ -25,6 +25,6 @@
 ## Core Ecosystem Conventions
 
 1.  **Rust Token Killer (RTK)**: All terminal commands executed by the agent must be prefixed with `rtk`.
-2.  **Bilingual Caveman Format (BCF)**: Facts stored in the Alicanto database use: `[EN]` in compressed caveman-style English for agent scanning efficiency, and `[ES]` in natural Spanish for developer reference.
+2.  **Bilingual Caveman Format (BCF)**: Facts stored in the giskard-sys native memory (per-project SQLite) use: `[EN]` in compressed caveman-style English for agent scanning efficiency, and `[ES]` in natural Spanish for developer reference.
 3.  **Zero-Pollution Encapsulation**: Maintain global agent rules in `~/.gemini/` or `~/.agents/`. Do not leave local configurations (like `.cursorrules`) inside the repository root.
 4.  **No Emojis or Icons**: Do not include emojis or visual symbols in planning and roadmap files to conserve context window tokens.
