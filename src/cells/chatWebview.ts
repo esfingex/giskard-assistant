@@ -88,6 +88,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _lastModel: string = '';
     private _lastOllamaUrl: string = '';
     private _lastTabId: string | undefined = undefined;
+    private _projectMemoryCache: { at: number; text: string | null } | null = null;
+    private _verifyIterations = 0;
 
     /** Fase 2: per-tab chat history (messages[]) for the host-side agent loop */
     private _tabHistory: Map<string, ChatMessage[]> = new Map();
@@ -446,6 +448,16 @@ ${projectRules}
 • TO PROPOSE A PLAN BEFORE EDITING: Wrap your plan in [PLAN] ... [/END_PLAN] and WAIT for the user to approve it before emitting tool calls or code blocks.
 • RICH OUTPUT FORMATTING: Use structured GitHub Markdown, fenced code blocks with language tags, diff code blocks for changes, tables, and callouts (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING]).
 • IGNORED DIRECTORIES: Do NOT attempt to read non-source files or build output directories like node_modules, out/, dist/, target/, build/, or .git/. Focus exclusively on source code files (src/, package.json, README.md, etc.).\n\n`;
+
+        // Req 5 (wave 012): handoff comun — inyecta la memoria del proyecto
+        // (memorias y decisiones recientes) desde giskard-sys cuando esta activo.
+        if (isGiskardActive) {
+            const projectMemory = await this._fetchProjectMemory();
+            if (projectMemory) {
+                systemHeader += `[PROJECT MEMORY (giskard-sys) — decisiones y recuerdos recientes del proyecto, respetalos]\n${projectMemory}\n`;
+            }
+        }
+
         if (isGiskardActive) {
             systemHeader += `[Capa de Seguridad Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
         }
@@ -1422,6 +1434,39 @@ ${projectRules}
     }
 
     /**
+     * Req 5 (wave 012): lee la memoria nativa del proyecto (memorias y
+     * decisiones recientes) desde giskard-sys para continuidad de sesion.
+     * Cache de 60s para no golpear el backend en cada prompt.
+     */
+    private async _fetchProjectMemory(): Promise<string | null> {
+        const now = Date.now();
+        if (this._projectMemoryCache && now - this._projectMemoryCache.at < 60000) {
+            return this._projectMemoryCache.text;
+        }
+        const wsName = vscode.workspace.workspaceFolders?.[0]?.name || '';
+        if (!wsName) { return null; }
+        try {
+            const url = `${getConnectorUrl()}/memory/graph?filter=project:${encodeURIComponent(wsName)}&limit=3`;
+            const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } }, 8000).catch(() => null);
+            if (!res || !res.ok) { this._projectMemoryCache = { at: now, text: null }; return null; }
+            const data: any = await res.json().catch(() => null);
+            const nodes = data && data.data && data.data.nodes;
+            if (!Array.isArray(nodes) || nodes.length === 0) {
+                this._projectMemoryCache = { at: now, text: null };
+                return null;
+            }
+            const lines = nodes
+                .map((n: any) => `- [${n.kind}] ${n.title ? n.title + ': ' : ''}${n.content}`)
+                .join('\n');
+            this._projectMemoryCache = { at: now, text: lines };
+            return lines;
+        } catch {
+            this._projectMemoryCache = { at: now, text: null };
+            return null;
+        }
+    }
+
+    /**
      * Corre la suite del proyecto (cargo test / npm test) vía giskard-sys /exec
      * después de aplicar cambios. Si falla, pide UNA corrección al modelo local
      * y muestra el diff propuesto (no se aplica automáticamente).
@@ -1429,6 +1474,18 @@ ${projectRules}
     private async _autoVerifyAndFix() {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) return;
+
+        // Req 3 (wave 012): limite de auto-correcciones consecutivas (3).
+        this._verifyIterations += 1;
+        if (this._verifyIterations > 3) {
+            this._view?.webview.postMessage({
+                type: 'streamToken',
+                token: `\n🛑 Limite de auto-correcciones (3) alcanzado. Revisa los tests manualmente.\n`,
+                model: this._lastModel,
+                tabId: this._lastTabId
+            });
+            return;
+        }
         const root = folders[0].uri;
         let cmd: string | null = null;
         try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'Cargo.toml')); cmd = 'cargo'; } catch { /* no rust */ }
@@ -1452,6 +1509,7 @@ ${projectRules}
             }
             const out: string = data.data || '';
             if (out.includes('EXIT CODE: 0')) {
+                this._verifyIterations = 0;
                 this._view.webview.postMessage({ type: 'streamToken', token: `✅ Tests pasaron.\n`, model, tabId });
                 return;
             }
@@ -1481,6 +1539,20 @@ ${projectRules}
             const msg = data && data.success
                 ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'
                 : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
+
+            // Req 5 (wave 012): handoff comun — nodo de continuidad para otros agentes
+            const handoffContent = historyText.length > 8000 ? historyText.slice(0, 8000) : historyText;
+            await fetchWithTimeout(`${getConnectorUrl()}/memory/graph/add_node`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({
+                    type: 'handoff',
+                    project: wsName,
+                    title: `Handoff ${new Date().toISOString().slice(0, 10)}`,
+                    description: handoffContent,
+                    status: 'active'
+                })
+            }, 15000).catch(() => null);
             this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
             this._view.webview.postMessage({ type: 'streamComplete' });
         } catch (err: any) {
@@ -1540,6 +1612,7 @@ ${projectRules}
                             if (choice !== 'Continuar de todos modos') { break; }
                         }
                     }
+                    this._verifyIterations = 0;
                     await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType, data.tabId);
                     break;
                 }
