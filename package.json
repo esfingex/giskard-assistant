@@ -2,7 +2,7 @@
   "name": "giskard-assistant",
   "displayName": "Giskard Assistant — Local AI Connector",
   "description": "Asistente IA para VSCode con soporte nativo para Ollama local, NVIDIA NIM, DeepSeek, Moonshot Kimi, Qwen y conector opcional Giskard-Sys con Sandbox Jail.",
-  "version": "4.2.6",
+  "version": "4.3.0",
   "publisher": "giskard",
   "icon": "resources/icon.png",
   "repository": {

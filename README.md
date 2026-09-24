@@ -1,6 +1,6 @@
 # 🤖 Giskard Assistant — AI Assistant for VS Code
 
-[![Version](https://img.shields.io/badge/version-4.2.6-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.3.0-blue.svg)](CHANGELOG.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-^1.80.0-blue.svg)](package.json)
 
@@ -101,7 +101,7 @@ giskard-assistant/
 Para instalar directamente el paquete compilado `.vsix`:
 
 ```bash
-code --install-extension giskard-assistant-4.2.0.vsix --force
+code --install-extension giskard-assistant-4.3.0.vsix --force
 ```
 
 ### 2. Compilación Manual (Desarrollo)

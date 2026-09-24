@@ -1,5 +1,28 @@
 # CHANGELOG — Giskard Assistant (VSCode Extension)
 
+## [4.3.0] - 2026-09-24
+
+### Refactored
+- **Descomposición del Monolito `chatWebview.ts` (1.762 → ~1.150 líneas, waves 0-6):**
+  - `cells/streamManager.ts` — streaming SSE unificado (giskard-sys, Ollama, API remota).
+  - `cells/connectionsHandlers.ts` — ciclo de vida de conexiones (list/add/remove/reset/activate/test).
+  - `cells/agentLoop.ts` — bucle agéntico local, reglas de proyecto, memoria, auto-verificación, compresión BCF y aprobación de planes.
+  - `cells/diffHandlers.ts` — auto-aplicación de diffs, smart-apply, snapshots y revert.
+  - `cells/knowledgeHandlers.ts` — skills de agentes y Graphify LTM.
+  - `cells/chatStateHandlers.ts` — ensamblado de modelos, settings, acciones CLI e historial de pestañas.
+  - Patrón: células puras de `this` con contexto explícito (`StreamContext`, `AgentLoopContext`, etc.); el host conserva factories `_xxxCtx()`.
+  - Registro de ventanas de contexto movido a `core/contextWindow.ts` (elimina import circular).
+
+### Added
+- **Contrato tipado `core/webviewContract.ts` + drift guard (`tests/webviewContract.test.js`):** fuente única de los mensajes postMessage TS↔webview; el compilador y el test detectan payloads/tipos sin contrato en ambos límites.
+- **Setting `giskard-assistant.inlineCompletionModel`:** modelo configurable para Ghost Text / FIM (default `qwen2.5-coder:1.5b`).
+
+### Fixed
+- **Script `npm test` roto:** `node --test tests/` no expande directorios en Node 22 → glob `tests/*.test.js`.
+- **Setting fantasma `ollamaBaseUrl`:** el código leía la clave inexistente `ollamaUrl`; el ajuste del usuario se ignoraba silenciosamente.
+- **`clearContext` incompleto:** ahora también vacía el historial agéntico (`_tabHistory`) y resetea el límite de auto-corrección.
+- **Contrato `webviewContract` desalineado:** shapes de `connectionTested`, `tool*Result`, `saveChatHistory`, `modelsList`, `mcpServersLoaded` corregidos a los payloads reales; tipos nuevos (`clearMessages`, `selectTheme`, `chatHistoryRestored`, `contextCleared`, `mcpTested`, `smitherySearchResults`).
+
 ## [4.2.6] - 2026-08-10
 
 ### Fixed
