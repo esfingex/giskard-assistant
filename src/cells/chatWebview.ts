@@ -74,6 +74,7 @@ import {
     resolveGiskardSysOllama
 } from './streamManager';
 import { HostToWebviewMessage } from '../core/webviewContract';
+import { DiffContext, maybeAutoTriggerDiff, openDiff, revertLastAiEdit } from './diffHandlers';
 import {
     ConnectionsContext,
     sendConnectionsList,
@@ -100,7 +101,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private readonly _agentLoopBudget = 28000; // safe margin under the 32K local window
 
     /** Snapshots of AI edits (original content) for one-click revert */
-    private static _editSnapshots: { uri: string; original: string; timestamp: number }[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -115,19 +115,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Revert the most recent AI edit (Fase 3: snapshot + revert) */
-    public static revertLastAiEdit(): boolean {
-        const snap = GiskardChatWebviewProvider._editSnapshots.pop();
-        if (!snap) return false;
-        const uri = vscode.Uri.parse(snap.uri);
-        vscode.workspace.openTextDocument(uri).then(async (doc) => {
-            const edit = new vscode.WorkspaceEdit();
-            edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), snap.original);
-            await vscode.workspace.applyEdit(edit);
-            vscode.window.showInformationMessage(`↩️ Cambio de IA revertido en ${vscode.workspace.asRelativePath(uri)}`);
-        });
-        return true;
-    }
-
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
@@ -207,6 +194,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    /** Contexto para la célula de diffs (decomposition wave 4) */
+    private _diffCtx(): DiffContext {
+        return {
+            onEditApplied: () => autoVerifyAndFix(this._agentCtx()).catch(() => { /* best-effort */ })
+        };
+    }
+
     /** Contexto para la célula del bucle agéntico (decomposition wave 3) */
     private _agentCtx(): AgentLoopContext {
         return {
@@ -214,7 +208,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             agentState: this._agentState,
             tabHistory: this._tabHistory,
             streamChat: (messages, model, ollamaUrl, tabId) => this._streamOllamaChat(messages, model, ollamaUrl, tabId),
-            maybeAutoTriggerDiff: (u, r, pf, f) => this._maybeAutoTriggerDiff(u, r, pf, f),
+            maybeAutoTriggerDiff: (u, r, pf, f) => maybeAutoTriggerDiff(this._diffCtx(), u, r, pf, f),
             handlePrompt: (prompt, model, includeFile, mode, tabId) => this._handlePrompt(prompt, model || '', Boolean(includeFile), mode || 'none', tabId),
             clearAbort: () => { this._activeAbortController = null; },
             firstEnabledModel: () => this._store.getEnabledModels()[0] || ''
@@ -340,7 +334,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
                     if (b.filePath) { best = b; break; }
                     if (b.code.length > best.code.length) best = b;
                 }
-                await this._handleOpenDiff(best.code, best.filePath || targetPathMatch);
+                await openDiff(this._diffCtx(), best.code, best.filePath || targetPathMatch);
                 return;
             }
         }
@@ -726,7 +720,7 @@ ${projectRules}
                 return;
             }
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
-            await this._maybeAutoTriggerDiff(prompt, accumulated, targetPathMatch, includeActiveFile);
+            await maybeAutoTriggerDiff(this._diffCtx(), prompt, accumulated, targetPathMatch, includeActiveFile);
 
         } catch (err: any) {
             if (err.name === 'AbortError') return;
@@ -905,7 +899,7 @@ ${projectRules}
             this._agentState.lastBotResponse = accumulated;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
-            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
+            await maybeAutoTriggerDiff(this._diffCtx(), userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
 
         } catch (err: any) {
             if (err.name === 'AbortError') {
@@ -957,7 +951,7 @@ ${projectRules}
             this._agentState.lastBotResponse = ctx.lastBotResponse.text;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
-            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, this._agentState.lastBotResponse, extractedPath, includeActiveFile);
+            await maybeAutoTriggerDiff(this._diffCtx(), userPrompt || fullPrompt, this._agentState.lastBotResponse, extractedPath, includeActiveFile);
         } catch (err: any) {
             if (err.name === 'AbortError') return;
             if (this._view) {
@@ -1007,112 +1001,6 @@ ${projectRules}
      * README.md) y las devuelve como bloque de texto acotado para inyectar
      * en el system header. Sin archivos de reglas devuelve ''. 
      */
-    private async _maybeAutoTriggerDiff(
-        userPrompt: string,
-        botResponse: string,
-        extractedPath?: string,
-        includeActiveFile?: boolean
-    ) {
-        const blocks = extractCodeBlocks(botResponse);
-        if (blocks.length === 0) return;
-
-        // Only consider auto-apply when the user explicitly asked to edit a file
-        // (the prompt mentions an edit verb AND we know a target file).
-        const editIntent = /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|corrige|corregir|fix|write|edit|update|apply|implement|create)\b/i.test(userPrompt);
-        const hasTarget = Boolean(extractedPath || includeActiveFile);
-        if (!editIntent || !hasTarget) return;
-
-        let best = blocks[0];
-        for (const b of blocks) {
-            if (b.filePath) { best = b; break; }
-            if (b.code.length > best.code.length) best = b;
-        }
-
-        let targetPath = best.filePath || extractedPath;
-        if (!targetPath) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document && editor.document.uri.scheme === 'file') {
-                targetPath = vscode.workspace.asRelativePath(editor.document.uri);
-            }
-        }
-        if (!targetPath || !best || !best.code || best.code.trim().length <= 10) return;
-
-        // Never apply silently: ask the user first
-        const choice = await vscode.window.showInformationMessage(
-            `Giskard: el modelo propuso cambios para «${targetPath}». ¿Los aplico?`,
-            { modal: false },
-            '✅ Aplicar',
-            '❌ Descartar'
-        );
-        if (choice === '✅ Aplicar') {
-            await this._handleOpenDiff(best.code, targetPath);
-        }
-    }
-
-    private async _handleOpenDiff(code: string, filePath?: string) {
-        let doc: vscode.TextDocument | null = null;
-        if (filePath) doc = await resolveWorkspaceFile(filePath);
-        if (!doc) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.uri.scheme === 'file') doc = editor.document;
-        }
-
-        if (!doc && filePath) {
-            const folders = vscode.workspace.workspaceFolders;
-            if (folders && folders.length > 0) {
-                const cleanRel = filePath.replace(/^\.\//, '').replace(/^\//, '');
-                const newUri = vscode.Uri.joinPath(folders[0].uri, cleanRel);
-                try {
-                    await vscode.workspace.fs.writeFile(newUri, new Uint8Array());
-                    doc = await vscode.workspace.openTextDocument(newUri);
-                } catch {}
-            }
-        }
-
-        if (!doc) {
-            const newDoc = await vscode.workspace.openTextDocument({ content: code, language: 'typescript' });
-            await vscode.window.showTextDocument(newDoc, { preview: false });
-            return;
-        }
-
-        // Open target file in the editor and apply changes safely (smart-apply, no destructive full-file overwrite)
-        await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
-        const originalContent = doc.getText();
-        const result = await applyCodeToDocument(doc, code);
-        const relPath = vscode.workspace.asRelativePath(doc.uri);
-        switch (result.mode) {
-            case 'noop':
-                vscode.window.showInformationMessage(`✓ Los cambios ya estaban aplicados en ${relPath}`);
-                break;
-            case 'new':
-                vscode.window.showInformationMessage(`✓ Archivo creado: ${relPath} — revisa y guarda`);
-                break;
-            case 'full':
-            case 'partial':
-                // Fase 3c: snapshot for one-click revert + native diff review
-                GiskardChatWebviewProvider._editSnapshots.push({ uri: doc.uri.toString(), original: originalContent, timestamp: Date.now() });
-                if (GiskardChatWebviewProvider._editSnapshots.length > 20) GiskardChatWebviewProvider._editSnapshots.shift();
-                try {
-                    const proposedContent = doc.getText();
-                    const stamp = Date.now();
-                    const origTmp = vscode.Uri.file(path.join(os.tmpdir(), `giskard-orig-${stamp}.tmp`));
-                    const propTmp = vscode.Uri.file(path.join(os.tmpdir(), `giskard-prop-${stamp}.tmp`));
-                    await vscode.workspace.fs.writeFile(origTmp, Buffer.from(originalContent, 'utf8'));
-                    await vscode.workspace.fs.writeFile(propTmp, Buffer.from(proposedContent, 'utf8'));
-                    await vscode.commands.executeCommand('vscode.diff', origTmp, propTmp, `Giskard: ${relPath} — original → propuesto (guarda en el archivo para aceptar)`);
-                } catch { /* diff view is best-effort */ }
-                vscode.window.showInformationMessage(`✓ Cambios aplicados (${result.mode === 'partial' ? 'edición parcial' : 'archivo completo'}) en ${relPath} — revisa el diff, guarda para aceptar o usa "Revert AI Change" para descartar`);
-                break;
-            case 'failed':
-            default:
-                vscode.window.showWarningMessage(`⚠️ ${result.message || `No se pudieron aplicar los cambios en ${relPath}`}`);
-                break;
-        }
-
-        // Wave A: verificación automática con tests (cargo/npm) tras aplicar cambios
-        autoVerifyAndFix(this._agentCtx()).catch(() => { /* best-effort */ });
-    }
-
     /** Fase 4a: persist chat tabs history in workspaceState */
     private async _saveChatHistory(tabs: any[]) {
         if (!this._context || !Array.isArray(tabs) || tabs.length === 0) return;
@@ -1239,7 +1127,7 @@ ${projectRules}
                     await handleOpenFile(data.relativePath || data.path);
                     break;
                 case 'openDiff':
-                    await this._handleOpenDiff(data.code, data.filePath);
+                    await openDiff(this._diffCtx(), data.code, data.filePath);
                     break;
                 case 'loadMcpServers':
                     await sendMcpServersList(this._view, this._store);

@@ -10,6 +10,7 @@
 
 import * as vscode from 'vscode';
 import { GiskardChatWebviewProvider, createNewChatPanelTab } from './cells/chatWebview';
+import { revertLastAiEdit } from './cells/diffHandlers';
 import { registerSandboxCommands } from './cells/sandboxCommands';
 import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore, fetchLlmModels } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
@@ -71,7 +72,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // 1.1 Fase 3c: Revert last AI edit (one-click undo of applied changes)
     context.subscriptions.push(
         vscode.commands.registerCommand('giskard-assistant.revertLastAiChange', () => {
-            if (!GiskardChatWebviewProvider.revertLastAiEdit()) {
+            if (!revertLastAiEdit()) {
                 vscode.window.showInformationMessage('No hay cambios de IA recientes para revertir.');
             }
         })
