@@ -4,9 +4,9 @@
 
 ## Current Context Handoff
 
-*   **Last Milestone**: Waves 0-6 + 8 commiteadas en `main`. Verificación en verde: `npm run verify` (tsc + 44 tests node:test).
-*   **Immediate Next Step**: Wave 6b — extraer `_setWebviewMessageListener` (chatWebview.ts ~línea 950) a `cells/messageRouter.ts`. El listener despacha ~30 tipos del contrato; resolver primero el acoplamiento con `_handlePrompt` (último método grande, ~450 líneas) — sugerencia: extraer `_handlePrompt` por fases (contexto/routing/streaming) antes del router.
-*   **Después**: Wave 7 — dividir `media/chatView.js` (1.182 líneas) y limpiar los 9 tipos muertos del allowlist en `tests/webviewContract.test.js` (los botones "ejecutar" `executeAction`/`executeShellCommand` envían mensajes que nadie maneja).
+*   **Last Milestone**: Waves 0-6, 6b, 7a y 8 commiteadas en `main`. Verificación en verde: `npm run verify` (tsc + 44 tests node:test) + `node --check` en media/*.js.
+*   **Immediate Next Step**: Verificación GUI manual (F5 → Extension Development Host): Ctrl+L muestra el bloque de contexto, botón ⚡Shell ejecuta por giskard-sys, botones ctx "cargo check"/"python unittest" devuelven actionResult.
+*   **Después (futuro)**: Wave 7b — dividir `media/chatView.js` (~1.120 líneas, IIFE con estado compartido → namespace). Opcional: trocear `_handlePrompt` (~450 líneas, último método grande de chatWebview.ts).
 
 ## Restart Commands
 

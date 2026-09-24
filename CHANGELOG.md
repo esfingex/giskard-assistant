@@ -18,6 +18,10 @@
 - **Setting `giskard-assistant.inlineCompletionModel`:** modelo configurable para Ghost Text / FIM (default `qwen2.5-coder:1.5b`).
 
 ### Fixed
+- **Ctrl+L roto (wave 7a):** el host enviaba `injectCodeSnippet` pero el webview solo escuchaba `attachedContext` (tipo sin emisor). El listener maneja `injectCodeSnippet` con `contextBlock`.
+- **Botones de ejecución muertos (wave 7a):** `executeAction` → `actionBtn` (canal vivo `execCliCommand rtk`) y ⚡Shell `executeShellCommand` → `toolExec` (giskard-sys `/exec` enjaulado con approval gate).
+- **Listeners muertos eliminados (wave 7a):** `memoryCompressed`, `policyError`, `setSelectedModel`, `stateRefreshed`, labels `settingsSaved`/`modelsLoaded`.
+- **Router de mensajes extraído (wave 6b):** `cells/messageRouter.ts` despacha los ~35 tipos `WebviewToHostMessage` con dependencias explícitas.
 - **Script `npm test` roto:** `node --test tests/` no expande directorios en Node 22 → glob `tests/*.test.js`.
 - **Setting fantasma `ollamaBaseUrl`:** el código leía la clave inexistente `ollamaUrl`; el ajuste del usuario se ignoraba silenciosamente.
 - **`clearContext` incompleto:** ahora también vacía el historial agéntico (`_tabHistory`) y resetea el límite de auto-corrección.

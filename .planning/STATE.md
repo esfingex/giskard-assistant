@@ -4,8 +4,8 @@
 
 ## Development State
 
-*   **Active Phase**: Descomposición del monolito `chatWebview.ts` (v4.3.0-dev)
-*   **Current Milestone**: Waves 0-6 completadas y commiteadas. `chatWebview.ts`: 1.762 → 1.153 líneas (−35%).
+*   **Active Phase**: Descomposición COMPLETADA (waves 0-8 + 6b + 7a). Siguiente fase candidata: trocear `_handlePrompt` y dividir `media/chatView.js`
+*   **Current Milestone**: Waves 0-6 completadas y commiteadas. `chatWebview.ts`: 1.762 → 954 líneas (−46%).
 *   **Git Position**: `main` @ wave 8
 
 ### Células extraídas (patrón: funciones puras con contexto explícito)
@@ -44,9 +44,10 @@
 
 ## Pendiente (próximas oleadas)
 
-*   **Wave 6b**: extraer `_setWebviewMessageListener` a `messageRouter.ts` — pendiente por alto acoplamiento con `_handlePrompt` (~450 líneas, el último gran método).
-*   **Wave 7**: dividir `media/chatView.js` (1.182 líneas) y limpiar los 8 listeners/senders muertos documentados en el allowlist del drift guard (`attachedContext`, `memoryCompressed`, `policyError`, `setSelectedModel`, `settingsSaved`, `stateRefreshed`, `modelsLoaded`, `executeAction`, `executeShellCommand`).
-*   **Hallazgo abierto**: los botones "ejecutar" del webview (`executeAction`/`executeShellCommand`) envían mensajes que nadie maneja en TS — funcionalidad muerta o regresión.
+*   ~~Wave 6b~~ **HECHA**: `cells/messageRouter.ts` (despacho de ~35 tipos con `ChatRouterDeps`; la política DeepSeek off-peak y el error boundary viven ahí).
+*   **Wave 7a HECHA**: listeners muertos eliminados; Ctrl+L restaurado (`injectCodeSnippet`); botones ctx reconectados vía `actionBtn` y ⚡Shell vía `toolExec` enjaulado. **Pendiente verificación GUI manual.**
+*   **Wave 7b (futura)**: dividir `media/chatView.js` (~1.120 líneas, IIFE única con estado compartido) — requiere convertir el closure a namespace compartido; sin tests de webview, hacer tras verificación GUI.
+*   ~~Hallazgo abierto~~ **RESUELTO (wave 7a)**: `executeAction`→`actionBtn`, `executeShellCommand`→`toolExec`, Ctrl+L→`injectCodeSnippet`.
 
 ## Active Blockers
 *   None.
