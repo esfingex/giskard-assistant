@@ -62,6 +62,7 @@ import {
     streamFromRemoteApi,
     resolveGiskardSysOllama
 } from './streamManager';
+import { HostToWebviewMessage } from '../core/webviewContract';
 
 const _modelContextRegistry: Map<string, number> = new Map();
 
@@ -192,7 +193,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         if (this._view) await sendMcpServersList(this._view, this._store);
     }
 
-    public postMessage(message: any) {
+    public postMessage(message: HostToWebviewMessage) {
         if (this._view) {
             this._view.webview.postMessage(message);
         }

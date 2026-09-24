@@ -42,15 +42,22 @@ export interface ConnectionErrorMessage {
 
 export interface ConnectionTestedMessage {
     type: 'connectionTested';
-    url: string;
     ok: boolean;
+    status?: number;
+    ms?: number;
     error?: string;
-    models?: number;
 }
 
 export interface ModelsListMessage {
     type: 'modelsList';
-    groups: any[]; // ConnectionModelsGroup[]
+    models?: string[];
+    enabledModels?: string[];
+    groups?: any[]; // ConnectionModelsGroup[]
+    localModels?: string[];
+    activeTag?: string;
+    activeName?: string;
+    currentUrl?: string;
+    connectionMode?: 'giskardSysActive' | 'ollamaDirect';
 }
 
 export interface SettingsErrorMessage {
@@ -105,49 +112,87 @@ export interface HandoffMessage {
 
 export interface McpServersLoadedMessage {
     type: 'mcpServersLoaded';
-    servers: any[]; // McpServer[]
+    servers?: any[]; // McpServer[] (extension.ts tree-refresh sends it empty; JS re-fetches)
+}
+
+export interface McpTestedMessage {
+    type: 'mcpTested';
+    ok: boolean;
+    ms?: number;
+    error?: string;
+}
+
+export interface SmitherySearchResultsMessage {
+    type: 'smitherySearchResults';
+    query: string;
+    results?: any[];
+    error?: string;
+}
+
+export interface ClearMessagesMessage {
+    type: 'clearMessages';
+}
+
+export interface SelectThemeMessage {
+    type: 'selectTheme';
+    theme: string;
+}
+
+export interface ChatHistoryRestoredMessage {
+    type: 'chatHistoryRestored';
+    tabs: any[];
+}
+
+export interface ContextClearedMessage {
+    type: 'contextCleared';
 }
 
 export interface ToolReadFileResultMessage {
     type: 'toolReadFileResult';
     id: number;
-    content: string;
     path: string;
+    content?: string;
+    error?: string;
 }
 
 export interface ToolListDirResultMessage {
     type: 'toolListDirResult';
     id: number;
-    content: string;
     path: string;
+    listing?: string;
+    error?: string;
 }
 
 export interface ToolWriteFileResultMessage {
     type: 'toolWriteFileResult';
     id: number;
     success: boolean;
-    error?: string;
     path?: string;
+    mode?: 'new' | 'overwrite';
+    error?: string;
 }
 
 export interface ToolExecResultMessage {
     type: 'toolExecResult';
     id: number;
-    stdout: string;
-    stderr: string;
-    exitCode: number;
+    output?: string;
+    error?: string;
 }
 
 export interface ToolSearchResultMessage {
     type: 'toolSearchResult';
     id: number;
-    content: string;
+    query?: string;
+    files?: string[];
+    error?: string;
 }
 
 export interface ToolGlobResultMessage {
     type: 'toolGlobResult';
     id: number;
-    content: string;
+    pattern?: string;
+    files?: string[];
+    error?: string;
 }
 
 /** Union of all messages the extension host may push down to the webview. */
@@ -168,6 +213,12 @@ export type HostToWebviewMessage =
     | OfflineModeMessage
     | HandoffMessage
     | McpServersLoadedMessage
+    | McpTestedMessage
+    | SmitherySearchResultsMessage
+    | ClearMessagesMessage
+    | SelectThemeMessage
+    | ChatHistoryRestoredMessage
+    | ContextClearedMessage
     | ToolReadFileResultMessage
     | ToolListDirResultMessage
     | ToolWriteFileResultMessage
@@ -372,8 +423,7 @@ export interface ApprovePlanMessage {
 
 export interface SaveChatHistoryMessage {
     type: 'saveChatHistory';
-    tabId: string;
-    history: any[];
+    tabs: any[];
 }
 
 export interface RestoreChatHistoryMessage {
