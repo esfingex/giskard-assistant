@@ -22,7 +22,7 @@
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p ./",
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "verify": "npm run compile && npm test",
     "package": "npm run compile && npx --yes @vscode/vsce package --no-dependencies"
   },
@@ -281,6 +281,11 @@
           ],
           "default": "en",
           "description": "Interface language for Giskard Assistant (en: English [default], es: Spanish)."
+        },
+        "giskard-assistant.inlineCompletionModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID for inline code completions (Ghost Text / FIM). Leave empty to use the default (qwen2.5-coder:1.5b)."
         }
       }
     },

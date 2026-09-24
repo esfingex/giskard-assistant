@@ -7,6 +7,9 @@ import * as vscode from 'vscode';
 import { ConnectionStore } from '../core/connectionStore';
 import { fetchWithTimeout, CLIENT_ID } from '../core/api';
 
+/** Default inline completion model — override via giskard-assistant.inlineCompletionModel setting */
+const DEFAULT_INLINE_MODEL = 'qwen2.5-coder:1.5b';
+
 export class GiskardInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
     constructor(private readonly store: ConnectionStore) { }
 
@@ -22,6 +25,10 @@ export class GiskardInlineCompletionProvider implements vscode.InlineCompletionI
         if (!prefix.trim()) return null;
 
         try {
+            const config = vscode.workspace.getConfiguration('giskard-assistant');
+            const configuredModel = config.get<string>('inlineCompletionModel', '');
+            const model = configuredModel || DEFAULT_INLINE_MODEL;
+
             const activeConn = this.store.getActive();
             const baseUrl = activeConn ? activeConn.url : 'http://localhost:11434';
             const apiKeyRes = activeConn ? await this.store.getAnyRemoteApiKey(activeConn.tag) : null;
@@ -38,7 +45,7 @@ export class GiskardInlineCompletionProvider implements vscode.InlineCompletionI
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
-                    model: 'qwen2.5-coder:1.5b',
+                    model,
                     messages: [{ role: 'user', content: `Complete code inline:\n${prefix}` }],
                     max_tokens: 48,
                     temperature: 0.2

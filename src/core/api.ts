@@ -157,7 +157,7 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
         const groupPromises = activeConnections.map(async (conn) => {
             try {
                 const apiKey = conn.id ? (await _store!.getApiKey(conn.id) || '') : '';
-                const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey).catch(() => []);
+                const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey, conn.type).catch(() => []);
                 if (providerModels && providerModels.length > 0) {
                     return {
                         connectionId: conn.id,

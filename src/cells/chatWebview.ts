@@ -54,6 +54,14 @@ import {
 } from './toolHandlers';
 import { setAgentActivity, clearAgentActivity } from './statusBar';
 import { buildChatMessages, trimHistory, estimateTokens, ChatMessage } from '../core/contextWindow';
+import {
+    StreamContext,
+    streamFromGiskardSys,
+    streamFromOllamaLegacy,
+    streamOllamaChat,
+    streamFromRemoteApi,
+    resolveGiskardSysOllama
+} from './streamManager';
 
 const _modelContextRegistry: Map<string, number> = new Map();
 
@@ -80,9 +88,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _lastBotResponse: string = '';
     private _localModelStreaming: boolean = false;
     private _modelConnectionMap: Map<string, ConnectionModelsGroup> = new Map();
-
-    /** Caché de la URL de Ollama que sirve el backend giskard-sys (GET /policy) */
-    private _giskardSysOllamaCache: { url: string; value: string | null; at: number } | null = null;
 
     /** Últimos modelo/URL/tab usados — para el bucle auto-corrector con tests */
     private _lastModel: string = '';
@@ -1015,89 +1020,26 @@ ${projectRules}
         if (!this._view) return;
 
         this._activeAbortController = new AbortController();
-        const signal = this._activeAbortController.signal;
 
         const config = vscode.workspace.getConfiguration('giskard-assistant');
         const defaultModel = config.get<string>('defaultModel') || 'qwen3-coder:30b';
-        const ollamaBaseUrl = customOllamaUrl || config.get<string>('ollamaUrl') || 'http://127.0.0.1:11434';
+        const ollamaBaseUrl = customOllamaUrl || config.get<string>('ollamaBaseUrl') || 'http://127.0.0.1:11434';
+        const targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
 
-        let targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
-        const url = `${ollamaBaseUrl.replace(/\/$/, '')}/api/generate`;
-
-        // Explicit context window: without num_ctx, Ollama uses the model's tiny default
-        // (often 2048-8192), which overflows as soon as we inject project file contents
-        // and kills the generation mid-stream. qwen-agentworld 35B supports 32K.
-        const modelCtx = getModelMaxContextWindow(targetModel);
-        const numCtx = Math.min(modelCtx, 32768);
+        const ctx: StreamContext = {
+            view: this._view,
+            abortController: this._activeAbortController,
+            lastBotResponse: { text: '' }
+        };
 
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: targetModel,
-                    prompt: fullPrompt,
-                    stream: true,
-                    keep_alive: '10m',
-                    options: {
-                        num_ctx: numCtx,
-                        num_predict: 8192,
-                        temperature: 0.7
-                    }
-                }),
-                signal
-            });
-
-            if (!response.ok || !response.body) {
-                throw new Error(`Ollama local respondió HTTP ${response.status}`);
-            }
-
-            this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: true, tabId });
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            let ollamaAccumulated = '';
-            let ollamaBuffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                ollamaBuffer += decoder.decode(value, { stream: true });
-                const lines = ollamaBuffer.split('\n');
-                ollamaBuffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed) continue;
-                    try {
-                        const json = JSON.parse(trimmed);
-                        let token = '';
-                        if (json.response !== undefined) {
-                            token = json.response;
-                        } else if (json.message?.content) {
-                            token = json.message.content;
-                        } else if (json.thinking) {
-                            token = json.thinking;
-                        } else if (json.message?.reasoning_content) {
-                            token = json.message.reasoning_content;
-                        }
-
-                        if (token) {
-                            ollamaAccumulated += token;
-                            this._view.webview.postMessage({ type: 'streamToken', token, model: targetModel, tabId });
-                        }
-                    } catch { }
-                }
-            }
-
-            this._lastBotResponse = ollamaAccumulated;
+            await streamFromOllamaLegacy(ctx, ollamaBaseUrl, fullPrompt, targetModel, tabId);
+            this._lastBotResponse = ctx.lastBotResponse.text;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
-            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, ollamaAccumulated, extractedPath, includeActiveFile);
-
+            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, this._lastBotResponse, extractedPath, includeActiveFile);
         } catch (err: any) {
             if (err.name === 'AbortError') return;
-            // Never let an Ollama error kill the conversation: surface it in the chat instead
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'streamError',
@@ -1120,59 +1062,13 @@ ${projectRules}
     ): Promise<string> {
         if (!this._view) return '';
         this._activeAbortController = new AbortController();
-        const signal = this._activeAbortController.signal;
-        const url = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model,
-                messages,
-                stream: true,
-                keep_alive: '10m',
-                options: {
-                    num_ctx: Math.min(getModelMaxContextWindow(model), 32768),
-                    num_predict: 8192,
-                    temperature: 0.7
-                }
-            }),
-            signal
-        });
-
-        if (!response.ok || !response.body) {
-            throw new Error(`Ollama /api/chat respondió HTTP ${response.status}`);
-        }
-
-        this._view.webview.postMessage({ type: 'streamStatus', phase: 'connected', isLocal: true, tabId });
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let accumulated = '';
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-                try {
-                    const json = JSON.parse(trimmed);
-                    let token = '';
-                    if (json.message && json.message.content) token = json.message.content;
-                    else if (json.message && json.message.reasoning_content) token = json.message.reasoning_content;
-                    else if (json.thinking) token = json.thinking;
-                    if (token) {
-                        accumulated += token;
-                        this._view.webview.postMessage({ type: 'streamToken', token, model, tabId });
-                    }
-                } catch { }
-            }
-        }
-        return accumulated;
+        const ctx: StreamContext = {
+            view: this._view,
+            abortController: this._activeAbortController,
+            lastBotResponse: { text: '' }
+        };
+        return await streamOllamaChat(ctx, messages, model, ollamaUrl, tabId);
     }
 
     /** Fase 2: host-side agent loop for local Ollama models — model → read-only tools → model, with history + budget */
@@ -1180,31 +1076,10 @@ ${projectRules}
      * Resuelve la URL de Ollama que sirve el backend giskard-sys consultando
      * GET /policy. Solo devuelve valor cuando el proveedor activo es "ollama".
      * Cacheada 60s para no golpear el conector en cada mensaje.
+     * Delegada a streamManager.ts.
      */
     private async _resolveGiskardSysOllama(connectorUrl: string): Promise<string | null> {
-        const now = Date.now();
-        const cache = this._giskardSysOllamaCache;
-        if (cache && cache.url === connectorUrl && now - cache.at < 60_000) {
-            return cache.value;
-        }
-        let result: string | null = null;
-        try {
-            const res = await fetchWithTimeout(`${connectorUrl}/policy`, {}, 5000);
-            if (res && res.ok) {
-                const data: any = await res.json().catch(() => null);
-                if (data && data.success && data.data) {
-                    const provider = String(data.data.active_provider || '').toLowerCase();
-                    const url = String(data.data.ollama_url || '').trim();
-                    if (provider === 'ollama' && url) {
-                        result = url;
-                    }
-                }
-            }
-        } catch {
-            // Sin conectividad con giskard-sys → caer al streaming clásico.
-        }
-        this._giskardSysOllamaCache = { url: connectorUrl, value: result, at: now };
-        return result;
+        return await resolveGiskardSysOllama(connectorUrl);
     }
 
     /**
