@@ -488,7 +488,7 @@ function attachCodeBlockActions(container) {
             runBtn.style.cssText = 'background: rgba(245,158,11,0.2); color: #f59e0b; border: 1px solid #f59e0b; padding: 2px 5px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold;';
             runBtn.onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
-                vscode.postMessage({ type: 'executeShellCommand', command: codeText.trim() });
+                vscode.postMessage({ type: 'toolExec', command: codeText.trim(), args: [], id: Date.now(), approved: false });
             };
             btnGroup.appendChild(runBtn);
         } else {

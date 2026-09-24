@@ -655,7 +655,7 @@
     }
     
     const ctxCheck = document.getElementById('ctx-action-check');
-    if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
+    if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
     
     const ctxPython = document.getElementById('ctx-action-python');
     const stopBtn = document.getElementById('stop-btn');
@@ -672,7 +672,7 @@
         });
     }
 
-    if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'executeAction', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
+    if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
 
     if (sendBtn) sendBtn.addEventListener('click', send);
 
@@ -876,16 +876,6 @@
                 break;
             }
 
-            case 'memoryCompressed':
-                if (messagesDiv) {
-                    const bDiv = document.createElement('div');
-                    bDiv.className = 'msg bot';
-                    bDiv.textContent = '🧠 Memoria comprimida y guardada en base local.\n\n' + message.summary + '\n\n✨ Ventana de contexto reiniciada.';
-                    messagesDiv.appendChild(bDiv);
-                }
-                updateTokenCounter();
-                break;
-            case 'settingsSaved':
             case 'actionResult':
                 if (currentBotMsgDiv) {
                     currentBotMsgDiv.textContent = message.message || message.text;
@@ -901,40 +891,21 @@
                 setGenerationState(false);
                 break;
 
-            case 'attachedContext':
-                if (messagesDiv) {
+            case 'injectCodeSnippet': {
+                // Fix wave 7a: el host envía {contextBlock:{relativePath,startLine,endLine,code,lang}} (webviewContract)
+                const cb = message.contextBlock || {};
+                if (messagesDiv && cb.code) {
                     const ctxDiv = document.createElement('div');
                     ctxDiv.className = 'msg context-block';
                     ctxDiv.innerHTML = `<span style="font-size:9px; color:#38bdf8; font-weight:bold;">📎 Contexto adjunto (Ctrl+L)</span><br>` +
-                        `<span style="opacity:0.7; font-size:9px;">${escapeHtml(message.relativePath)} · Línea ${message.startLine}–${message.endLine}</span><br>` +
-                        `<pre style="margin:4px 0 0 0; font-size:10px; max-height:80px; overflow:auto;"><code>${escapeHtml(message.code)}</code></pre>`;
+                        `<span style="opacity:0.7; font-size:9px;">${escapeHtml(cb.relativePath || '')} · Línea ${cb.startLine || '?'}–${cb.endLine || '?'}${cb.lang ? ' · ' + escapeHtml(cb.lang) : ''}</span><br>` +
+                        `<pre style="margin:4px 0 0 0; font-size:10px; max-height:80px; overflow:auto;"><code>${escapeHtml(cb.code)}</code></pre>`;
                     messagesDiv.appendChild(ctxDiv);
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 }
-                if (promptInput && message.prefillPrompt) {
-                    promptInput.value = message.prefillPrompt;
-                    promptInput.focus();
-                }
                 break;
+            }
 
-            case 'policyError':
-                if (messagesDiv) {
-                    const errDiv = document.createElement('div');
-                    errDiv.className = 'msg error';
-                    const payload = message.payload || {};
-                    const detail = payload.error || payload.message || JSON.stringify(payload, null, 2);
-                    errDiv.innerHTML = `<b>⛔ Bloqueado por Política de Giskard-Sys (HTTP 403)</b>\n` +
-                        `<span style="opacity:0.8; font-size:9px;">El conector rechazó esta operación.</span>\n\n` +
-                        escapeHtml(detail);
-                    messagesDiv.appendChild(errDiv);
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }
-                if (currentBotMsgDiv) {
-                    currentBotMsgDiv.remove();
-                    currentBotMsgDiv = null;
-                }
-                setGenerationState(false);
-                break;
 
             case 'offlineMode':
                 if (offlineBadge) {
@@ -1002,7 +973,6 @@
                 }
                 break;
 
-            case 'modelsLoaded':
             case 'modelsList':
                 console.log('[Giskard Webview] modelsList payload:', message);
                 if (Array.isArray(message.enabledModels)) {
@@ -1048,20 +1018,6 @@
 
                 renderSubTabs();
                 renderPopoverLists();
-                break;
-
-            case 'setSelectedModel':
-                if (message.model) {
-                    currentActiveModel = message.model;
-                    if (chatModelSelect) {
-                        chatModelSelect.value = message.model;
-                    }
-                }
-                break;
-
-            case 'stateRefreshed':
-                const connUrlInp = document.getElementById('conn-url');
-                if (message.url && connUrlInp) connUrlInp.value = message.url;
                 break;
 
             case 'toolReadFileResult':

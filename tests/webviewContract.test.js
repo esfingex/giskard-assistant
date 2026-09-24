@@ -17,20 +17,11 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 
-// ── Allowlists (documented exceptions — every entry must justify itself) ─────
-// Webview listens but nobody sends: dead listeners, cleanup pending.
+// ── Allowlist (documented exceptions — every entry must justify itself) ─────
+// Despachos internos de tool-calls en chatUtils.js (no son mensajes del host;
+// envían toolSearch/toolGlob/toolExec, cubiertos por el contrato).
 const DEAD_LISTENERS = new Set([
-    'attachedContext',   // awaiting: confirmación de Ctrl+L (hoy se usa injectCodeSnippet)
-    'memoryCompressed',  // _handleCompressMemory responde vía streamToken/streamComplete
-    'policyError',       // sin emisor; el error de /policy va por streamError
-    'setSelectedModel',  // el cambio de modelo se refleja vía setEnabledModels/modelsList
-    'settingsSaved',     // saveSettings responde vía actionResult/settingsError
-    'stateRefreshed',    // refreshState reusa setEnabledModels/connectionsLoaded
-    'modelsLoaded',      // solo lo emite modelSettingsWebview con campo 'command:' en SU vista; chat nunca lo recibe
-    // Webview sends but host never handles: dead senders (botones "ejecutar" sin efecto).
-    'exec', 'glob', 'search', // inner handlers de chatUtils (no son mensajes host)
-    'executeAction',
-    'executeShellCommand'
+    'exec', 'glob', 'search'
 ]);
 
 function readAll(dir, filter, acc = []) {
