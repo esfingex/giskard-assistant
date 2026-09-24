@@ -76,6 +76,7 @@ import {
 import { HostToWebviewMessage } from '../core/webviewContract';
 import { DiffContext, maybeAutoTriggerDiff, openDiff, revertLastAiEdit } from './diffHandlers';
 import { KnowledgeContext, fetchSkills, runGraphify } from './knowledgeHandlers';
+import { ChatStateContext, sendModelsList, handleSaveSettings, handleAction, saveChatHistory, restoreChatHistory } from './chatStateHandlers';
 import {
     ConnectionsContext,
     sendConnectionsList,
@@ -175,7 +176,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         await sendConnectionsList(this._cellCtx());
-        await this._sendModelsList();
+        await sendModelsList(this._stateCtx());
         if (this._view) await sendMcpServersList(this._view, this._store);
     }
 
@@ -193,6 +194,18 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             type: 'injectCodeSnippet',
             contextBlock
         });
+    }
+
+    /** Contexto para la célula de estado (decomposition wave 6) */
+    private _stateCtx(): ChatStateContext {
+        return {
+            view: this._view,
+            panel: this._panel,
+            store: this._store,
+            modelConnectionMap: this._modelConnectionMap,
+            postMessage: (m) => this.postMessage(m),
+            extensionContext: this._context
+        };
     }
 
     /** Contexto para la célula de conocimiento (decomposition wave 5) */
@@ -230,84 +243,6 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             postMessage: (m) => this.postMessage(m),
             refreshState: () => this.refreshState()
         };
-    }
-
-    private async _sendModelsList() {
-        if (!this._view && !this._panel) return;
-
-        let enabledModels = this._store.getEnabledModels();
-
-        const activeConn = this._store.getActive();
-        const activeTag = activeConn?.tag || 'giskard-sys';
-        const activeName = activeConn?.name || (activeConn?.type === 'remote' ? 'Remote API' : 'Giskard-Sys');
-
-        const groups = await fetchLlmModelsGrouped().catch(() => []);
-        const remoteModels = await fetchLlmModels().catch(() => []);
-
-        const ollamaConn = this._store.getAll().find(c => c.tag === 'ollama' || c.url.includes(':11434'));
-        const ollamaUrl = ollamaConn?.url || 'http://127.0.0.1:11434';
-        const localModels = await fetchOllamaModels(ollamaUrl).catch(() => []);
-
-        const flatGroupModels: string[] = [];
-        this._modelConnectionMap.clear();
-        groups.forEach(g => {
-            if (g && Array.isArray(g.models)) {
-                flatGroupModels.push(...g.models);
-                g.models.forEach(m => {
-                    if (m) this._modelConnectionMap.set(m, g);
-                });
-            }
-        });
-
-        const allFlatModels = Array.from(new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
-
-        // Auto-enable if empty
-        if (enabledModels.length === 0 && allFlatModels.length > 0) {
-            enabledModels = allFlatModels;
-            this._store.setEnabledModels(enabledModels);
-        }
-
-        this.postMessage({ type: 'setEnabledModels', enabledModels });
-
-        const config = vscode.workspace.getConfiguration('giskard-assistant');
-        const isGiskardSysEnabled = config.get<boolean>('giskardSys.enabled', false);
-        const connectionMode = isGiskardSysEnabled ? 'giskardSysActive' : 'ollamaDirect';
-
-        this.postMessage({
-            type: 'modelsList',
-            models: allFlatModels,
-            enabledModels,
-            groups,
-            localModels,
-            activeTag,
-            activeName,
-            currentUrl: getConnectorUrl(),
-            connectionMode
-        });
-    }
-
-    private async _handleSaveSettings(provider: string, baseUrl?: string, apiKey?: string) {
-        try {
-            const res = await execCliCommand('config', 'update', provider);
-            if (res.success) {
-                vscode.window.showInformationMessage(`✓ Proveedor IA actualizado a: ${provider}`);
-            } else {
-                this._view?.webview.postMessage({ type: 'settingsError', error: res.error });
-            }
-        } catch (err: any) {
-            this._view?.webview.postMessage({ type: 'settingsError', error: err.message });
-        }
-    }
-
-    private async _handleAction(action: string) {
-        if (!this._view) return;
-        try {
-            const resData: any = await execCliCommand('rtk', action);
-            const text = resData.success ? resData.data : `Error Ejecución: ${resData.error}`;
-            this._view.webview.postMessage({ type: 'actionResult', text });
-        } catch (err: any) {
-            this._view.webview.postMessage({ type: 'streamError', error: err.message });
-        }
     }
 
     private async _handlePrompt(
@@ -1002,36 +937,6 @@ ${projectRules}
         return await resolveGiskardSysOllama(connectorUrl);
     }
 
-    /**
-     * Lee las reglas del proyecto abierto (AGENTS.md, CLAUDE.md, .cursorrules,
-     * README.md) y las devuelve como bloque de texto acotado para inyectar
-     * en el system header. Sin archivos de reglas devuelve ''. 
-     */
-    /** Fase 4a: persist chat tabs history in workspaceState */
-    private async _saveChatHistory(tabs: any[]) {
-        if (!this._context || !Array.isArray(tabs) || tabs.length === 0) return;
-        try {
-            // Cap payload: keep the most recent 2 tabs if the serialized history is large
-            let safeTabs = tabs;
-            const serialized = JSON.stringify(tabs);
-            if (serialized && serialized.length > 90000) {
-                safeTabs = tabs.slice(-2);
-            }
-            await this._context.workspaceState.update('giskard.chatTabs', safeTabs);
-        } catch { /* non-critical: history persistence is best-effort */ }
-    }
-
-    /** Fase 4a: restore chat tabs from workspaceState and push to the webview */
-    private async _restoreChatHistory() {
-        if (!this._context || !this._view) return;
-        try {
-            const tabs = this._context.workspaceState.get<any[]>('giskard.chatTabs', []);
-            if (Array.isArray(tabs) && tabs.length > 0) {
-                this._view.webview.postMessage({ type: 'chatHistoryRestored', tabs });
-            }
-        } catch { /* non-critical */ }
-    }
-
     private _setWebviewMessageListener(webview: vscode.Webview) {
         webview.onDidReceiveMessage(async (data) => {
             try {
@@ -1090,7 +995,7 @@ ${projectRules}
                     break;
                 case 'fetchModels':
                 case 'getModels':
-                    await this._sendModelsList();
+                    await sendModelsList(this._stateCtx());
                     break;
                 case 'modelChanged':
                     if (data.model) {
@@ -1098,7 +1003,7 @@ ${projectRules}
                     }
                     break;
                 case 'saveSettings':
-                    await this._handleSaveSettings(data.provider, data.baseUrl, data.apiKey);
+                    await handleSaveSettings(this._stateCtx(), data.provider, data.baseUrl, data.apiKey);
                     break;
                 case 'clearContext':
                     if (this._activeAbortController) {
@@ -1126,7 +1031,7 @@ ${projectRules}
                     break;
                 }
                 case 'actionBtn':
-                    await this._handleAction(data.action);
+                    await handleAction(this._stateCtx(), data.action);
                     break;
                 case 'openFile':
                     // Fix: el webview envía relativePath (chatView.js/chatUtils.js)
@@ -1188,10 +1093,10 @@ ${projectRules}
                     await approvePlan(this._agentCtx(), data.plan, data.model, data.tabId);
                     break;
                 case 'saveChatHistory':
-                    await this._saveChatHistory(data.tabs);
+                    await saveChatHistory(this._stateCtx(), data.tabs);
                     break;
                 case 'restoreChatHistory':
-                    await this._restoreChatHistory();
+                    await restoreChatHistory(this._stateCtx());
                     break;
                 case 'compressMemory':
                     await compressMemory(this._view, data.historyText || '');

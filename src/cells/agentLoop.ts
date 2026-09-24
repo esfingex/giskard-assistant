@@ -54,6 +54,11 @@ export function resetVerifyIterations(): void {
 // ── Caché de memoria de proyecto (60s) ────────────────────────────────────────
 let _projectMemoryCache: { at: number; text: string | null } | null = null;
 
+/**
+ * Lee las reglas del proyecto abierto (AGENTS.md, CLAUDE.md, .cursorrules,
+ * README.md) y las devuelve como bloque de texto acotado para inyectar
+ * en el system header. Sin archivos de reglas devuelve ''.
+ */
 export async function loadProjectRules(): Promise<string> {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) return '';
