@@ -18,52 +18,23 @@ import {
     fetchLlmModels,
     fetchLlmModelsGrouped,
     ConnectionModelsGroup,
-    fetchWithTimeout,
     checkHealth,
     resetSession
 } from '../core/api';
-import { fetchOllamaModels } from '../core/providers';
-import { getPeakInfo } from '../core/providers/deepseekProvider';
 import { ConnectionStore } from '../core/connectionStore';
 import { EventBus, EventPayload } from '../core/eventBus';
 import { getHtmlForWebview } from './htmlShell';
-import {
-    sendMcpServersList,
-    handleAddMcpServer,
-    handleRemoveMcpServer,
-    handleToggleMcpServer,
-    handleToggleMcpTool,
-    handleDiscoverMcpTools,
-    handleTestMcpServer,
-    handleSearchSmitheryRegistry,
-    getActiveMcpPromptContext
-} from './mcpHandlers';
-import {
-    handleOpenFile,
-    handleToolReadFile,
-    handleToolWriteFile,
-    handleToolExec,
-    handleToolListDir,
-    handleToolSearch,
-    handleToolGlob,
-    resolveWorkspaceFile,
-    extractCodeBlocks,
-    applyCodeToDocument,
-    extractToolCalls,
-    executeReadOnlyTool
-} from './toolHandlers';
-import { setAgentActivity, clearAgentActivity } from './statusBar';
-import { buildChatMessages, trimHistory, estimateTokens, ChatMessage, getModelMaxContextWindow } from '../core/contextWindow';
+import { sendMcpServersList, getActiveMcpPromptContext } from './mcpHandlers';
+import { handleOpenFile, extractCodeBlocks } from './toolHandlers';
+import { clearAgentActivity } from './statusBar';
+import { ChatMessage, getModelMaxContextWindow } from '../core/contextWindow';
 import {
     AgentState,
     AgentLoopContext,
     loadProjectRules,
     fetchProjectMemory,
     agentLoopOllama,
-    autoVerifyAndFix,
-    resetVerifyIterations,
-    compressMemory,
-    approvePlan
+    autoVerifyAndFix
 } from './agentLoop';
 import {
     StreamContext,
@@ -75,17 +46,10 @@ import {
 } from './streamManager';
 import { HostToWebviewMessage } from '../core/webviewContract';
 import { DiffContext, maybeAutoTriggerDiff, openDiff, revertLastAiEdit } from './diffHandlers';
-import { KnowledgeContext, fetchSkills, runGraphify } from './knowledgeHandlers';
-import { ChatStateContext, sendModelsList, handleSaveSettings, handleAction, saveChatHistory, restoreChatHistory } from './chatStateHandlers';
-import {
-    ConnectionsContext,
-    sendConnectionsList,
-    handleAddConnection,
-    handleRemoveConnection,
-    handleResetConnections,
-    handleActivateConnection,
-    handleTestConnectionUrl
-} from './connectionsHandlers';
+import { KnowledgeContext } from './knowledgeHandlers';
+import { ChatStateContext, sendModelsList } from './chatStateHandlers';
+import { ChatRouterDeps, setWebviewMessageListener } from './messageRouter';
+import { ConnectionsContext, sendConnectionsList } from './connectionsHandlers';
 
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'giskard-assistant.chatView';
@@ -194,6 +158,30 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             type: 'injectCodeSnippet',
             contextBlock
         });
+    }
+
+    /** Dependencias del router de mensajes (decomposition wave 6b) */
+    private _routerDeps(): ChatRouterDeps {
+        return {
+            getView: () => this._view,
+            abortActive: () => {
+                if (this._activeAbortController) {
+                    this._activeAbortController.abort();
+                    this._activeAbortController = null;
+                }
+            },
+            tabHistory: this._tabHistory,
+            resetSession: () => resetSession(),
+            refreshState: () => this.refreshState(),
+            handlePrompt: (prompt, model, includeActiveFile, contextType, tabId) =>
+                this._handlePrompt(prompt, model || '', Boolean(includeActiveFile), contextType || 'none', tabId),
+            store: this._store,
+            cellCtx: () => this._cellCtx(),
+            stateCtx: () => this._stateCtx(),
+            diffCtx: () => this._diffCtx(),
+            agentCtx: () => this._agentCtx(),
+            knowledgeCtx: () => this._knowledgeCtx()
+        };
     }
 
     /** Contexto para la célula de estado (decomposition wave 6) */
@@ -938,194 +926,7 @@ ${projectRules}
     }
 
     private _setWebviewMessageListener(webview: vscode.Webview) {
-        webview.onDidReceiveMessage(async (data) => {
-            try {
-                switch (data.type) {
-                case 'sendPrompt': {
-                    // Regla del usuario (2026-09-09): DeepSeek oficial solo en off-peak.
-                    const modelLower = String(data.model || '').toLowerCase();
-                    if (modelLower.startsWith('deepseek') || modelLower.includes('deepseek')) {
-                        const peak = getPeakInfo();
-                        if (peak.isPeak) {
-                            const choice = await vscode.window.showWarningMessage(
-                                `Horario PEAK de DeepSeek API (ventanas 01:00-04:00 y 06:00-10:00 UTC, lun-vie). Proxima transicion: ${peak.nextTransitionUtc} UTC. Las corridas pagadas en peak cuestan mas.`,
-                                { modal: true },
-                                'Continuar de todos modos',
-                                'Cancelar'
-                            );
-                            if (choice !== 'Continuar de todos modos') { break; }
-                        }
-                    }
-                    resetVerifyIterations();
-                    await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType, data.tabId);
-                    break;
-                }
-                case 'stopGeneration':
-                    if (this._activeAbortController) {
-                        this._activeAbortController.abort();
-                        this._activeAbortController = null;
-                    }
-                    break;
-                case 'openSettings':
-                    await this.refreshState();
-                    break;
-                case 'loadConnections':
-                    await sendConnectionsList(this._cellCtx());
-                    break;
-                case 'addConnection':
-                    await handleAddConnection(this._cellCtx(), data);
-                    break;
-                case 'removeConnection':
-                    await handleRemoveConnection(this._cellCtx(), data.id);
-                    break;
-                case 'resetConnections':
-                    await handleResetConnections(this._cellCtx());
-                    break;
-                case 'activateConnection':
-                    await handleActivateConnection(this._cellCtx(), data.id);
-                    break;
-                case 'testConnectionUrl':
-                    await handleTestConnectionUrl(this._cellCtx(), data.url);
-                    break;
-                case 'webviewReady':
-                    await this.refreshState();
-                    break;
-                case 'createNewChatTab':
-                    vscode.commands.executeCommand('giskard-assistant.openChatTab');
-                    break;
-                case 'fetchModels':
-                case 'getModels':
-                    await sendModelsList(this._stateCtx());
-                    break;
-                case 'modelChanged':
-                    if (data.model) {
-                        await this._store.setActiveChatModel(data.model);
-                    }
-                    break;
-                case 'saveSettings':
-                    await handleSaveSettings(this._stateCtx(), data.provider, data.baseUrl, data.apiKey);
-                    break;
-                case 'clearContext':
-                    if (this._activeAbortController) {
-                        this._activeAbortController.abort();
-                        this._activeAbortController = null;
-                    }
-                    // Fix wave 3: limpiar también el historial agéntico y el límite de auto-fix
-                    this._tabHistory.clear();
-                    resetVerifyIterations();
-                    await resetSession();
-                    if (this._view) {
-                        this._view.webview.postMessage({ type: 'contextCleared' });
-                    }
-                    break;
-                case 'getExclusionPatterns': {
-                    const patterns = this._store.getExclusionPatterns();
-                    webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
-                    break;
-                }
-                case 'saveExclusionPatterns': {
-                    await this._store.saveExclusionPatterns(data.patterns || []);
-                    vscode.window.showInformationMessage('✓ Patrones de exclusión de workspace guardados.');
-                    const patterns = this._store.getExclusionPatterns();
-                    webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
-                    break;
-                }
-                case 'actionBtn':
-                    await handleAction(this._stateCtx(), data.action);
-                    break;
-                case 'openFile':
-                    // Fix: el webview envía relativePath (chatView.js/chatUtils.js)
-                    await handleOpenFile(data.relativePath || data.path);
-                    break;
-                case 'openDiff':
-                    await openDiff(this._diffCtx(), data.code, data.filePath);
-                    break;
-                case 'loadMcpServers':
-                    await sendMcpServersList(this._view, this._store);
-                    break;
-                case 'addMcpServer':
-                    await handleAddMcpServer(this._view, this._store, data.name, data.serverType, data.commandOrUrl);
-                    break;
-                case 'removeMcpServer':
-                    await handleRemoveMcpServer(this._view, this._store, data.id);
-                    break;
-                case 'toggleMcpServer':
-                    await handleToggleMcpServer(this._view, this._store, data.id);
-                    break;
-                case 'toggleMcpTool':
-                    await handleToggleMcpTool(this._view, this._store, data.serverId, data.toolId);
-                    break;
-                case 'discoverMcpTools':
-                    await handleDiscoverMcpTools(this._view, this._store, data.serverId);
-                    break;
-                case 'testMcpServer':
-                    await handleTestMcpServer(this._view, data.serverType, data.commandOrUrl);
-                    break;
-                case 'searchSmithery':
-                    await handleSearchSmitheryRegistry(this._view, data.query);
-                    break;
-                // ── Tool Call Bridge (AI-driven file/exec ops) ──────────────
-                case 'toolReadFile':
-                    setAgentActivity(`leyendo ${data.path}…`);
-                    await handleToolReadFile(this._view, data.path, data.id);
-                    break;
-                case 'toolWriteFile':
-                    setAgentActivity(`escribiendo ${data.path}…`);
-                    await handleToolWriteFile(this._view, data.path, data.content, data.id);
-                    break;
-                case 'toolListDir':
-                    setAgentActivity(`listando ${data.path}…`);
-                    await handleToolListDir(this._view, data.path, data.id);
-                    break;
-                case 'toolSearch':
-                    setAgentActivity(`buscando «${data.query}»…`);
-                    await handleToolSearch(this._view, data.query, data.id);
-                    break;
-                case 'toolGlob':
-                    setAgentActivity(`glob ${data.pattern}…`);
-                    await handleToolGlob(this._view, data.pattern, data.id);
-                    break;
-                case 'toolExec':
-                    setAgentActivity(`ejecutando ${data.command}…`);
-                    await handleToolExec(this._view, data.command, data.args, data.id);
-                    break;
-                case 'approvePlan':
-                    await approvePlan(this._agentCtx(), data.plan, data.model, data.tabId);
-                    break;
-                case 'saveChatHistory':
-                    await saveChatHistory(this._stateCtx(), data.tabs);
-                    break;
-                case 'restoreChatHistory':
-                    await restoreChatHistory(this._stateCtx());
-                    break;
-                case 'compressMemory':
-                    await compressMemory(this._view, data.historyText || '');
-                    break;
-                case 'runGraphify':
-                    await runGraphify(this._knowledgeCtx());
-                    break;
-                case 'fetchSkills':
-                    await fetchSkills(this._knowledgeCtx());
-                    break;
-                case 'copyToClipboard':
-                    if (data.text) {
-                        await vscode.env.clipboard.writeText(data.text);
-                        vscode.window.setStatusBarMessage('$(clippy) Código copiado al portapapeles', 2500);
-                    }
-                    break;
-                }
-            } catch (err: any) {
-                // Global error boundary: never let an unexpected exception kill the chat
-                if (this._view) {
-                    this._view.webview.postMessage({
-                        type: 'streamError',
-                        model: data?.model,
-                        tabId: data?.tabId,
-                        error: `❌ Error inesperado en Giskard: ${err?.message || err}`
-                    });
-                }
-            }
-        });
+        setWebviewMessageListener(webview, this._routerDeps());
     }
 
 }
