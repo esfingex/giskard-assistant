@@ -63,6 +63,15 @@ import {
     resolveGiskardSysOllama
 } from './streamManager';
 import { HostToWebviewMessage } from '../core/webviewContract';
+import {
+    ConnectionsContext,
+    sendConnectionsList,
+    handleAddConnection,
+    handleRemoveConnection,
+    handleResetConnections,
+    handleActivateConnection,
+    handleTestConnectionUrl
+} from './connectionsHandlers';
 
 const _modelContextRegistry: Map<string, number> = new Map();
 
@@ -188,7 +197,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             this._panel.webview.postMessage({ type: 'exclusionPatternsLoaded', patterns });
         }
 
-        await this._sendConnectionsList();
+        await sendConnectionsList(this._cellCtx());
         await this._sendModelsList();
         if (this._view) await sendMcpServersList(this._view, this._store);
     }
@@ -209,108 +218,15 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private async _sendConnectionsList() {
-        if (!this._view && !this._panel) return;
-        const connections = this._store.getAll();
-        this.postMessage({ type: 'connectionsLoaded', connections });
-    }
-
-    private async _handleAddConnection(data: any) {
-        if (!this._view && !this._panel) return;
-        try {
-            const id = await this._store.addConnection(
-                data.name,
-                data.connType,
-                data.url,
-                data.tag,
-                data.apiKey
-            );
-            vscode.window.showInformationMessage(`✓ Conexión "${data.name}" guardada.`);
-            await this._store.setActive(id);
-            await this.refreshState();
-        } catch (err: any) {
-            this.postMessage({ type: 'connectionError', error: err.message });
-            vscode.window.showErrorMessage(`Error guardando conexión: ${err.message}`);
-        }
-    }
-
-    private async _handleRemoveConnection(id: number) {
-        if (!this._view && !this._panel) return;
-        try {
-            await this._store.removeConnection(id);
-            vscode.window.showInformationMessage(`✓ Connection deleted.`);
-            await this.refreshState();
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Error deleting connection: ${err.message}`);
-        }
-    }
-
-    private async _handleResetConnections() {
-        if (!this._view && !this._panel) return;
-        try {
-            const list = this._store.getAll();
-            for (const c of list) {
-                await this._store.removeConnection(c.id);
-            }
-            await this._store.init();
-            vscode.window.showInformationMessage(`✓ All connection profiles reset.`);
-            await this.refreshState();
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Error resetting connections: ${err.message}`);
-        }
-    }
-
-    private async _handleActivateConnection(id: number) {
-        if (!this._view && !this._panel) return;
-        try {
-            await this._store.setActive(id);
-            const active = this._store.getActive();
-            const url = active?.url || 'desconocida';
-            vscode.window.showInformationMessage(`✓ Conexión activa: ${active?.name || url}`);
-            await this.refreshState();
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Error activando conexión: ${err.message}`);
-        }
-    }
-
-    private async _handleTestConnectionUrl(url: string) {
-        if (!this._view && !this._panel) return;
-        const start = Date.now();
-        try {
-            const cleanUrl = url.trim().replace(/\/$/, '');
-            let res = await fetchWithTimeout(`${cleanUrl}/health`, {
-                headers: { 'X-Client-Id': getClientId() }
-            }, 5000).catch(() => null);
-
-            if (!res || !res.ok) {
-                res = await fetchWithTimeout(cleanUrl, {}, 5000).catch(() => null);
-            }
-
-            const ms = Date.now() - start;
-            const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 401 || res.status === 404 || res.status === 405));
-            let statusText = `HTTP ${res?.status}`;
-            if (res?.status === 401) statusText += ' (Requiere API Key)';
-            this.postMessage({
-                type: 'connectionTested',
-                ok,
-                status: res?.status,
-                ms,
-                error: ok ? undefined : (res ? statusText : 'Servidor no responde en esa URL')
-            });
-        } catch (err: any) {
-            const ms = Date.now() - start;
-            let reason = err.message;
-            if (err.name === 'AbortError') reason = 'Timeout — sin respuesta en 5 segundos';
-            else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que el servidor esté activo';
-            else if (err.message.includes('ENOTFOUND')) reason = 'Host no encontrado — verifica la URL';
-
-            this.postMessage({
-                type: 'connectionTested',
-                ok: false,
-                error: reason,
-                ms
-            });
-        }
+    /** Contexto compartido para las células extraídas (decomposition wave 2+) */
+    private _cellCtx(): ConnectionsContext {
+        return {
+            view: this._view,
+            panel: this._panel,
+            store: this._store,
+            postMessage: (m) => this.postMessage(m),
+            refreshState: () => this.refreshState()
+        };
     }
 
     private async _sendModelsList() {
@@ -1502,22 +1418,22 @@ ${projectRules}
                     await this.refreshState();
                     break;
                 case 'loadConnections':
-                    await this._sendConnectionsList();
+                    await sendConnectionsList(this._cellCtx());
                     break;
                 case 'addConnection':
-                    await this._handleAddConnection(data);
+                    await handleAddConnection(this._cellCtx(), data);
                     break;
                 case 'removeConnection':
-                    await this._handleRemoveConnection(data.id);
+                    await handleRemoveConnection(this._cellCtx(), data.id);
                     break;
                 case 'resetConnections':
-                    await this._handleResetConnections();
+                    await handleResetConnections(this._cellCtx());
                     break;
                 case 'activateConnection':
-                    await this._handleActivateConnection(data.id);
+                    await handleActivateConnection(this._cellCtx(), data.id);
                     break;
                 case 'testConnectionUrl':
-                    await this._handleTestConnectionUrl(data.url);
+                    await handleTestConnectionUrl(this._cellCtx(), data.url);
                     break;
                 case 'webviewReady':
                     await this.refreshState();
