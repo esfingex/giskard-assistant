@@ -75,6 +75,7 @@ import {
 } from './streamManager';
 import { HostToWebviewMessage } from '../core/webviewContract';
 import { DiffContext, maybeAutoTriggerDiff, openDiff, revertLastAiEdit } from './diffHandlers';
+import { KnowledgeContext, fetchSkills, runGraphify } from './knowledgeHandlers';
 import {
     ConnectionsContext,
     sendConnectionsList,
@@ -192,6 +193,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             type: 'injectCodeSnippet',
             contextBlock
         });
+    }
+
+    /** Contexto para la célula de conocimiento (decomposition wave 5) */
+    private _knowledgeCtx(): KnowledgeContext {
+        return { view: this._view, store: this._store };
     }
 
     /** Contexto para la célula de diffs (decomposition wave 4) */
@@ -1191,10 +1197,10 @@ ${projectRules}
                     await compressMemory(this._view, data.historyText || '');
                     break;
                 case 'runGraphify':
-                    await this._handleRunGraphify();
+                    await runGraphify(this._knowledgeCtx());
                     break;
                 case 'fetchSkills':
-                    await this._handleFetchSkills();
+                    await fetchSkills(this._knowledgeCtx());
                     break;
                 case 'copyToClipboard':
                     if (data.text) {
@@ -1217,87 +1223,6 @@ ${projectRules}
         });
     }
 
-    private async _handleFetchSkills() {
-        if (!this._view) return;
-        const connectorUrl = getConnectorUrl();
-        const giskardConn = this._store.getActiveLocal();
-        const isGiskardActive = Boolean(giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500')));
-
-        try {
-            this._view.webview.postMessage({
-                type: 'streamToken',
-                token: '\n\n🎯 [Agent Skills]: Consultando habilidades registradas en giskard-sys y workspace...'
-            });
-
-            const res = await fetchWithTimeout(`${connectorUrl}/agents`, {
-                headers: { 'X-Client-Id': getClientId() }
-            }, 10000).catch(() => null);
-
-            let skillsText = '\n✅ [Habilidades Estándar del Agente]:\n';
-            skillsText += ' • 🛠️ **web_search** (Búsqueda Técnica Web)\n';
-            skillsText += ' • 💻 **exec_shell** (Ejecución Enjaulada RTK)\n';
-            skillsText += ' • 📄 **read_file / write_file** (Lectura/Escritura de Archivos)\n';
-            skillsText += ' • 📝 **diff_apply** (Edición In-Place de Código)\n';
-
-            skillsText += '\n🔒 [Habilidades Exclusivas del Backend giskard-sys (Puerto 3500)]:\n';
-            if (isGiskardActive || (res && res.ok)) {
-                skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM — Activo ✅)\n';
-                skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — Activo ✅)\n';
-            } else {
-                skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
-                skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — ⚠️ Requiere giskard-sys backend)\n';
-            }
-
-            if (res && res.ok) {
-                const agents: any = await res.json().catch(() => null);
-                if (Array.isArray(agents) && agents.length > 0) {
-                    skillsText += '\n🤖 [Agentes Registrados en giskard-sys]:\n';
-                    agents.forEach((ag: any) => {
-                        skillsText += ` • **${ag.name}**: ${(ag.skills || []).join(', ')}\n`;
-                    });
-                }
-            }
-
-            this._view.webview.postMessage({ type: 'streamToken', token: skillsText });
-            this._view.webview.postMessage({ type: 'streamComplete' });
-        } catch (err: any) {
-            this._view.webview.postMessage({ type: 'streamError', error: `Skills error: ${err.message}` });
-        }
-    }
-
-    private async _handleRunGraphify() {
-        if (!this._view) return;
-        const folders = vscode.workspace.workspaceFolders;
-        const targetPath = folders && folders.length > 0 ? folders[0].uri.fsPath : './';
-        const connectorUrl = getConnectorUrl();
-
-        try {
-            this._view.webview.postMessage({
-                type: 'streamToken',
-                token: '\n\n🕸️ [Graphify LTM]: Indexando estructura del proyecto y construyendo grafo de conocimiento...'
-            });
-
-            const res = await fetchWithTimeout(`${connectorUrl}/extensions/graphify/run`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Client-Id': getClientId()
-                },
-                body: JSON.stringify({ path: targetPath })
-            }, 15000).catch(() => null);
-
-            if (res && res.ok) {
-                const data: any = await res.json().catch(() => null);
-                const msg = data && data.success ? (data.data || '✓ Grafo de conocimiento indexado.') : `Error: ${data?.error || 'Falló Graphify'}`;
-                this._view.webview.postMessage({ type: 'streamToken', token: `\n✅ [Graphify LTM Memory]: ${msg}\n` });
-            } else {
-                this._view.webview.postMessage({ type: 'streamToken', token: '\n✅ [Graphify LTM Memory]: Grafo de conocimiento persistente actualizado para el proyecto activo.\n' });
-            }
-            this._view.webview.postMessage({ type: 'streamComplete' });
-        } catch (err: any) {
-            this._view.webview.postMessage({ type: 'streamError', error: `Graphify error: ${err.message}` });
-        }
-    }
 }
 
 let _chatTabCounter = 1;
