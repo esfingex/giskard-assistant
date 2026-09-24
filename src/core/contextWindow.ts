@@ -82,3 +82,22 @@ export function buildChatMessages(
     const withUser: ChatMessage[] = [...base, { role: 'user', content: userContent }];
     return trimHistory(withUser, budget);
 }
+
+// ── Registry de ventanas de contexto por modelo (movido desde chatWebview, wave 3) ──
+
+const _modelContextRegistry: Map<string, number> = new Map();
+
+export function setModelContextWindow(modelName: string, maxTokens: number) {
+    if (modelName && maxTokens > 0) {
+        _modelContextRegistry.set(modelName.toLowerCase().trim(), maxTokens);
+    }
+}
+
+export function getModelMaxContextWindow(modelName: string): number {
+    const cleanName = (modelName || "").toLowerCase().trim();
+    if (_modelContextRegistry.has(cleanName)) {
+        return _modelContextRegistry.get(cleanName)!;
+    }
+    // Remote models default to unrestrictive modern baseline (128,000 tokens), local models default to 32,768 tokens
+    return cleanName.startsWith("local:") ? 32768 : 128000;
+}

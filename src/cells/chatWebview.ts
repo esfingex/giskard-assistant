@@ -53,7 +53,18 @@ import {
     executeReadOnlyTool
 } from './toolHandlers';
 import { setAgentActivity, clearAgentActivity } from './statusBar';
-import { buildChatMessages, trimHistory, estimateTokens, ChatMessage } from '../core/contextWindow';
+import { buildChatMessages, trimHistory, estimateTokens, ChatMessage, getModelMaxContextWindow } from '../core/contextWindow';
+import {
+    AgentState,
+    AgentLoopContext,
+    loadProjectRules,
+    fetchProjectMemory,
+    agentLoopOllama,
+    autoVerifyAndFix,
+    resetVerifyIterations,
+    compressMemory,
+    approvePlan
+} from './agentLoop';
 import {
     StreamContext,
     streamFromGiskardSys,
@@ -73,38 +84,16 @@ import {
     handleTestConnectionUrl
 } from './connectionsHandlers';
 
-const _modelContextRegistry: Map<string, number> = new Map();
-
-export function setModelContextWindow(modelName: string, maxTokens: number) {
-    if (modelName && maxTokens > 0) {
-        _modelContextRegistry.set(modelName.toLowerCase().trim(), maxTokens);
-    }
-}
-
-export function getModelMaxContextWindow(modelName: string): number {
-    const cleanName = (modelName || '').toLowerCase().trim();
-    if (_modelContextRegistry.has(cleanName)) {
-        return _modelContextRegistry.get(cleanName)!;
-    }
-    // Remote models default to unrestrictive modern baseline (128,000 tokens), local models default to 32,768 tokens
-    return cleanName.startsWith('local:') ? 32768 : 128000;
-}
-
 export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'giskard-assistant.chatView';
 
     private _view?: vscode.WebviewView;
     private _activeAbortController: AbortController | null = null;
-    private _lastBotResponse: string = '';
     private _localModelStreaming: boolean = false;
     private _modelConnectionMap: Map<string, ConnectionModelsGroup> = new Map();
 
     /** Últimos modelo/URL/tab usados — para el bucle auto-corrector con tests */
-    private _lastModel: string = '';
-    private _lastOllamaUrl: string = '';
-    private _lastTabId: string | undefined = undefined;
-    private _projectMemoryCache: { at: number; text: string | null } | null = null;
-    private _verifyIterations = 0;
+    private _agentState: AgentState = { lastModel: '', lastOllamaUrl: '', lastBotResponse: '' };
 
     /** Fase 2: per-tab chat history (messages[]) for the host-side agent loop */
     private _tabHistory: Map<string, ChatMessage[]> = new Map();
@@ -218,6 +207,20 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    /** Contexto para la célula del bucle agéntico (decomposition wave 3) */
+    private _agentCtx(): AgentLoopContext {
+        return {
+            view: this._view,
+            agentState: this._agentState,
+            tabHistory: this._tabHistory,
+            streamChat: (messages, model, ollamaUrl, tabId) => this._streamOllamaChat(messages, model, ollamaUrl, tabId),
+            maybeAutoTriggerDiff: (u, r, pf, f) => this._maybeAutoTriggerDiff(u, r, pf, f),
+            handlePrompt: (prompt, model, includeFile, mode, tabId) => this._handlePrompt(prompt, model || '', Boolean(includeFile), mode || 'none', tabId),
+            clearAbort: () => { this._activeAbortController = null; },
+            firstEnabledModel: () => this._store.getEnabledModels()[0] || ''
+        };
+    }
+
     /** Contexto compartido para las células extraídas (decomposition wave 2+) */
     private _cellCtx(): ConnectionsContext {
         return {
@@ -325,8 +328,8 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Conversational apply flow
         const APPLY_LAST_REGEX = /^\s*(?:hazla|hazlo|ap[lí]ca(?:la|lo|r)?|s[ií]|yes|do it|ejecuta(?:lo|la)?|a[pú]ntalo|aplica|perfecto!?|ok!?|dale!?|listo!?|excelente!?|procede|proceed|apply(?:\s+it)?|use(?:\s+it)?|use\s+that|implement(?:\s+it)?)\s*$/i;
-        if (APPLY_LAST_REGEX.test(prompt.trim()) && this._lastBotResponse.trim()) {
-            const blocks = extractCodeBlocks(this._lastBotResponse);
+        if (APPLY_LAST_REGEX.test(prompt.trim()) && this._agentState.lastBotResponse.trim()) {
+            const blocks = extractCodeBlocks(this._agentState.lastBotResponse);
             if (blocks.length > 0) {
                 if (this._view) {
                     this._view.webview.postMessage({ type: 'streamToken', token: '📦 Aplicando código propuesto en el editor...', model, tabId });
@@ -344,10 +347,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         let fullPrompt = prompt;
 
-        this._lastTabId = tabId;
+        this._agentState.lastTabId = tabId;
 
         // Reglas de proyecto automáticas: AGENTS.md / CLAUDE.md / .cursorrules / README.md
-        const projectRules = await this._loadProjectRules();
+        const projectRules = await loadProjectRules();
 
         // 1. Check if Giskard-Sys active connection is present
         const giskardConn = this._store.getActiveLocal();
@@ -374,7 +377,7 @@ ${projectRules}
         // Req 5 (wave 012): handoff comun — inyecta la memoria del proyecto
         // (memorias y decisiones recientes) desde giskard-sys cuando esta activo.
         if (isGiskardActive) {
-            const projectMemory = await this._fetchProjectMemory();
+            const projectMemory = await fetchProjectMemory();
             if (projectMemory) {
                 systemHeader += `[PROJECT MEMORY (giskard-sys) — decisiones y recuerdos recientes del proyecto, respetalos]\n${projectMemory}\n`;
             }
@@ -534,7 +537,7 @@ ${projectRules}
             // Fase 2: host-side agent loop with real message history
             const systemMsg = systemHeader.trim();
             const userMsg = fullPrompt.replace(systemHeader, '').trim();
-            await this._agentLoopOllama(systemMsg, userMsg, localModelName, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
+            await agentLoopOllama(this._agentCtx(), systemMsg, userMsg, localModelName, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
             return;
         }
 
@@ -578,7 +581,7 @@ ${projectRules}
             // Fase 2: host-side agent loop with real message history
             const systemMsg = systemHeader.trim();
             const userMsg = fullPrompt.replace(systemHeader, '').trim();
-            await this._agentLoopOllama(systemMsg, userMsg, targetModel, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
+            await agentLoopOllama(this._agentCtx(), systemMsg, userMsg, targetModel, ollamaUrl, prompt, targetPathMatch, includeActiveFile, tabId);
             return;
         }
 
@@ -594,7 +597,7 @@ ${projectRules}
         if (giskardSysOllama) {
             const systemMsg = systemHeader.trim();
             const userMsg = fullPrompt.replace(systemHeader, '').trim();
-            await this._agentLoopOllama(
+            await agentLoopOllama(this._agentCtx(), 
                 systemMsg,
                 userMsg,
                 targetModel,
@@ -709,7 +712,7 @@ ${projectRules}
                 }
             }
 
-            this._lastBotResponse = accumulated;
+            this._agentState.lastBotResponse = accumulated;
             clearAgentActivity();
             if (!accumulated.trim()) {
                 // Red de seguridad: stream vacío sin error HTTP → dar un mensaje
@@ -899,7 +902,7 @@ ${projectRules}
                 }
             }
 
-            this._lastBotResponse = accumulated;
+            this._agentState.lastBotResponse = accumulated;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
             await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
@@ -951,10 +954,10 @@ ${projectRules}
 
         try {
             await streamFromOllamaLegacy(ctx, ollamaBaseUrl, fullPrompt, targetModel, tabId);
-            this._lastBotResponse = ctx.lastBotResponse.text;
+            this._agentState.lastBotResponse = ctx.lastBotResponse.text;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
-            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, this._lastBotResponse, extractedPath, includeActiveFile);
+            await this._maybeAutoTriggerDiff(userPrompt || fullPrompt, this._agentState.lastBotResponse, extractedPath, includeActiveFile);
         } catch (err: any) {
             if (err.name === 'AbortError') return;
             if (this._view) {
@@ -1004,121 +1007,6 @@ ${projectRules}
      * README.md) y las devuelve como bloque de texto acotado para inyectar
      * en el system header. Sin archivos de reglas devuelve ''. 
      */
-    private async _loadProjectRules(): Promise<string> {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) return '';
-        const root = folders[0].uri;
-        const names = ['AGENTS.md', 'CLAUDE.md', '.cursorrules', 'README.md'];
-        const parts: string[] = [];
-        for (const n of names) {
-            try {
-                const uri = vscode.Uri.joinPath(root, n);
-                const data = await vscode.workspace.fs.readFile(uri);
-                const text = new TextDecoder().decode(data);
-                const capped = text.slice(0, 2500);
-                if (capped.trim()) parts.push(`-- ${n} --\n${capped}`);
-            } catch { /* el archivo no existe */ }
-        }
-        return parts.join('\n\n');
-    }
-
-    private async _agentLoopOllama(
-        system: string,
-        userContent: string,
-        model: string,
-        ollamaUrl: string,
-        userPrompt: string,
-        extractedPath?: string,
-        includeActiveFile?: boolean,
-        tabId?: string
-    ) {
-        if (!this._view) return;
-        this._lastModel = model;
-        this._lastOllamaUrl = ollamaUrl;
-        const key = tabId || '_main';
-        let history = this._tabHistory.get(key) || [];
-        // Presupuesto dinámico: prompt debe caber en num_ctx - num_predict - margen
-        const numCtx = Math.min(getModelMaxContextWindow(model), 32768);
-        const predictBudget = 8192;
-        const margin = 2000;
-        const loopBudget = Math.max(4000, numCtx - predictBudget - margin);
-        let messages = buildChatMessages(history, system, userContent, loopBudget);
-        let finalReply = '';
-        const maxSteps = 6;
-
-        try {
-            for (let step = 0; step < maxSteps; step++) {
-                if (step > 0) {
-                    this._view.webview.postMessage({ type: 'streamToken', token: `\n\n--- 🔧 Paso ${step + 1} del agente ---\n`, model, tabId });
-                }
-                const reply = await this._streamOllamaChat(messages, model, ollamaUrl, tabId);
-                messages = trimHistory([...messages, { role: 'assistant', content: reply }], loopBudget);
-
-                const calls = extractToolCalls(reply);
-                if (calls.length === 0) {
-                    finalReply = reply;
-                    break;
-                }
-
-                const readOnly = calls.filter(c => ['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
-                const blocking = calls.filter(c => !['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
-
-                // Blocking tools (write/exec) end the loop: the user applies via the existing UI
-                if (blocking.length > 0) {
-                    finalReply = reply;
-                    this._view.webview.postMessage({
-                        type: 'streamToken',
-                        token: `\n\n[ℹ️] El modelo pidió ${blocking.map(b => b.action).join(', ')} — aplícalo con el botón 📝 Apply Change.\n`,
-                        model, tabId
-                    });
-                    break;
-                }
-
-                for (const call of readOnly) {
-                    setAgentActivity(`${call.action} ${call.path || call.query || call.pattern || ''}…`);
-                    const res = await executeReadOnlyTool(call);
-                    messages = trimHistory([...messages, { role: 'tool', content: res.output }], loopBudget);
-                    this._view.webview.postMessage({
-                        type: 'streamToken',
-                        token: `\n\n[🔧 ${res.ok ? 'OK' : 'ERROR'} ${call.action} ${call.path || call.query || call.pattern || ''}]\n`,
-                        model, tabId
-                    });
-                }
-                setAgentActivity('razonando…');
-            }
-
-            if (!finalReply && messages.length > 0) {
-                finalReply = messages[messages.length - 1].content || '';
-            }
-
-            // Persist history (user turn + final assistant reply), keep the window fresh
-            history = trimHistory(
-                [...history, { role: 'user', content: userContent }, { role: 'assistant', content: finalReply }],
-                loopBudget
-            );
-            if (history.length > 40) history = history.slice(-40);
-            this._tabHistory.set(key, history);
-
-            this._lastBotResponse = finalReply;
-            clearAgentActivity();
-            this._view.webview.postMessage({ type: 'streamComplete', model, tabId });
-            await this._maybeAutoTriggerDiff(userPrompt, finalReply, extractedPath, includeActiveFile);
-        } catch (err: any) {
-            if (err.name === 'AbortError') return;
-            clearAgentActivity();
-            if (this._view) {
-                this._view.webview.postMessage({
-                    type: 'streamError',
-                    model,
-                    tabId,
-                    error: `❌ Error en el bucle agente (${model}): ${err?.message || err}`
-                });
-            }
-        } finally {
-            this._activeAbortController = null;
-        }
-    }
-
     private async _maybeAutoTriggerDiff(
         userPrompt: string,
         botResponse: string,
@@ -1222,142 +1110,7 @@ ${projectRules}
         }
 
         // Wave A: verificación automática con tests (cargo/npm) tras aplicar cambios
-        this._autoVerifyAndFix().catch(() => { /* best-effort */ });
-    }
-
-    /**
-     * Req 5 (wave 012): lee la memoria nativa del proyecto (memorias y
-     * decisiones recientes) desde giskard-sys para continuidad de sesion.
-     * Cache de 60s para no golpear el backend en cada prompt.
-     */
-    private async _fetchProjectMemory(): Promise<string | null> {
-        const now = Date.now();
-        if (this._projectMemoryCache && now - this._projectMemoryCache.at < 60000) {
-            return this._projectMemoryCache.text;
-        }
-        const wsName = vscode.workspace.workspaceFolders?.[0]?.name || '';
-        if (!wsName) { return null; }
-        try {
-            const url = `${getConnectorUrl()}/memory/graph?filter=project:${encodeURIComponent(wsName)}&limit=3`;
-            const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } }, 8000).catch(() => null);
-            if (!res || !res.ok) { this._projectMemoryCache = { at: now, text: null }; return null; }
-            const data: any = await res.json().catch(() => null);
-            const nodes = data && data.data && data.data.nodes;
-            if (!Array.isArray(nodes) || nodes.length === 0) {
-                this._projectMemoryCache = { at: now, text: null };
-                return null;
-            }
-            const lines = nodes
-                .map((n: any) => `- [${n.kind}] ${n.title ? n.title + ': ' : ''}${n.content}`)
-                .join('\n');
-            this._projectMemoryCache = { at: now, text: lines };
-            return lines;
-        } catch {
-            this._projectMemoryCache = { at: now, text: null };
-            return null;
-        }
-    }
-
-    /**
-     * Corre la suite del proyecto (cargo test / npm test) vía giskard-sys /exec
-     * después de aplicar cambios. Si falla, pide UNA corrección al modelo local
-     * y muestra el diff propuesto (no se aplica automáticamente).
-     */
-    private async _autoVerifyAndFix() {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) return;
-
-        // Req 3 (wave 012): limite de auto-correcciones consecutivas (3).
-        this._verifyIterations += 1;
-        if (this._verifyIterations > 3) {
-            this._view?.webview.postMessage({
-                type: 'streamToken',
-                token: `\n🛑 Limite de auto-correcciones (3) alcanzado. Revisa los tests manualmente.\n`,
-                model: this._lastModel,
-                tabId: this._lastTabId
-            });
-            return;
-        }
-        const root = folders[0].uri;
-        let cmd: string | null = null;
-        try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'Cargo.toml')); cmd = 'cargo'; } catch { /* no rust */ }
-        if (!cmd) { try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'package.json')); cmd = 'npm'; } catch { /* no node */ } }
-        if (!cmd || !this._view) return;
-
-        const model = this._lastModel || '';
-        const tabId = this._lastTabId;
-        this._view.webview.postMessage({ type: 'streamToken', token: `\n\n🧪 Ejecutando ${cmd} test...\n`, model, tabId });
-
-        try {
-            const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({ command: cmd, args: ['test'] })
-            }, 180000);
-            const data: any = await res.json();
-            if (!data || !data.success) {
-                this._view.webview.postMessage({ type: 'streamToken', token: `⚠️ No se pudieron correr tests: ${(data && data.error) || 'error'}\n`, model, tabId });
-                return;
-            }
-            const out: string = data.data || '';
-            if (out.includes('EXIT CODE: 0')) {
-                this._verifyIterations = 0;
-                this._view.webview.postMessage({ type: 'streamToken', token: `✅ Tests pasaron.\n`, model, tabId });
-                return;
-            }
-            const tail = out.split('\n').filter(Boolean).slice(-8).join('\n');
-            this._view.webview.postMessage({ type: 'streamToken', token: `❌ Tests fallaron:\n${tail.substring(0, 900)}\n`, model, tabId });
-
-            if (this._lastModel && this._lastOllamaUrl) {
-                this._view.webview.postMessage({ type: 'streamToken', token: `\n🔧 Pidiendo una corrección al modelo local...\n`, model, tabId });
-                const systemMsg = 'You are an integrated coding agent in VS Code. Fix the failing tests by editing the relevant source file. Output ONLY the corrected code block with the file path as the first comment line.';
-                const fixPrompt = `The project tests are failing after the last edit. Test output:\n${tail.substring(0, 1500)}\n\nAnalyze the failure and fix the code.`;
-                await this._agentLoopOllama(systemMsg, fixPrompt, this._lastModel, this._lastOllamaUrl, fixPrompt, undefined, false, tabId);
-            }
-        } catch { /* verificación best-effort */ }
-    }
-
-    private async _handleCompressMemory(historyText: string) {
-        if (!this._view) return;
-        try {
-            const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
-            // Guardar via giskard-sys /memory/add (memoria nativa por proyecto, wave 009)
-            const res = await fetchWithTimeout(`${getConnectorUrl()}/memory/add`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({ project: wsName, category: 'flow', content: historyText, tags: 'compressed,chat' })
-            }, 15000);
-            const data: any = await res.json().catch(() => null);
-            const msg = data && data.success
-                ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'
-                : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
-
-            // Req 5 (wave 012): handoff comun — nodo de continuidad para otros agentes
-            const handoffContent = historyText.length > 8000 ? historyText.slice(0, 8000) : historyText;
-            await fetchWithTimeout(`${getConnectorUrl()}/memory/graph/add_node`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-                body: JSON.stringify({
-                    type: 'handoff',
-                    project: wsName,
-                    title: `Handoff ${new Date().toISOString().slice(0, 10)}`,
-                    description: handoffContent,
-                    status: 'active'
-                })
-            }, 15000).catch(() => null);
-            this._view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
-            this._view.webview.postMessage({ type: 'streamComplete' });
-        } catch (err: any) {
-            this._view.webview.postMessage({ type: 'streamError', error: err.message });
-        }
-    }
-
-    /** Fase 3b: user approved a [PLAN] — re-prompt the model to execute it step by step */
-    private async _handleApprovePlan(plan: string, model?: string, tabId?: string) {
-        if (!plan || !plan.trim()) return;
-        const targetModel = model || (this._store.getEnabledModels()[0] || '');
-        const executionPrompt = `El usuario ha APROBADO el siguiente plan. Ejecútalo ahora paso a paso: lee los archivos que necesites, haz los cambios propuestos y verifica. NO vuelvas a pedir aprobación.\n\n[PLAN APROBADO]:\n${plan}\n\nEjecuta el plan completo.`;
-        await this._handlePrompt(executionPrompt, targetModel, false, 'none', tabId);
+        autoVerifyAndFix(this._agentCtx()).catch(() => { /* best-effort */ });
     }
 
     /** Fase 4a: persist chat tabs history in workspaceState */
@@ -1404,7 +1157,7 @@ ${projectRules}
                             if (choice !== 'Continuar de todos modos') { break; }
                         }
                     }
-                    this._verifyIterations = 0;
+                    resetVerifyIterations();
                     await this._handlePrompt(data.prompt, data.model, data.includeActiveFile, data.contextType, data.tabId);
                     break;
                 }
@@ -1458,6 +1211,9 @@ ${projectRules}
                         this._activeAbortController.abort();
                         this._activeAbortController = null;
                     }
+                    // Fix wave 3: limpiar también el historial agéntico y el límite de auto-fix
+                    this._tabHistory.clear();
+                    resetVerifyIterations();
                     await resetSession();
                     if (this._view) {
                         this._view.webview.postMessage({ type: 'contextCleared' });
@@ -1535,7 +1291,7 @@ ${projectRules}
                     await handleToolExec(this._view, data.command, data.args, data.id);
                     break;
                 case 'approvePlan':
-                    await this._handleApprovePlan(data.plan, data.model, data.tabId);
+                    await approvePlan(this._agentCtx(), data.plan, data.model, data.tabId);
                     break;
                 case 'saveChatHistory':
                     await this._saveChatHistory(data.tabs);
@@ -1544,7 +1300,7 @@ ${projectRules}
                     await this._restoreChatHistory();
                     break;
                 case 'compressMemory':
-                    await this._handleCompressMemory(data.historyText || '');
+                    await compressMemory(this._view, data.historyText || '');
                     break;
                 case 'runGraphify':
                     await this._handleRunGraphify();

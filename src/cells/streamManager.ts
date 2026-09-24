@@ -12,7 +12,7 @@
 
 import * as vscode from 'vscode';
 import { getClientId, getClientToken, fetchWithTimeout } from '../core/api';
-import { getModelMaxContextWindow } from './chatWebview';
+import { getModelMaxContextWindow } from '../core/contextWindow';
 
 /** Shared streaming context passed by the caller */
 export interface StreamContext {
