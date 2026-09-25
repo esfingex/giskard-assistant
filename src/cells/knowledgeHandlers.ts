@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import { fetchWithTimeout, getClientId, getConnectorUrl } from '../core/api';
+import { GiskardResponse, fetchWithTimeout, getClientId, getConnectorUrl } from '../core/api';
 import { ConnectionStore } from '../core/connectionStore';
 
 export interface KnowledgeContext {
@@ -99,7 +99,7 @@ export async function runGraphify(ctx: KnowledgeContext): Promise<void> {
         ).catch(() => null);
 
         if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
+            const data: GiskardResponse<string> | null = await res.json().catch(() => null);
             const msg =
                 data && data.success
                     ? data.data || '✓ Grafo de conocimiento indexado.'

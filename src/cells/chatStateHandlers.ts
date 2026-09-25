@@ -100,7 +100,7 @@ export async function handleSaveSettings(
 export async function handleAction(ctx: ChatStateContext, action: string): Promise<void> {
     if (!ctx.view) return;
     try {
-        const resData: any = await execCliCommand('rtk', action);
+        const resData = await execCliCommand('rtk', action);
         const text = resData.success ? resData.data : `Error Ejecución: ${resData.error}`;
         ctx.view.webview.postMessage({ type: 'actionResult', text });
     } catch (err: any) {

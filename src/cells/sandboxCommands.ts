@@ -6,11 +6,16 @@
 import * as vscode from 'vscode';
 import { fetchSandboxList, fetchSandboxRead } from '../core/api';
 
+interface SandboxEntry {
+    is_dir?: boolean;
+    name: string;
+}
+
 export function registerSandboxCommands(context: vscode.ExtensionContext) {
     const listCmd = vscode.commands.registerCommand('giskard-assistant.listSandbox', async () => {
         try {
-            const data: any = await fetchSandboxList('.');
-            if (data.success) {
+            const data = await fetchSandboxList<SandboxEntry>('.');
+            if (data.success && Array.isArray(data.data)) {
                 const files = data.data.map((f: any) => `${f.is_dir ? '📁' : '📄'} ${f.name}`).join('\n');
                 vscode.window.showInformationMessage(`Archivos del Sandbox:\n${files}`);
             } else {
@@ -26,7 +31,7 @@ export function registerSandboxCommands(context: vscode.ExtensionContext) {
         if (!filePath) return;
 
         try {
-            const data: any = await fetchSandboxRead(filePath);
+            const data = await fetchSandboxRead<string>(filePath);
             if (data.success) {
                 const doc = await vscode.workspace.openTextDocument({ content: data.data });
                 await vscode.window.showTextDocument(doc);

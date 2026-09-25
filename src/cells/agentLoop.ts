@@ -11,7 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import { fetchWithTimeout, getClientId, getConnectorUrl } from '../core/api';
+import { GiskardResponse, fetchWithTimeout, getClientId, getConnectorUrl } from '../core/api';
 import { buildChatMessages, trimHistory, getModelMaxContextWindow, ChatMessage } from '../core/contextWindow';
 import { executeReadOnlyTool, extractToolCalls } from './toolHandlers';
 import { setAgentActivity, clearAgentActivity } from './statusBar';
@@ -108,7 +108,8 @@ export async function fetchProjectMemory(): Promise<string | null> {
             _projectMemoryCache = { at: now, text: null };
             return null;
         }
-        const data: any = await res.json().catch(() => null);
+        type GraphNodes = { nodes?: Array<{ kind?: string; title?: string; content?: string }> };
+        const data: GiskardResponse<GraphNodes> | null = await res.json().catch(() => null);
         const nodes = data && data.data && data.data.nodes;
         if (!Array.isArray(nodes) || nodes.length === 0) {
             _projectMemoryCache = { at: now, text: null };
@@ -293,7 +294,7 @@ export async function autoVerifyAndFix(ctx: AgentLoopContext): Promise<void> {
             },
             180000
         );
-        const data: any = await res.json();
+        const data: GiskardResponse<string> = await res.json();
         if (!data || !data.success) {
             view.webview.postMessage({
                 type: 'streamToken',
@@ -366,7 +367,7 @@ export async function compressMemory(
             },
             15000
         );
-        const data: any = await res.json().catch(() => null);
+        const data: GiskardResponse<unknown> | null = await res.json().catch(() => null);
         const msg =
             data && data.success
                 ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'

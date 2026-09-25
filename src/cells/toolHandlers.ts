@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { getConnectorUrl, getClientId, fetchWithTimeout } from '../core/api';
+import { GiskardResponse, getConnectorUrl, getClientId, fetchWithTimeout } from '../core/api';
 
 export const DEFAULT_EXCLUDE_GLOB =
     '**/{node_modules,out,dist,target,build,coverage,.git,.gemini,.cache,venv,.venv}/**';
@@ -177,7 +177,7 @@ export async function handleToolExec(
             headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
             body: JSON.stringify({ command, args })
         });
-        const data: any = await res.json();
+        const data: GiskardResponse<string> = await res.json();
         if (!data.success) throw new Error(data.error || 'Error ejecutando comando');
         view.webview.postMessage({ type: 'toolExecResult', id, output: data.data });
     } catch (err: any) {

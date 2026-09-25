@@ -127,7 +127,7 @@ export async function fetchWaveCurrent(workspacePath: string): Promise<any> {
     }
 }
 
-export async function fetchSandboxList(path: string = '.') {
+export async function fetchSandboxList<T = unknown>(path: string = '.'): Promise<GiskardResponse<T>> {
     const res = await fetchWithTimeout(`${getConnectorUrl()}/list`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
@@ -136,7 +136,7 @@ export async function fetchSandboxList(path: string = '.') {
     return res.json();
 }
 
-export async function fetchSandboxRead(path: string) {
+export async function fetchSandboxRead<T = unknown>(path: string): Promise<GiskardResponse<T>> {
     const res = await fetchWithTimeout(`${getConnectorUrl()}/read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
@@ -232,8 +232,15 @@ export async function updateProviderConfig(
     return res.json();
 }
 
+/** Envelope estándar de las respuestas REST de giskard-sys ({success, error, data}). */
+export interface GiskardResponse<T = unknown> {
+    success: boolean;
+    error?: string;
+    data?: T;
+}
+
 /** Execute a CLI command through the backend server */
-export async function execCliCommand(command: string, ...args: string[]): Promise<any> {
+export async function execCliCommand(command: string, ...args: string[]): Promise<GiskardResponse<string>> {
     try {
         const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
             method: 'POST',

@@ -11,7 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import { getClientId, getClientToken, fetchWithTimeout } from '../core/api';
+import { GiskardResponse, getClientId, getClientToken, fetchWithTimeout } from '../core/api';
 import { clearAgentActivity } from './statusBar';
 import { getModelMaxContextWindow } from '../core/contextWindow';
 
@@ -490,7 +490,8 @@ export async function resolveGiskardSysOllama(connectorUrl: string): Promise<str
     try {
         const res = await fetchWithTimeout(`${connectorUrl}/policy`, {}, 5000);
         if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
+            type PolicyData = { active_provider?: string; ollama_url?: string };
+            const data: GiskardResponse<PolicyData> | null = await res.json().catch(() => null);
             if (data && data.success && data.data) {
                 const provider = String(data.data.active_provider || '').toLowerCase();
                 const url = String(data.data.ollama_url || '').trim();
