@@ -79,11 +79,15 @@ export async function checkHealth(baseUrl?: string): Promise<boolean> {
 export async function resetSession(): Promise<void> {
     try {
         const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
-        await fetchWithTimeout(`${getConnectorUrl()}/llm/reset`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
-            body: JSON.stringify({ session_id: wsName })
-        }, 15000);
+        await fetchWithTimeout(
+            `${getConnectorUrl()}/llm/reset`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
+                body: JSON.stringify({ session_id: wsName })
+            },
+            15000
+        );
     } catch {
         // Silent — reset is best-effort
     }
@@ -92,9 +96,13 @@ export async function resetSession(): Promise<void> {
 /** Passive workspace list check — GET /workspace/list */
 export async function fetchWorkspaceList(): Promise<any> {
     try {
-        const res = await fetchWithTimeout(`${getConnectorUrl()}/workspace/list`, {
-            headers: { 'X-Client-Id': CLIENT_ID }
-        }, 15000);
+        const res = await fetchWithTimeout(
+            `${getConnectorUrl()}/workspace/list`,
+            {
+                headers: { 'X-Client-Id': CLIENT_ID }
+            },
+            15000
+        );
         return res.json();
     } catch {
         return null;
@@ -104,11 +112,15 @@ export async function fetchWorkspaceList(): Promise<any> {
 /** Passive wave status check — POST /planning/wave/current */
 export async function fetchWaveCurrent(workspacePath: string): Promise<any> {
     try {
-        const res = await fetchWithTimeout(`${getConnectorUrl()}/planning/wave/current`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
-            body: JSON.stringify({ path: workspacePath })
-        }, 15000);
+        const res = await fetchWithTimeout(
+            `${getConnectorUrl()}/planning/wave/current`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
+                body: JSON.stringify({ path: workspacePath })
+            },
+            15000
+        );
         return res.json();
     } catch {
         return null;
@@ -148,7 +160,7 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
     try {
         if (!_store) return [];
         const list = _store.getAll();
-        const activeConnections = list.filter(c => c.isActive);
+        const activeConnections = list.filter((c) => c.isActive);
 
         if (activeConnections.length === 0) {
             return [];
@@ -156,8 +168,13 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
 
         const groupPromises = activeConnections.map(async (conn) => {
             try {
-                const apiKey = conn.id ? (await _store!.getApiKey(conn.id) || '') : '';
-                const providerModels = await fetchModelsForProvider(conn.url, conn.tag, apiKey, conn.type).catch(() => []);
+                const apiKey = conn.id ? (await _store!.getApiKey(conn.id)) || '' : '';
+                const providerModels = await fetchModelsForProvider(
+                    conn.url,
+                    conn.tag,
+                    apiKey,
+                    conn.type
+                ).catch(() => []);
                 if (providerModels && providerModels.length > 0) {
                     return {
                         connectionId: conn.id,
@@ -175,7 +192,7 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
 
         const results = await Promise.allSettled(groupPromises);
         const groups: ConnectionModelsGroup[] = [];
-        results.forEach(r => {
+        results.forEach((r) => {
             if (r.status === 'fulfilled' && r.value) {
                 groups.push(r.value);
             }
@@ -190,15 +207,19 @@ export async function fetchLlmModelsGrouped(): Promise<ConnectionModelsGroup[]> 
 export async function fetchLlmModels(): Promise<string[]> {
     const groups = await fetchLlmModelsGrouped();
     const allModels: string[] = [];
-    groups.forEach(g => {
-        g.models.forEach(m => {
+    groups.forEach((g) => {
+        g.models.forEach((m) => {
             if (!allModels.includes(m)) allModels.push(m);
         });
     });
     return allModels;
 }
 
-export async function updateProviderConfig(activeProvider: string, openaiBaseUrl?: string, openaiApiKey?: string) {
+export async function updateProviderConfig(
+    activeProvider: string,
+    openaiBaseUrl?: string,
+    openaiApiKey?: string
+) {
     const res = await fetchWithTimeout(`${getConnectorUrl()}/llm/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },

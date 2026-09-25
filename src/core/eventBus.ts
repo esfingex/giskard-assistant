@@ -6,9 +6,9 @@
 import * as vscode from 'vscode';
 
 export type EventMap = {
-    'modelsUpdated': void;
-    'modelToggled': { modelId: string; enabled: boolean };
-    'connectionChanged': void;
+    modelsUpdated: void;
+    modelToggled: { modelId: string; enabled: boolean };
+    connectionChanged: void;
 };
 
 export interface EventPayload {

@@ -17,6 +17,6 @@ export async function fetchOllamaModels(baseUrl: string = OLLAMA_DEFAULT_URL): P
                 return data.models.map((m: any) => m.name || m.id || String(m));
             }
         }
-    } catch { }
+    } catch {}
     return [];
 }

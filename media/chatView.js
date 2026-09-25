@@ -8,7 +8,6 @@
  * mcpView -> chatRouter -> chatView.
  */
 
-
 if (modelSelect) {
     modelSelect.addEventListener('change', updateTokenCounter);
 }
@@ -22,7 +21,7 @@ if (clearCtxBtn) {
 }
 
 if (openSettingsBtn) {
-    openSettingsBtn.addEventListener('click', () => { 
+    openSettingsBtn.addEventListener('click', () => {
         if (settingsModal) settingsModal.style.display = 'flex';
         vscode.postMessage({ type: 'loadConnections' });
         vscode.postMessage({ type: 'loadMcpServers' });
@@ -31,8 +30,8 @@ if (openSettingsBtn) {
 }
 
 if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', () => { 
-        if (settingsModal) settingsModal.style.display = 'none'; 
+    closeModalBtn.addEventListener('click', () => {
+        if (settingsModal) settingsModal.style.display = 'none';
     });
 }
 
@@ -52,7 +51,7 @@ if (settingsModal) {
 if (compressBtn) {
     compressBtn.addEventListener('click', () => {
         let historyText = '';
-        messagesDiv.querySelectorAll('.msg').forEach(m => {
+        messagesDiv.querySelectorAll('.msg').forEach((m) => {
             const isUser = m.classList.contains('user');
             historyText += (isUser ? 'Usuario: ' : 'IA: ') + m.textContent + '\n';
         });
@@ -104,7 +103,11 @@ if (stopBtn) {
     });
 }
 
-if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
+if (ctxPython)
+    ctxPython.addEventListener('click', () => {
+        vscode.postMessage({ type: 'actionBtn', action: 'python3 -m unittest' });
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
 
 if (sendBtn) sendBtn.addEventListener('click', send);
 
@@ -133,7 +136,7 @@ function send() {
     promptInput.value = '';
 
     const activeTabId = _activeTabId;
-    const curTab = _subTabs.find(t => t.id === activeTabId);
+    const curTab = _subTabs.find((t) => t.id === activeTabId);
     if (curTab) {
         curTab.isGenerating = true;
         curTab.model = currentActiveModel;
@@ -147,7 +150,7 @@ function send() {
     messagesDiv.appendChild(bMsg);
     currentBotMsgDiv = bMsg;
     currentBotRawText = '';
-    currentActiveModel = currentActiveModel || (_enabledModelsCache[0] || '');
+    currentActiveModel = currentActiveModel || _enabledModelsCache[0] || '';
 
     if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
     updateTokenCounter();

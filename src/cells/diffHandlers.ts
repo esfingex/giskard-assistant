@@ -30,9 +30,15 @@ export function revertLastAiEdit(): boolean {
     const uri = vscode.Uri.parse(snap.uri);
     vscode.workspace.openTextDocument(uri).then(async (doc) => {
         const edit = new vscode.WorkspaceEdit();
-        edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), snap.original);
+        edit.replace(
+            uri,
+            new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)),
+            snap.original
+        );
         await vscode.workspace.applyEdit(edit);
-        vscode.window.showInformationMessage(`↩️ Cambio de IA revertido en ${vscode.workspace.asRelativePath(uri)}`);
+        vscode.window.showInformationMessage(
+            `↩️ Cambio de IA revertido en ${vscode.workspace.asRelativePath(uri)}`
+        );
     });
     return true;
 }
@@ -54,13 +60,19 @@ export async function maybeAutoTriggerDiff(
 
     // Only consider auto-apply when the user explicitly asked to edit a file
     // (the prompt mentions an edit verb AND we know a target file).
-    const editIntent = /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|corrige|corregir|fix|write|edit|update|apply|implement|create)\b/i.test(userPrompt);
+    const editIntent =
+        /(?:aplica|aplicar|modifica|edita|reescribe|cambia|hazla|hazlo|implementa|actualiza|crea|agrega|añade|corrige|corregir|fix|write|edit|update|apply|implement|create)\b/i.test(
+            userPrompt
+        );
     const hasTarget = Boolean(extractedPath || includeActiveFile);
     if (!editIntent || !hasTarget) return;
 
     let best = blocks[0];
     for (const b of blocks) {
-        if (b.filePath) { best = b; break; }
+        if (b.filePath) {
+            best = b;
+            break;
+        }
         if (b.code.length > best.code.length) best = b;
     }
 
@@ -101,7 +113,9 @@ export async function openDiff(ctx: DiffContext, code: string, filePath?: string
             try {
                 await vscode.workspace.fs.writeFile(newUri, new Uint8Array());
                 doc = await vscode.workspace.openTextDocument(newUri);
-            } catch { /* creación falla → fallback a documento sin título */ }
+            } catch {
+                /* creación falla → fallback a documento sin título */
+            }
         }
     }
 
@@ -126,7 +140,11 @@ export async function openDiff(ctx: DiffContext, code: string, filePath?: string
         case 'full':
         case 'partial':
             // Fase 3c: snapshot for one-click revert + native diff review
-            _editSnapshots.push({ uri: doc.uri.toString(), original: originalContent, timestamp: Date.now() });
+            _editSnapshots.push({
+                uri: doc.uri.toString(),
+                original: originalContent,
+                timestamp: Date.now()
+            });
             if (_editSnapshots.length > 20) _editSnapshots.shift();
             try {
                 const proposedContent = doc.getText();
@@ -135,13 +153,24 @@ export async function openDiff(ctx: DiffContext, code: string, filePath?: string
                 const propTmp = vscode.Uri.file(path.join(os.tmpdir(), `giskard-prop-${stamp}.tmp`));
                 await vscode.workspace.fs.writeFile(origTmp, Buffer.from(originalContent, 'utf8'));
                 await vscode.workspace.fs.writeFile(propTmp, Buffer.from(proposedContent, 'utf8'));
-                await vscode.commands.executeCommand('vscode.diff', origTmp, propTmp, `Giskard: ${relPath} — original → propuesto (guarda en el archivo para aceptar)`);
-            } catch { /* diff view is best-effort */ }
-            vscode.window.showInformationMessage(`✓ Cambios aplicados (${result.mode === 'partial' ? 'edición parcial' : 'archivo completo'}) en ${relPath} — revisa el diff, guarda para aceptar o usa "Revert AI Change" para descartar`);
+                await vscode.commands.executeCommand(
+                    'vscode.diff',
+                    origTmp,
+                    propTmp,
+                    `Giskard: ${relPath} — original → propuesto (guarda en el archivo para aceptar)`
+                );
+            } catch {
+                /* diff view is best-effort */
+            }
+            vscode.window.showInformationMessage(
+                `✓ Cambios aplicados (${result.mode === 'partial' ? 'edición parcial' : 'archivo completo'}) en ${relPath} — revisa el diff, guarda para aceptar o usa "Revert AI Change" para descartar`
+            );
             break;
         case 'failed':
         default:
-            vscode.window.showWarningMessage(`⚠️ ${result.message || `No se pudieron aplicar los cambios en ${relPath}`}`);
+            vscode.window.showWarningMessage(
+                `⚠️ ${result.message || `No se pudieron aplicar los cambios en ${relPath}`}`
+            );
             break;
     }
 

@@ -38,10 +38,10 @@ export interface McpServer {
 
 export interface ModelSettings {
     temperature: number; // 0.0 - 1.0
-    topP: number;        // 0.0 - 1.0
-    topK: number;        // 1 - 100
-    numCtx: number;      // 2048 - 128000
-    numPredict: number;  // 512 - 4096
+    topP: number; // 0.0 - 1.0
+    topK: number; // 1 - 100
+    numCtx: number; // 2048 - 128000
+    numPredict: number; // 512 - 4096
     think?: boolean;
     thinkBudget?: number;
 }
@@ -70,20 +70,46 @@ export interface ModelCapabilities {
 
 export function getModelCapabilities(modelName: string): ModelCapabilities {
     const l = (modelName || '').toLowerCase();
-    const thinking = l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('nemotron-3') || l.includes('thinking');
-    const tools = l.includes('instruct') || l.includes('coder') || l.includes('gpt') || l.includes('claude') || l.includes('gemini') || l.includes('llama-3');
-    const vision = l.includes('vision') || l.includes('vl') || l.includes('gpt-4o') || l.includes('gemini-1.5') || l.includes('gemini-2') || l.includes('claude-3');
+    const thinking =
+        l.includes('r1') ||
+        l.includes('reasoner') ||
+        l.includes('qwq') ||
+        l.includes('nemotron-3') ||
+        l.includes('thinking');
+    const tools =
+        l.includes('instruct') ||
+        l.includes('coder') ||
+        l.includes('gpt') ||
+        l.includes('claude') ||
+        l.includes('gemini') ||
+        l.includes('llama-3');
+    const vision =
+        l.includes('vision') ||
+        l.includes('vl') ||
+        l.includes('gpt-4o') ||
+        l.includes('gemini-1.5') ||
+        l.includes('gemini-2') ||
+        l.includes('claude-3');
     const embedding = l.includes('embed') || l.includes('bge') || l.includes('nomic');
     return { thinking, tools, vision, embedding };
 }
 
 export const DEFAULT_EXCLUSIONS = [
-    'node_modules', 'out', 'dist', 'target', 'build', 'coverage',
-    '.git', '.gemini', '.cache', 'venv', '.venv'
+    'node_modules',
+    'out',
+    'dist',
+    'target',
+    'build',
+    'coverage',
+    '.git',
+    '.gemini',
+    '.cache',
+    'venv',
+    '.venv'
 ];
 
 export class ConnectionStore {
-    constructor(private readonly context: vscode.ExtensionContext) { }
+    constructor(private readonly context: vscode.ExtensionContext) {}
 
     async init(): Promise<void> {
         const isInitialized = this.context.globalState.get<boolean>('giskard_initialized_v1', false);
@@ -116,10 +142,30 @@ export class ConnectionStore {
                 commandOrUrl: `npx -y @modelcontextprotocol/server-filesystem ${wsPath}`,
                 isActive: true,
                 tools: [
-                    { id: 'read_file', name: 'read_file', description: 'Lectura de archivos del workspace', enabled: true },
-                    { id: 'write_file', name: 'write_file', description: 'Escritura atómica en workspace', enabled: true },
-                    { id: 'search_files', name: 'search_files', description: 'Búsqueda por patrón en workspace', enabled: true },
-                    { id: 'directory_tree', name: 'directory_tree', description: 'Árbol recursivo de directorios', enabled: true }
+                    {
+                        id: 'read_file',
+                        name: 'read_file',
+                        description: 'Lectura de archivos del workspace',
+                        enabled: true
+                    },
+                    {
+                        id: 'write_file',
+                        name: 'write_file',
+                        description: 'Escritura atómica en workspace',
+                        enabled: true
+                    },
+                    {
+                        id: 'search_files',
+                        name: 'search_files',
+                        description: 'Búsqueda por patrón en workspace',
+                        enabled: true
+                    },
+                    {
+                        id: 'directory_tree',
+                        name: 'directory_tree',
+                        description: 'Árbol recursivo de directorios',
+                        enabled: true
+                    }
                 ],
                 createdAt: new Date().toISOString()
             };
@@ -161,7 +207,7 @@ export class ConnectionStore {
     /** Get array of multi-selected enabled models for Chat dropdown */
     getEnabledModels(): string[] {
         const raw = this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1') || [];
-        return raw.filter(m => typeof m === 'string' && m.trim().length > 0 && m !== '[object Object]');
+        return raw.filter((m) => typeof m === 'string' && m.trim().length > 0 && m !== '[object Object]');
     }
 
     /** Check if a specific model is enabled (Default: FALSE / Disabled) */
@@ -173,9 +219,9 @@ export class ConnectionStore {
     /** Toggle multi-selected enabled state for a model */
     async toggleModelEnabled(modelName: string): Promise<boolean> {
         const current = this.getEnabledModels();
-        let list = [...current];
+        const list = [...current];
         const index = list.indexOf(modelName);
-        let newState = false;
+        let newState: boolean;
         if (index >= 0) {
             list.splice(index, 1);
             newState = false;
@@ -191,14 +237,14 @@ export class ConnectionStore {
     /** Remove a model from enabled list and purge its saved settings */
     async removeEnabledModel(modelName: string): Promise<void> {
         const current = this.getEnabledModels();
-        const list = current.filter(m => m !== modelName);
+        const list = current.filter((m) => m !== modelName);
         await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
         await this.removeModelOverrides(modelName);
     }
 
     /** Bulk-set the enabled models list (replaces any existing list) */
     setEnabledModels(models: string[]): void {
-        const clean = models.map(m => (typeof m === 'string' ? m.trim() : '')).filter(Boolean);
+        const clean = models.map((m) => (typeof m === 'string' ? m.trim() : '')).filter(Boolean);
         // Use synchronous update pattern — globalState.update is async but fire-and-forget is safe here
         void this.context.globalState.update('giskard_enabled_chat_models_v1', clean);
     }
@@ -219,7 +265,7 @@ export class ConnectionStore {
 
         const list = this._getRawList();
         // Deactivate previous connections so the newly created profile becomes the active one
-        list.forEach(c => c.isActive = false);
+        list.forEach((c) => (c.isActive = false));
 
         const newId = Date.now();
         const newConn: Connection = {
@@ -241,7 +287,7 @@ export class ConnectionStore {
     /** Retrieve stored API key secret for a connection */
     async getApiKey(id: number): Promise<string | undefined> {
         const list = this._getRawList();
-        const conn = list.find(c => c.id === id);
+        const conn = list.find((c) => c.id === id);
         if (conn && conn.secretRef) {
             return await this.context.secrets.get(conn.secretRef);
         }
@@ -251,7 +297,7 @@ export class ConnectionStore {
     /** Save or update API key secret for a connection */
     async saveApiKey(id: number, apiKey: string): Promise<void> {
         const list = this._getRawList();
-        const conn = list.find(c => c.id === id);
+        const conn = list.find((c) => c.id === id);
         if (!conn) return;
         if (!conn.secretRef) {
             conn.secretRef = `conn_${id}_token`;
@@ -261,24 +307,24 @@ export class ConnectionStore {
         try {
             const { clearNvidiaModelCache } = await import('./providers/nvidiaProvider');
             clearNvidiaModelCache();
-        } catch { }
+        } catch {}
         await this._saveRawList(list);
     }
 
     /** Remove a connection profile and its stored secret */
     async removeConnection(id: number): Promise<void> {
         let list = this._getRawList();
-        const target = list.find(c => c.id === id);
+        const target = list.find((c) => c.id === id);
         if (!target) return;
 
         if (target.secretRef) {
             try {
                 await this.context.secrets.delete(target.secretRef);
-            } catch { }
+            } catch {}
         }
 
         const wasActive = target.isActive;
-        list = list.filter(c => c.id !== id);
+        list = list.filter((c) => c.id !== id);
 
         // If removed connection was active, activate the first remaining connection
         if (wasActive && list.length > 0) {
@@ -295,7 +341,7 @@ export class ConnectionStore {
     /** Toggle active state for a connection profile (allows multiple active profiles) */
     async toggleActive(id: number): Promise<void> {
         const list = this._getRawList();
-        const conn = list.find(c => c.id === id);
+        const conn = list.find((c) => c.id === id);
         if (conn) {
             conn.isActive = !conn.isActive;
             await this._saveRawList(list);
@@ -310,19 +356,29 @@ export class ConnectionStore {
     /** Get active remote connection profile */
     getActiveRemote(): Connection | null {
         const list = this._getRawList();
-        return list.find(c => c.isActive && (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag))) || null;
+        return (
+            list.find(
+                (c) =>
+                    c.isActive &&
+                    (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag))
+            ) || null
+        );
     }
 
     /** Get active local connection profile (giskard-sys or ollama) */
     getActiveLocal(): Connection | null {
         const list = this._getRawList();
-        return list.find(c => c.isActive && (c.type === 'local' || c.tag === 'giskard-sys' || c.tag === 'ollama')) || null;
+        return (
+            list.find(
+                (c) => c.isActive && (c.type === 'local' || c.tag === 'giskard-sys' || c.tag === 'ollama')
+            ) || null
+        );
     }
 
     /** Get the primary active connection, or null */
     getActive(): Connection | null {
         const list = this._getRawList();
-        const active = list.find(c => c.isActive);
+        const active = list.find((c) => c.isActive);
         if (active) return active;
         if (list.length > 0) return list[0];
         return null;
@@ -333,7 +389,7 @@ export class ConnectionStore {
         const cleanTag = (tag || '').toLowerCase().trim();
         if (!cleanTag) return null;
         const list = this._getRawList();
-        return list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag) || null;
+        return list.find((c) => (c.tag || '').toLowerCase().trim() === cleanTag) || null;
     }
 
     /** Robust API key lookup with session RAM cache: tries exact tag match, active connection, then any saved secret in SecretStorage */
@@ -349,7 +405,7 @@ export class ConnectionStore {
 
         // 1. Exact tag match
         if (cleanTag) {
-            const tagConn = list.find(c => (c.tag || '').toLowerCase().trim() === cleanTag);
+            const tagConn = list.find((c) => (c.tag || '').toLowerCase().trim() === cleanTag);
             if (tagConn && tagConn.secretRef) {
                 const key = await this.context.secrets.get(tagConn.secretRef);
                 if (key && key.trim()) {
@@ -399,7 +455,11 @@ export class ConnectionStore {
         return this.context.globalState.get<McpServer[]>(MCP_STORAGE_KEY, []);
     }
 
-    async addMcpServer(name: string, type: 'docker' | 'stdio' | 'url', commandOrUrl: string): Promise<number> {
+    async addMcpServer(
+        name: string,
+        type: 'docker' | 'stdio' | 'url',
+        commandOrUrl: string
+    ): Promise<number> {
         const list = this.getMcpServers();
         const newId = Date.now();
         const newMcp: McpServer = {
@@ -416,13 +476,13 @@ export class ConnectionStore {
     }
 
     async removeMcpServer(id: number): Promise<void> {
-        const list = this.getMcpServers().filter(s => s.id !== id);
+        const list = this.getMcpServers().filter((s) => s.id !== id);
         await this.context.globalState.update(MCP_STORAGE_KEY, list);
     }
 
     async toggleMcpServer(id: number): Promise<boolean> {
         const list = [...this.getMcpServers()];
-        const target = list.find(s => s.id === id);
+        const target = list.find((s) => s.id === id);
         let newState = false;
         if (target) {
             target.isActive = !target.isActive;
@@ -434,7 +494,7 @@ export class ConnectionStore {
 
     async updateMcpTools(id: number, tools: McpTool[]): Promise<void> {
         const list = this.getMcpServers();
-        const target = list.find(s => s.id === id);
+        const target = list.find((s) => s.id === id);
         if (target) {
             target.tools = tools;
             await this.context.globalState.update(MCP_STORAGE_KEY, list);
@@ -443,10 +503,10 @@ export class ConnectionStore {
 
     async toggleMcpTool(serverId: number, toolId: string): Promise<boolean> {
         const list = [...this.getMcpServers()];
-        const target = list.find(s => s.id === serverId);
+        const target = list.find((s) => s.id === serverId);
         let newState = false;
         if (target && target.tools) {
-            const tool = target.tools.find(t => t.id === toolId || t.name === toolId);
+            const tool = target.tools.find((t) => t.id === toolId || t.name === toolId);
             if (tool) {
                 tool.enabled = tool.enabled === false ? true : false;
                 newState = tool.enabled;
@@ -464,7 +524,12 @@ export class ConnectionStore {
 
     async saveExclusionPatterns(patterns: string[]): Promise<void> {
         const clean = patterns
-            .map(p => p.trim().replace(/^\*\*\//, '').replace(/\/$/, ''))
+            .map((p) =>
+                p
+                    .trim()
+                    .replace(/^\*\*\//, '')
+                    .replace(/\/$/, '')
+            )
             .filter(Boolean);
         await this.context.globalState.update(EXCLUSION_STORAGE_KEY, clean);
     }
@@ -472,12 +537,18 @@ export class ConnectionStore {
     // ── Model Overrides Storage ─────────────────────────────────────────────
 
     getModelOverrides(modelName: string): ModelSettings {
-        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(
+            MODEL_OVERRIDES_STORAGE_KEY,
+            {}
+        );
         return allMap[modelName] || { ...DEFAULT_MODEL_SETTINGS };
     }
 
     async saveModelOverrides(modelName: string, settings: Partial<ModelSettings>): Promise<void> {
-        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(
+            MODEL_OVERRIDES_STORAGE_KEY,
+            {}
+        );
         const current = allMap[modelName] || { ...DEFAULT_MODEL_SETTINGS };
         allMap[modelName] = { ...current, ...settings };
         await this.context.globalState.update(MODEL_OVERRIDES_STORAGE_KEY, allMap);
@@ -485,7 +556,10 @@ export class ConnectionStore {
 
     /** Delete stored hyperparameter overrides for a specific model name */
     async removeModelOverrides(modelName: string): Promise<void> {
-        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(MODEL_OVERRIDES_STORAGE_KEY, {});
+        const allMap = this.context.globalState.get<Record<string, ModelSettings>>(
+            MODEL_OVERRIDES_STORAGE_KEY,
+            {}
+        );
         if (allMap[modelName]) {
             delete allMap[modelName];
             await this.context.globalState.update(MODEL_OVERRIDES_STORAGE_KEY, allMap);

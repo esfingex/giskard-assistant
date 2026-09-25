@@ -8,9 +8,8 @@
  * mcpView -> chatRouter -> chatView.
  */
 
-
 // ── Main Webview Message Router ─────────────────────────────────────
-window.addEventListener('message', event => {
+window.addEventListener('message', (event) => {
     const message = event.data;
     switch (message.type) {
         case 'modelsList':
@@ -40,15 +39,16 @@ window.addEventListener('message', event => {
             const _local = message.isLocal;
             const _icon = _local ? '🔌' : '🌐';
             const _icon2 = _local ? '⚙️' : '📡';
-            const statusHtml = _phase === 'connecting'
-                ? `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon} Conectando a <b>${_prov}</b>…</span>`
-                : `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon2} Conexión establecida — Generando respuesta…</span>`;
+            const statusHtml =
+                _phase === 'connecting'
+                    ? `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon} Conectando a <b>${_prov}</b>…</span>`
+                    : `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon2} Conexión establecida — Generando respuesta…</span>`;
 
             if (targetTabId === _activeTabId) {
                 const targetDiv = getActiveBotMsgDiv(targetTabId);
                 if (targetDiv) targetDiv.innerHTML = statusHtml;
             } else {
-                const targetTab = _subTabs.find(t => t.id === targetTabId);
+                const targetTab = _subTabs.find((t) => t.id === targetTabId);
                 if (targetTab) {
                     const tempContainer = document.createElement('div');
                     tempContainer.innerHTML = targetTab.messagesHtml || '';
@@ -68,18 +68,25 @@ window.addEventListener('message', event => {
 
         case 'streamToken': {
             const targetTabId = message.tabId || _activeTabId;
-            const targetTab = _subTabs.find(t => t.id === targetTabId);
+            const targetTab = _subTabs.find((t) => t.id === targetTabId);
             if (targetTab) {
                 targetTab.rawText = (targetTab.rawText || '') + message.token;
             }
 
             if (targetTabId === _activeTabId) {
                 const targetTokenDiv = getActiveBotMsgDiv(targetTabId);
-                const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
+                const isNearBottom = messagesDiv
+                    ? messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60
+                    : false;
 
-                currentBotRawText = (targetTab ? targetTab.rawText : currentBotRawText);
+                currentBotRawText = targetTab ? targetTab.rawText : currentBotRawText;
                 if (targetTokenDiv) {
-                    updateBotMessageDisplay(targetTokenDiv, currentBotRawText, message.model || currentActiveModel, true);
+                    updateBotMessageDisplay(
+                        targetTokenDiv,
+                        currentBotRawText,
+                        message.model || currentActiveModel,
+                        true
+                    );
                 }
 
                 if (messagesDiv && isNearBottom) {
@@ -95,7 +102,12 @@ window.addEventListener('message', event => {
                     if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
                 }
                 if (botDiv) {
-                    updateBotMessageDisplay(botDiv, targetTab.rawText, message.model || targetTab.model, true);
+                    updateBotMessageDisplay(
+                        botDiv,
+                        targetTab.rawText,
+                        message.model || targetTab.model,
+                        true
+                    );
                     targetTab.messagesHtml = tempContainer.innerHTML;
                 }
             }
@@ -104,23 +116,30 @@ window.addEventListener('message', event => {
 
         case 'streamComplete': {
             const targetTabId = message.tabId || _activeTabId;
-            const targetTab = _subTabs.find(t => t.id === targetTabId);
+            const targetTab = _subTabs.find((t) => t.id === targetTabId);
             if (targetTab) targetTab.isGenerating = false;
 
-            var rawFull = targetTab ? (targetTab.rawText || '') : currentBotRawText;
+            var rawFull = targetTab ? targetTab.rawText || '' : currentBotRawText;
             var parsed = parseToolCalls(rawFull);
             var hadTools = parsed.toolCalls.length > 0;
             var pendingPlan = extractPlan(rawFull);
             var displayText = hadTools ? parsed.cleanText : rawFull;
             if (pendingPlan) {
-                displayText = displayText.replace(/\[PLAN\][\s\S]*?\[\/END_PLAN\]/g, '').trim() || '📋 La IA propuso un plan:';
+                displayText =
+                    displayText.replace(/\[PLAN\][\s\S]*?\[\/END_PLAN\]/g, '').trim() ||
+                    '📋 La IA propuso un plan:';
             }
 
             if (targetTabId === _activeTabId) {
                 const targetCompDiv = getActiveBotMsgDiv(targetTabId);
                 if (targetCompDiv) {
                     targetCompDiv.removeAttribute('data-streaming');
-                    updateBotMessageDisplay(targetCompDiv, displayText, message.model || currentActiveModel, false);
+                    updateBotMessageDisplay(
+                        targetCompDiv,
+                        displayText,
+                        message.model || currentActiveModel,
+                        false
+                    );
                 }
                 currentBotMsgDiv = null;
                 currentBotRawText = '';
@@ -145,7 +164,9 @@ window.addEventListener('message', event => {
             if (pendingPlan && targetTabId === _activeTabId) {
                 showPlanCard(pendingPlan, message.model || currentActiveModel, targetTabId);
             } else if (hadTools && targetTabId === _activeTabId) {
-                setTimeout(function() { dispatchToolCalls(parsed.toolCalls); }, 80);
+                setTimeout(function () {
+                    dispatchToolCalls(parsed.toolCalls);
+                }, 80);
             }
             persistChatHistory();
             break;
@@ -172,7 +193,8 @@ window.addEventListener('message', event => {
             if (messagesDiv && cb.code) {
                 const ctxDiv = document.createElement('div');
                 ctxDiv.className = 'msg context-block';
-                ctxDiv.innerHTML = `<span style="font-size:9px; color:#38bdf8; font-weight:bold;">📎 Contexto adjunto (Ctrl+L)</span><br>` +
+                ctxDiv.innerHTML =
+                    `<span style="font-size:9px; color:#38bdf8; font-weight:bold;">📎 Contexto adjunto (Ctrl+L)</span><br>` +
                     `<span style="opacity:0.7; font-size:9px;">${escapeHtml(cb.relativePath || '')} · Línea ${cb.startLine || '?'}–${cb.endLine || '?'}${cb.lang ? ' · ' + escapeHtml(cb.lang) : ''}</span><br>` +
                     `<pre style="margin:4px 0 0 0; font-size:10px; max-height:80px; overflow:auto;"><code>${escapeHtml(cb.code)}</code></pre>`;
                 messagesDiv.appendChild(ctxDiv);
@@ -180,7 +202,6 @@ window.addEventListener('message', event => {
             }
             break;
         }
-
 
         case 'offlineMode':
             if (offlineBadge) {
@@ -215,9 +236,12 @@ window.addEventListener('message', event => {
 
         case 'selectTheme':
             const themePreset = (message.theme || message.preset || '').toLowerCase();
-            if (themePreset.includes('white') || themePreset.includes('light')) setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a');
-            else if (themePreset.includes('cyan') || themePreset.includes('neon')) setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7');
-            else if (themePreset.includes('emerald') || themePreset.includes('midnight')) setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22');
+            if (themePreset.includes('white') || themePreset.includes('light'))
+                setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a');
+            else if (themePreset.includes('cyan') || themePreset.includes('neon'))
+                setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7');
+            else if (themePreset.includes('emerald') || themePreset.includes('midnight'))
+                setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22');
             else setPaletteValues('#faf5ff', '#ffffff', '#c084fc', '#9333ea', '#3b0764', '#1e1b4b');
             break;
 
@@ -257,7 +281,7 @@ window.addEventListener('message', event => {
             if (Array.isArray(message.models)) list = list.concat(message.models);
             if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
             if (Array.isArray(message.groups)) {
-                message.groups.forEach(g => {
+                message.groups.forEach((g) => {
                     if (g && Array.isArray(g.models)) {
                         list = list.concat(g.models);
                     }
@@ -269,13 +293,14 @@ window.addEventListener('message', event => {
                 currentActiveModel = _enabledModelsCache[0] || _allModelsCache[0] || '';
             }
 
-            const activeCurTab = _subTabs.find(t => t.id === _activeTabId);
+            const activeCurTab = _subTabs.find((t) => t.id === _activeTabId);
             if (activeCurTab) {
                 if (!activeCurTab.model && currentActiveModel) {
                     activeCurTab.model = currentActiveModel;
                 }
                 if (activeModelName) {
-                    activeModelName.textContent = '🤖 ' + (activeCurTab.model || currentActiveModel || 'Modelo');
+                    activeModelName.textContent =
+                        '🤖 ' + (activeCurTab.model || currentActiveModel || 'Modelo');
                 }
             }
 
@@ -297,11 +322,21 @@ window.addEventListener('message', event => {
 
         case 'toolReadFileResult':
             if (message.error) {
-                appendActivityPill('❌ Error reading <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                appendActivityPill(
+                    '❌ Error reading <code>' +
+                        escapeHtml(message.path) +
+                        '</code>: ' +
+                        escapeHtml(message.error),
+                    '❌'
+                );
             } else {
                 vscode.postMessage({ type: 'openFile', relativePath: message.path });
                 appendActivityPill(
-                    'Read 1 file ➔ <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
+                    'Read 1 file ➔ <code>' +
+                        escapeHtml(message.path) +
+                        '</code> (' +
+                        (message.content || '').length +
+                        ' chars)',
                     '🔍'
                 );
                 _readFilesBatch.push(message);
@@ -312,12 +347,30 @@ window.addEventListener('message', event => {
 
         case 'toolListDirResult':
             if (message.error) {
-                appendActivityPill('❌ Error listando <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                appendActivityPill(
+                    '❌ Error listando <code>' +
+                        escapeHtml(message.path) +
+                        '</code>: ' +
+                        escapeHtml(message.error),
+                    '❌'
+                );
             } else {
-                appendActivityPill('📂 <code>' + escapeHtml(message.path) + '</code> — ' + (message.listing ? message.listing.split('\n').length : 0) + ' entradas', '📂');
-                _readFilesBatch.push({ path: message.path + ' (listado)', content: message.listing || '(vacío)' });
+                appendActivityPill(
+                    '📂 <code>' +
+                        escapeHtml(message.path) +
+                        '</code> — ' +
+                        (message.listing ? message.listing.split('\n').length : 0) +
+                        ' entradas',
+                    '📂'
+                );
+                _readFilesBatch.push({
+                    path: message.path + ' (listado)',
+                    content: message.listing || '(vacío)'
+                });
                 if (_readFileTimer) clearTimeout(_readFileTimer);
-                _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
+                _readFileTimer = setTimeout(function () {
+                    flushToolBatch();
+                }, 600);
             }
             break;
 
@@ -326,10 +379,18 @@ window.addEventListener('message', event => {
                 appendActivityPill('❌ Error buscando: ' + escapeHtml(message.error), '❌');
             } else {
                 var sFiles = Array.isArray(message.files) ? message.files : [];
-                appendActivityPill('🔍 «' + escapeHtml(message.query) + '» → ' + sFiles.length + ' resultados', '🔍');
-                _readFilesBatch.push({ path: 'search:' + message.query, content: sFiles.length ? sFiles.join('\n') : '(sin resultados)' });
+                appendActivityPill(
+                    '🔍 «' + escapeHtml(message.query) + '» → ' + sFiles.length + ' resultados',
+                    '🔍'
+                );
+                _readFilesBatch.push({
+                    path: 'search:' + message.query,
+                    content: sFiles.length ? sFiles.join('\n') : '(sin resultados)'
+                });
                 if (_readFileTimer) clearTimeout(_readFileTimer);
-                _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
+                _readFileTimer = setTimeout(function () {
+                    flushToolBatch();
+                }, 600);
             }
             break;
 
@@ -338,18 +399,37 @@ window.addEventListener('message', event => {
                 appendActivityPill('❌ Error en glob: ' + escapeHtml(message.error), '❌');
             } else {
                 var gFiles = Array.isArray(message.files) ? message.files : [];
-                appendActivityPill('🗂️ ' + escapeHtml(message.pattern || '**/*') + ' → ' + gFiles.length + ' archivos', '🗂️');
-                _readFilesBatch.push({ path: 'glob:' + (message.pattern || '**/*'), content: gFiles.length ? gFiles.join('\n') : '(sin resultados)' });
+                appendActivityPill(
+                    '🗂️ ' + escapeHtml(message.pattern || '**/*') + ' → ' + gFiles.length + ' archivos',
+                    '🗂️'
+                );
+                _readFilesBatch.push({
+                    path: 'glob:' + (message.pattern || '**/*'),
+                    content: gFiles.length ? gFiles.join('\n') : '(sin resultados)'
+                });
                 if (_readFileTimer) clearTimeout(_readFileTimer);
-                _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
+                _readFileTimer = setTimeout(function () {
+                    flushToolBatch();
+                }, 600);
             }
             break;
 
         case 'toolWriteFileResult':
             if (message.error) {
-                appendActivityPill('❌ Error aplicando diff a <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
+                appendActivityPill(
+                    '❌ Error aplicando diff a <code>' +
+                        escapeHtml(message.path) +
+                        '</code>: ' +
+                        escapeHtml(message.error),
+                    '❌'
+                );
             } else if (message.diffOpened) {
-                appendActivityPill('Abierto cambio in-place para <code>' + escapeHtml(message.path) + '</code> — Acepta o rechaza en el editor.', '📝');
+                appendActivityPill(
+                    'Abierto cambio in-place para <code>' +
+                        escapeHtml(message.path) +
+                        '</code> — Acepta o rechaza en el editor.',
+                    '📝'
+                );
             } else if (message.success) {
                 appendActivityPill('Cambios aplicados a <code>' + escapeHtml(message.path) + '</code>', '✅');
             }
@@ -360,7 +440,9 @@ window.addEventListener('message', event => {
                 appendActivityPill('❌ Error ejecutando: ' + escapeHtml(message.error), '❌');
             } else {
                 appendActivityPill(
-                    'Ejecutó comando en terminal:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' + escapeHtml(message.output || '(sin salida)') + '</pre>',
+                    'Ejecutó comando en terminal:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' +
+                        escapeHtml(message.output || '(sin salida)') +
+                        '</pre>',
                     '⚡'
                 );
             }
@@ -369,20 +451,27 @@ window.addEventListener('message', event => {
         case 'streamError':
         case 'settingsError': {
             const targetTabId = message.tabId || _activeTabId;
-            const targetTab = _subTabs.find(t => t.id === targetTabId);
+            const targetTab = _subTabs.find((t) => t.id === targetTabId);
             if (targetTab) targetTab.isGenerating = false;
 
             let errText = message.error || 'Unknown error';
             if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
                 errText = `⚠️ CLI tool '${(message.model || currentActiveModel).replace('cli:', '')}' is not installed.\n\n💡 Use Local Swarm models (Ollama) or configure a Remote API Key in Settings ⚙️.`;
             }
-            const formattedErr = errText.startsWith('⚠️') ? errText : `⚠️ **Connection Error**:\n\n${errText}`;
+            const formattedErr = errText.startsWith('⚠️')
+                ? errText
+                : `⚠️ **Connection Error**:\n\n${errText}`;
 
             if (targetTabId === _activeTabId) {
                 const targetErrDiv = getActiveBotMsgDiv(targetTabId);
                 if (targetErrDiv) {
                     targetErrDiv.removeAttribute('data-streaming');
-                    updateBotMessageDisplay(targetErrDiv, formattedErr, message.model || currentActiveModel, false);
+                    updateBotMessageDisplay(
+                        targetErrDiv,
+                        formattedErr,
+                        message.model || currentActiveModel,
+                        false
+                    );
                 }
                 currentBotMsgDiv = null;
                 currentBotRawText = '';

@@ -20,7 +20,9 @@ export async function fetchSkills(ctx: KnowledgeContext): Promise<void> {
     if (!view) return;
     const connectorUrl = getConnectorUrl();
     const giskardConn = ctx.store.getActiveLocal();
-    const isGiskardActive = Boolean(giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500')));
+    const isGiskardActive = Boolean(
+        giskardConn && (giskardConn.tag === 'giskard-sys' || giskardConn.url.includes(':3500'))
+    );
 
     try {
         view.webview.postMessage({
@@ -28,9 +30,13 @@ export async function fetchSkills(ctx: KnowledgeContext): Promise<void> {
             token: '\n\n🎯 [Agent Skills]: Consultando habilidades registradas en giskard-sys y workspace...'
         });
 
-        const res = await fetchWithTimeout(`${connectorUrl}/agents`, {
-            headers: { 'X-Client-Id': getClientId() }
-        }, 10000).catch(() => null);
+        const res = await fetchWithTimeout(
+            `${connectorUrl}/agents`,
+            {
+                headers: { 'X-Client-Id': getClientId() }
+            },
+            10000
+        ).catch(() => null);
 
         let skillsText = '\n✅ [Habilidades Estándar del Agente]:\n';
         skillsText += ' • 🛠️ **web_search** (Búsqueda Técnica Web)\n';
@@ -43,8 +49,10 @@ export async function fetchSkills(ctx: KnowledgeContext): Promise<void> {
             skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento Persistente LTM — Activo ✅)\n';
             skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — Activo ✅)\n';
         } else {
-            skillsText += ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
-            skillsText += ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — ⚠️ Requiere giskard-sys backend)\n';
+            skillsText +=
+                ' • 🕸️ **graphify_ltm** (Grafo de Conocimiento LTM — ⚠️ Requiere giskard-sys backend)\n';
+            skillsText +=
+                ' • 🧠 **giskard_bcf** (Memoria BCF nativa de giskard-sys — ⚠️ Requiere giskard-sys backend)\n';
         }
 
         if (res && res.ok) {
@@ -77,21 +85,31 @@ export async function runGraphify(ctx: KnowledgeContext): Promise<void> {
             token: '\n\n🕸️ [Graphify LTM]: Indexando estructura del proyecto y construyendo grafo de conocimiento...'
         });
 
-        const res = await fetchWithTimeout(`${connectorUrl}/extensions/graphify/run`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Client-Id': getClientId()
+        const res = await fetchWithTimeout(
+            `${connectorUrl}/extensions/graphify/run`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Id': getClientId()
+                },
+                body: JSON.stringify({ path: targetPath })
             },
-            body: JSON.stringify({ path: targetPath })
-        }, 15000).catch(() => null);
+            15000
+        ).catch(() => null);
 
         if (res && res.ok) {
             const data: any = await res.json().catch(() => null);
-            const msg = data && data.success ? (data.data || '✓ Grafo de conocimiento indexado.') : `Error: ${data?.error || 'Falló Graphify'}`;
+            const msg =
+                data && data.success
+                    ? data.data || '✓ Grafo de conocimiento indexado.'
+                    : `Error: ${data?.error || 'Falló Graphify'}`;
             view.webview.postMessage({ type: 'streamToken', token: `\n✅ [Graphify LTM Memory]: ${msg}\n` });
         } else {
-            view.webview.postMessage({ type: 'streamToken', token: '\n✅ [Graphify LTM Memory]: Grafo de conocimiento persistente actualizado para el proyecto activo.\n' });
+            view.webview.postMessage({
+                type: 'streamToken',
+                token: '\n✅ [Graphify LTM Memory]: Grafo de conocimiento persistente actualizado para el proyecto activo.\n'
+            });
         }
         view.webview.postMessage({ type: 'streamComplete' });
     } catch (err: any) {

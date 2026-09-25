@@ -12,12 +12,7 @@
 
 import * as vscode from 'vscode';
 import { fetchWithTimeout, getClientId, getConnectorUrl } from '../core/api';
-import {
-    buildChatMessages,
-    trimHistory,
-    getModelMaxContextWindow,
-    ChatMessage
-} from '../core/contextWindow';
+import { buildChatMessages, trimHistory, getModelMaxContextWindow, ChatMessage } from '../core/contextWindow';
 import { executeReadOnlyTool, extractToolCalls } from './toolHandlers';
 import { setAgentActivity, clearAgentActivity } from './statusBar';
 
@@ -35,8 +30,19 @@ export interface AgentLoopContext {
     agentState: AgentState;
     tabHistory: Map<string, ChatMessage[]>;
     streamChat(messages: ChatMessage[], model: string, ollamaUrl: string, tabId?: string): Promise<string>;
-    maybeAutoTriggerDiff(userPrompt: string, reply: string, extractedPath?: string, includeActiveFile?: boolean): Promise<void>;
-    handlePrompt(prompt: string, model?: string, includeFile?: boolean, mode?: string, tabId?: string): Promise<void>;
+    maybeAutoTriggerDiff(
+        userPrompt: string,
+        reply: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean
+    ): Promise<void>;
+    handlePrompt(
+        prompt: string,
+        model?: string,
+        includeFile?: boolean,
+        mode?: string,
+        tabId?: string
+    ): Promise<void>;
     clearAbort(): void;
     firstEnabledModel(): string;
 }
@@ -72,7 +78,9 @@ export async function loadProjectRules(): Promise<string> {
             const text = new TextDecoder().decode(data);
             const capped = text.slice(0, 2500);
             if (capped.trim()) parts.push(`-- ${n} --\n${capped}`);
-        } catch { /* el archivo no existe */ }
+        } catch {
+            /* el archivo no existe */
+        }
     }
     return parts.join('\n\n');
 }
@@ -88,11 +96,18 @@ export async function fetchProjectMemory(): Promise<string | null> {
         return _projectMemoryCache.text;
     }
     const wsName = vscode.workspace.workspaceFolders?.[0]?.name || '';
-    if (!wsName) { return null; }
+    if (!wsName) {
+        return null;
+    }
     try {
         const url = `${getConnectorUrl()}/memory/graph?filter=project:${encodeURIComponent(wsName)}&limit=3`;
-        const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } }, 8000).catch(() => null);
-        if (!res || !res.ok) { _projectMemoryCache = { at: now, text: null }; return null; }
+        const res = await fetchWithTimeout(url, { headers: { 'X-Client-Id': getClientId() } }, 8000).catch(
+            () => null
+        );
+        if (!res || !res.ok) {
+            _projectMemoryCache = { at: now, text: null };
+            return null;
+        }
         const data: any = await res.json().catch(() => null);
         const nodes = data && data.data && data.data.nodes;
         if (!Array.isArray(nodes) || nodes.length === 0) {
@@ -139,7 +154,12 @@ export async function agentLoopOllama(
     try {
         for (let step = 0; step < MAX_AGENT_STEPS; step++) {
             if (step > 0) {
-                view.webview.postMessage({ type: 'streamToken', token: `\n\n--- 🔧 Paso ${step + 1} del agente ---\n`, model, tabId });
+                view.webview.postMessage({
+                    type: 'streamToken',
+                    token: `\n\n--- 🔧 Paso ${step + 1} del agente ---\n`,
+                    model,
+                    tabId
+                });
             }
             const reply = await ctx.streamChat(messages, model, ollamaUrl, tabId);
             messages = trimHistory([...messages, { role: 'assistant', content: reply }], loopBudget);
@@ -150,16 +170,21 @@ export async function agentLoopOllama(
                 break;
             }
 
-            const readOnly = calls.filter(c => ['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
-            const blocking = calls.filter(c => !['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase()));
+            const readOnly = calls.filter((c) =>
+                ['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase())
+            );
+            const blocking = calls.filter(
+                (c) => !['read_file', 'list_dir', 'search', 'glob'].includes((c.action || '').toLowerCase())
+            );
 
             // Blocking tools (write/exec) end the loop: the user applies via the existing UI
             if (blocking.length > 0) {
                 finalReply = reply;
                 view.webview.postMessage({
                     type: 'streamToken',
-                    token: `\n\n[ℹ️] El modelo pidió ${blocking.map(b => b.action).join(', ')} — aplícalo con el botón 📝 Apply Change.\n`,
-                    model, tabId
+                    token: `\n\n[ℹ️] El modelo pidió ${blocking.map((b) => b.action).join(', ')} — aplícalo con el botón 📝 Apply Change.\n`,
+                    model,
+                    tabId
                 });
                 break;
             }
@@ -171,7 +196,8 @@ export async function agentLoopOllama(
                 view.webview.postMessage({
                     type: 'streamToken',
                     token: `\n\n[🔧 ${res.ok ? 'OK' : 'ERROR'} ${call.action} ${call.path || call.query || call.pattern || ''}]\n`,
-                    model, tabId
+                    model,
+                    tabId
                 });
             }
             setAgentActivity('razonando…');
@@ -190,8 +216,8 @@ export async function agentLoopOllama(
         ctx.tabHistory.set(key, history);
 
         ctx.agentState.lastBotResponse = finalReply;
-    clearAgentActivity();
-    view.webview.postMessage({ type: 'streamComplete', model, tabId });
+        clearAgentActivity();
+        view.webview.postMessage({ type: 'streamComplete', model, tabId });
         await ctx.maybeAutoTriggerDiff(userPrompt, finalReply, extractedPath, includeActiveFile);
     } catch (err: any) {
         if (err.name === 'AbortError') return;
@@ -232,23 +258,49 @@ export async function autoVerifyAndFix(ctx: AgentLoopContext): Promise<void> {
     }
     const root = folders[0].uri;
     let cmd: string | null = null;
-    try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'Cargo.toml')); cmd = 'cargo'; } catch { /* no rust */ }
-    if (!cmd) { try { await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'package.json')); cmd = 'npm'; } catch { /* no node */ } }
+    try {
+        await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'Cargo.toml'));
+        cmd = 'cargo';
+    } catch {
+        /* no rust */
+    }
+    if (!cmd) {
+        try {
+            await vscode.workspace.fs.stat(vscode.Uri.joinPath(root, 'package.json'));
+            cmd = 'npm';
+        } catch {
+            /* no node */
+        }
+    }
     if (!cmd || !view) return;
 
     const model = ctx.agentState.lastModel || '';
     const tabId = ctx.agentState.lastTabId;
-    view.webview.postMessage({ type: 'streamToken', token: `\n\n🧪 Ejecutando ${cmd} test...\n`, model, tabId });
+    view.webview.postMessage({
+        type: 'streamToken',
+        token: `\n\n🧪 Ejecutando ${cmd} test...\n`,
+        model,
+        tabId
+    });
 
     try {
-        const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-            body: JSON.stringify({ command: cmd, args: ['test'] })
-        }, 180000);
+        const res = await fetchWithTimeout(
+            `${getConnectorUrl()}/exec`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({ command: cmd, args: ['test'] })
+            },
+            180000
+        );
         const data: any = await res.json();
         if (!data || !data.success) {
-            view.webview.postMessage({ type: 'streamToken', token: `⚠️ No se pudieron correr tests: ${(data && data.error) || 'error'}\n`, model, tabId });
+            view.webview.postMessage({
+                type: 'streamToken',
+                token: `⚠️ No se pudieron correr tests: ${(data && data.error) || 'error'}\n`,
+                model,
+                tabId
+            });
             return;
         }
         const out: string = data.data || '';
@@ -258,45 +310,85 @@ export async function autoVerifyAndFix(ctx: AgentLoopContext): Promise<void> {
             return;
         }
         const tail = out.split('\n').filter(Boolean).slice(-8).join('\n');
-        view.webview.postMessage({ type: 'streamToken', token: `❌ Tests fallaron:\n${tail.substring(0, 900)}\n`, model, tabId });
+        view.webview.postMessage({
+            type: 'streamToken',
+            token: `❌ Tests fallaron:\n${tail.substring(0, 900)}\n`,
+            model,
+            tabId
+        });
 
         if (ctx.agentState.lastModel && ctx.agentState.lastOllamaUrl) {
-            view.webview.postMessage({ type: 'streamToken', token: `\n🔧 Pidiendo una corrección al modelo local...\n`, model, tabId });
-            const systemMsg = 'You are an integrated coding agent in VS Code. Fix the failing tests by editing the relevant source file. Output ONLY the corrected code block with the file path as the first comment line.';
+            view.webview.postMessage({
+                type: 'streamToken',
+                token: `\n🔧 Pidiendo una corrección al modelo local...\n`,
+                model,
+                tabId
+            });
+            const systemMsg =
+                'You are an integrated coding agent in VS Code. Fix the failing tests by editing the relevant source file. Output ONLY the corrected code block with the file path as the first comment line.';
             const fixPrompt = `The project tests are failing after the last edit. Test output:\n${tail.substring(0, 1500)}\n\nAnalyze the failure and fix the code.`;
-            await agentLoopOllama(ctx, systemMsg, fixPrompt, ctx.agentState.lastModel, ctx.agentState.lastOllamaUrl, fixPrompt, undefined, false, tabId);
+            await agentLoopOllama(
+                ctx,
+                systemMsg,
+                fixPrompt,
+                ctx.agentState.lastModel,
+                ctx.agentState.lastOllamaUrl,
+                fixPrompt,
+                undefined,
+                false,
+                tabId
+            );
         }
-    } catch { /* verificación best-effort */ }
+    } catch {
+        /* verificación best-effort */
+    }
 }
 
-export async function compressMemory(view: vscode.WebviewView | undefined, historyText: string): Promise<void> {
+export async function compressMemory(
+    view: vscode.WebviewView | undefined,
+    historyText: string
+): Promise<void> {
     if (!view) return;
     try {
         const wsName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
         // Guardar via giskard-sys /memory/add (memoria nativa por proyecto, wave 009)
-        const res = await fetchWithTimeout(`${getConnectorUrl()}/memory/add`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-            body: JSON.stringify({ project: wsName, category: 'flow', content: historyText, tags: 'compressed,chat' })
-        }, 15000);
+        const res = await fetchWithTimeout(
+            `${getConnectorUrl()}/memory/add`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({
+                    project: wsName,
+                    category: 'flow',
+                    content: historyText,
+                    tags: 'compressed,chat'
+                })
+            },
+            15000
+        );
         const data: any = await res.json().catch(() => null);
-        const msg = data && data.success
-            ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'
-            : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
+        const msg =
+            data && data.success
+                ? '✓ Memoria BCF guardada exitosamente en giskard-sys (memoria nativa).'
+                : `Error guardando memoria: ${(data && data.error) || 'error de conexión'}`;
 
         // Req 5 (wave 012): handoff comun — nodo de continuidad para otros agentes
         const handoffContent = historyText.length > 8000 ? historyText.slice(0, 8000) : historyText;
-        await fetchWithTimeout(`${getConnectorUrl()}/memory/graph/add_node`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
-            body: JSON.stringify({
-                type: 'handoff',
-                project: wsName,
-                title: `Handoff ${new Date().toISOString().slice(0, 10)}`,
-                description: handoffContent,
-                status: 'active'
-            })
-        }, 15000).catch(() => null);
+        await fetchWithTimeout(
+            `${getConnectorUrl()}/memory/graph/add_node`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() },
+                body: JSON.stringify({
+                    type: 'handoff',
+                    project: wsName,
+                    title: `Handoff ${new Date().toISOString().slice(0, 10)}`,
+                    description: handoffContent,
+                    status: 'active'
+                })
+            },
+            15000
+        ).catch(() => null);
         view.webview.postMessage({ type: 'streamToken', token: `\n\n[Sistema]: ${msg}` });
         view.webview.postMessage({ type: 'streamComplete' });
     } catch (err: any) {

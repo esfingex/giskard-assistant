@@ -35,22 +35,24 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     const groups = await fetchLlmModelsGrouped().catch(() => []);
     const remoteModels = await fetchLlmModels().catch(() => []);
 
-    const ollamaConn = ctx.store.getAll().find(c => c.tag === 'ollama' || c.url.includes(':11434'));
+    const ollamaConn = ctx.store.getAll().find((c) => c.tag === 'ollama' || c.url.includes(':11434'));
     const ollamaUrl = ollamaConn?.url || 'http://127.0.0.1:11434';
     const localModels = await fetchOllamaModels(ollamaUrl).catch(() => []);
 
     const flatGroupModels: string[] = [];
     ctx.modelConnectionMap.clear();
-    groups.forEach(g => {
+    groups.forEach((g) => {
         if (g && Array.isArray(g.models)) {
             flatGroupModels.push(...g.models);
-            g.models.forEach(m => {
+            g.models.forEach((m) => {
                 if (m) ctx.modelConnectionMap.set(m, g);
             });
         }
     });
 
-    const allFlatModels = Array.from(new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])).filter(m => Boolean(m));
+    const allFlatModels = Array.from(
+        new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])
+    ).filter((m) => Boolean(m));
 
     // Auto-enable if empty
     if (enabledModels.length === 0 && allFlatModels.length > 0) {
@@ -80,8 +82,8 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
 export async function handleSaveSettings(
     ctx: ChatStateContext,
     provider: string,
-    baseUrl?: string,
-    apiKey?: string
+    _baseUrl?: string,
+    _apiKey?: string
 ): Promise<void> {
     try {
         const res = await execCliCommand('config', 'update', provider);
@@ -117,7 +119,9 @@ export async function saveChatHistory(ctx: ChatStateContext, tabs: any[]): Promi
             safeTabs = tabs.slice(-2);
         }
         await ctx.extensionContext.workspaceState.update('giskard.chatTabs', safeTabs);
-    } catch { /* non-critical: history persistence is best-effort */ }
+    } catch {
+        /* non-critical: history persistence is best-effort */
+    }
 }
 
 /** Fase 4a: restore chat tabs from workspaceState and push to the webview */
@@ -128,5 +132,7 @@ export async function restoreChatHistory(ctx: ChatStateContext): Promise<void> {
         if (Array.isArray(tabs) && tabs.length > 0) {
             ctx.view.webview.postMessage({ type: 'chatHistoryRestored', tabs });
         }
-    } catch { /* non-critical */ }
+    } catch {
+        /* non-critical */
+    }
 }

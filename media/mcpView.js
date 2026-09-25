@@ -7,12 +7,13 @@ function renderMcpServersList(servers) {
     const mcpServersListDiv = document.getElementById('mcp-servers-list');
     if (!mcpServersListDiv) return;
     if (!servers || servers.length === 0) {
-        mcpServersListDiv.innerHTML = '<span style="font-size:9px;opacity:0.5;">Sin servidores MCP agregados</span>';
+        mcpServersListDiv.innerHTML =
+            '<span style="font-size:9px;opacity:0.5;">Sin servidores MCP agregados</span>';
         return;
     }
 
     let html = '';
-    servers.forEach(s => {
+    servers.forEach((s) => {
         const activeBadge = s.isActive
             ? `<button type="button" class="btn-tog-mcp" data-id="${s.id}" style="padding:1px 5px;font-size:9px;background:rgba(52,211,153,0.2);color:#34d399;border:1px solid #34d399;border-radius:3px;cursor:pointer;font-weight:bold;">🟢 Activo</button>`
             : `<button type="button" class="btn-tog-mcp" data-id="${s.id}" style="padding:1px 5px;font-size:9px;background:transparent;border:1px solid #94a3b8;color:#94a3b8;border-radius:3px;cursor:pointer;">⚪ Inactivo</button>`;
@@ -20,8 +21,8 @@ function renderMcpServersList(servers) {
         let toolsHtml = '';
         if (s.tools && s.tools.length > 0) {
             toolsHtml += `<div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1);display:flex;flex-direction:column;gap:3px;">
-                <div style="font-size:9px;font-weight:bold;color:#38bdf8;">🛠️ Servicios/Herramientas Disponibles (${s.tools.filter(t=>t.enabled).length}/${s.tools.length}):</div>`;
-            s.tools.forEach(t => {
+                <div style="font-size:9px;font-weight:bold;color:#38bdf8;">🛠️ Servicios/Herramientas Disponibles (${s.tools.filter((t) => t.enabled).length}/${s.tools.length}):</div>`;
+            s.tools.forEach((t) => {
                 toolsHtml += `<label style="display:flex;align-items:center;gap:5px;font-size:9px;cursor:pointer;opacity:${t.enabled ? '1' : '0.5'};">
                     <input type="checkbox" class="mcp-tool-cb" data-server-id="${s.id}" data-tool-id="${escapeHtml(t.id)}" ${t.enabled ? 'checked' : ''}>
                     <strong style="color:${t.enabled ? '#34d399' : '#94a3b8'};">${escapeHtml(t.name)}</strong>
@@ -56,21 +57,21 @@ function renderMcpServersList(servers) {
 
     mcpServersListDiv.innerHTML = html;
 
-    mcpServersListDiv.querySelectorAll('.btn-tog-mcp').forEach(btn => {
+    mcpServersListDiv.querySelectorAll('.btn-tog-mcp').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = parseInt(btn.getAttribute('data-id'), 10);
             if (id) vscode.postMessage({ type: 'toggleMcpServer', id });
         });
     });
 
-    mcpServersListDiv.querySelectorAll('.btn-disc-mcp').forEach(btn => {
+    mcpServersListDiv.querySelectorAll('.btn-disc-mcp').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = parseInt(btn.getAttribute('data-id'), 10);
             if (id) vscode.postMessage({ type: 'discoverMcpTools', serverId: id });
         });
     });
 
-    mcpServersListDiv.querySelectorAll('.mcp-tool-cb').forEach(cb => {
+    mcpServersListDiv.querySelectorAll('.mcp-tool-cb').forEach((cb) => {
         cb.addEventListener('change', () => {
             const serverId = parseInt(cb.getAttribute('data-server-id'), 10);
             const toolId = cb.getAttribute('data-tool-id');
@@ -80,7 +81,7 @@ function renderMcpServersList(servers) {
         });
     });
 
-    mcpServersListDiv.querySelectorAll('.btn-del-mcp').forEach(btn => {
+    mcpServersListDiv.querySelectorAll('.btn-del-mcp').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = parseInt(btn.getAttribute('data-id'), 10);
             if (id) vscode.postMessage({ type: 'removeMcpServer', id });
@@ -102,11 +103,14 @@ function renderMcpServersList(servers) {
             const commandOrUrl = mcpCmdInp ? mcpCmdInp.value.trim() : '';
 
             if (!commandOrUrl) {
-                if (mcpStatusDiv) mcpStatusDiv.innerHTML = '<span style="color:#f87171;">⚠️ Ingresa un comando o URL para probar.</span>';
+                if (mcpStatusDiv)
+                    mcpStatusDiv.innerHTML =
+                        '<span style="color:#f87171;">⚠️ Ingresa un comando o URL para probar.</span>';
                 return;
             }
 
-            if (mcpStatusDiv) mcpStatusDiv.innerHTML = '<span style="color:#38bdf8;">⏳ Probando MCP...</span>';
+            if (mcpStatusDiv)
+                mcpStatusDiv.innerHTML = '<span style="color:#38bdf8;">⏳ Probando MCP...</span>';
             vscode.postMessage({
                 type: 'testMcpServer',
                 serverType,

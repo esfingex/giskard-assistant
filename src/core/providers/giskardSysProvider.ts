@@ -10,9 +10,13 @@ export const GISKARD_SYS_DEFAULT_URL = 'http://localhost:3500';
 export async function fetchGiskardSysModels(baseUrl: string = GISKARD_SYS_DEFAULT_URL): Promise<string[]> {
     try {
         const cleanUrl = baseUrl.replace(/\/$/, '');
-        const res = await fetchWithTimeout(`${cleanUrl}/llm/models`, {
-            headers: { 'X-Client-Id': CLIENT_ID }
-        }, 5000).catch(() => null);
+        const res = await fetchWithTimeout(
+            `${cleanUrl}/llm/models`,
+            {
+                headers: { 'X-Client-Id': CLIENT_ID }
+            },
+            5000
+        ).catch(() => null);
 
         if (res && res.ok) {
             const data: any = await res.json().catch(() => null);
@@ -20,6 +24,6 @@ export async function fetchGiskardSysModels(baseUrl: string = GISKARD_SYS_DEFAUL
                 return data.data.map((m: any) => m.name || m.id || String(m));
             }
         }
-    } catch { }
+    } catch {}
     return [];
 }

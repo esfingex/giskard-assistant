@@ -6,10 +6,12 @@
 import * as vscode from 'vscode';
 import { getConnectorUrl, getClientId, fetchWithTimeout } from '../core/api';
 
-export const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,out,dist,target,build,coverage,.git,.gemini,.cache,venv,.venv}/**';
+export const DEFAULT_EXCLUDE_GLOB =
+    '**/{node_modules,out,dist,target,build,coverage,.git,.gemini,.cache,venv,.venv}/**';
 
 /** Real source/editor file extensions — used to avoid treating version strings or package names as file paths */
-const SOURCE_FILE_EXT_RE = /\.(?:ts|tsx|js|jsx|json|py|rs|md|mdx|html|css|scss|sass|less|c|cpp|cc|h|hpp|go|yaml|yml|toml|sh|bash|zsh|fish|sql|vue|svelte|astro|java|kt|kts|rb|php|env|ini|cfg|conf|xml|svg|txt|lock|gradle|properties|nix|tf|proto|mjs|cjs|mts|cts)$/i;
+const SOURCE_FILE_EXT_RE =
+    /\.(?:ts|tsx|js|jsx|json|py|rs|md|mdx|html|css|scss|sass|less|c|cpp|cc|h|hpp|go|yaml|yml|toml|sh|bash|zsh|fish|sql|vue|svelte|astro|java|kt|kts|rb|php|env|ini|cfg|conf|xml|svg|txt|lock|gradle|properties|nix|tf|proto|mjs|cjs|mts|cts)$/i;
 
 /** Heuristic: is this string a plausible relative/absolute file path (and not a version or package name)? */
 export function isLikelyFilePath(candidate: string): boolean {
@@ -24,7 +26,13 @@ export async function resolveWorkspaceFile(targetPath: string): Promise<vscode.T
 
     // Ignore requests to read build output / node_modules / git directories
     const lower = cleanPath.toLowerCase();
-    if (lower.includes('node_modules/') || lower.includes('dist/') || lower.includes('out/') || lower.includes('target/') || lower.includes('.git/')) {
+    if (
+        lower.includes('node_modules/') ||
+        lower.includes('dist/') ||
+        lower.includes('out/') ||
+        lower.includes('target/') ||
+        lower.includes('.git/')
+    ) {
         return null;
     }
 
@@ -65,14 +73,20 @@ export async function handleOpenFile(relativePath: string) {
         if (doc) {
             await vscode.window.showTextDocument(doc, { preview: false });
         } else {
-            vscode.window.showErrorMessage(`Giskard: No se encontró el archivo '${relativePath}' en el workspace.`);
+            vscode.window.showErrorMessage(
+                `Giskard: No se encontró el archivo '${relativePath}' en el workspace.`
+            );
         }
     } catch (err: any) {
         vscode.window.showErrorMessage(`Giskard: Error al abrir '${relativePath}': ${err.message}`);
     }
 }
 
-export async function handleToolReadFile(view: vscode.WebviewView | undefined, targetPath: string, id: number) {
+export async function handleToolReadFile(
+    view: vscode.WebviewView | undefined,
+    targetPath: string,
+    id: number
+) {
     if (!view) return;
     try {
         const doc = await resolveWorkspaceFile(targetPath);
@@ -80,7 +94,9 @@ export async function handleToolReadFile(view: vscode.WebviewView | undefined, t
         let content = doc.getText();
         const MAX_READ_CHARS = 14000;
         if (content.length > MAX_READ_CHARS) {
-            content = content.substring(0, MAX_READ_CHARS) + `\n\n... [Contenido optimizado a los primeros 14,000 caracteres de ${content.length.toLocaleString()} caracteres totales para máxima velocidad de inferencia]`;
+            content =
+                content.substring(0, MAX_READ_CHARS) +
+                `\n\n... [Contenido optimizado a los primeros 14,000 caracteres de ${content.length.toLocaleString()} caracteres totales para máxima velocidad de inferencia]`;
         }
         view.webview.postMessage({ type: 'toolReadFileResult', id, content, path: targetPath });
     } catch (err: any) {
@@ -103,11 +119,28 @@ export async function handleToolWriteFile(
             await doc.save();
             await vscode.window.showTextDocument(doc, { preview: false });
             if (result.applied) {
-                view.webview.postMessage({ type: 'toolWriteFileResult', id, success: true, path: targetPath, mode: result.mode });
+                view.webview.postMessage({
+                    type: 'toolWriteFileResult',
+                    id,
+                    success: true,
+                    path: targetPath,
+                    mode: result.mode
+                });
             } else if (result.mode === 'noop') {
-                view.webview.postMessage({ type: 'toolWriteFileResult', id, success: true, path: targetPath, mode: 'noop' });
+                view.webview.postMessage({
+                    type: 'toolWriteFileResult',
+                    id,
+                    success: true,
+                    path: targetPath,
+                    mode: 'noop'
+                });
             } else {
-                view.webview.postMessage({ type: 'toolWriteFileResult', id, error: result.message || 'No se pudieron aplicar los cambios', path: targetPath });
+                view.webview.postMessage({
+                    type: 'toolWriteFileResult',
+                    id,
+                    error: result.message || 'No se pudieron aplicar los cambios',
+                    path: targetPath
+                });
             }
         } else {
             const folders = vscode.workspace.workspaceFolders;
@@ -118,14 +151,25 @@ export async function handleToolWriteFile(
             await vscode.workspace.fs.writeFile(newUri, enc.encode(content));
             const newDoc = await vscode.workspace.openTextDocument(newUri);
             await vscode.window.showTextDocument(newDoc, { preview: false });
-            view.webview.postMessage({ type: 'toolWriteFileResult', id, success: true, path: targetPath, mode: 'new' });
+            view.webview.postMessage({
+                type: 'toolWriteFileResult',
+                id,
+                success: true,
+                path: targetPath,
+                mode: 'new'
+            });
         }
     } catch (err: any) {
         view.webview.postMessage({ type: 'toolWriteFileResult', id, error: err.message, path: targetPath });
     }
 }
 
-export async function handleToolExec(view: vscode.WebviewView | undefined, command: string, args: string[], id: number) {
+export async function handleToolExec(
+    view: vscode.WebviewView | undefined,
+    command: string,
+    args: string[],
+    id: number
+) {
     if (!view) return;
     try {
         const res = await fetchWithTimeout(`${getConnectorUrl()}/exec`, {
@@ -142,7 +186,11 @@ export async function handleToolExec(view: vscode.WebviewView | undefined, comma
 }
 
 /** List directory entries (names only, bounded) so the model can explore the project structure */
-export async function handleToolListDir(view: vscode.WebviewView | undefined, targetPath: string, id: number) {
+export async function handleToolListDir(
+    view: vscode.WebviewView | undefined,
+    targetPath: string,
+    id: number
+) {
     if (!view) return;
     try {
         const folders = vscode.workspace.workspaceFolders;
@@ -179,7 +227,9 @@ export async function handleToolSearch(view: vscode.WebviewView | undefined, que
                         results.push(`${vscode.workspace.asRelativePath(uri)}:${i + 1}`);
                     }
                 }
-            } catch { /* skip unreadable/binary */ }
+            } catch {
+                /* skip unreadable/binary */
+            }
             if (results.length >= 50) break;
         }
         view.webview.postMessage({ type: 'toolSearchResult', id, query: q, files: results });
@@ -193,7 +243,7 @@ export async function handleToolGlob(view: vscode.WebviewView | undefined, patte
     if (!view) return;
     try {
         const matches = await vscode.workspace.findFiles(pattern || '**/*', DEFAULT_EXCLUDE_GLOB, 100);
-        const files = matches.map(u => vscode.workspace.asRelativePath(u)).slice(0, 100);
+        const files = matches.map((u) => vscode.workspace.asRelativePath(u)).slice(0, 100);
         view.webview.postMessage({ type: 'toolGlobResult', id, pattern: pattern || '**/*', files });
     } catch (err: any) {
         view.webview.postMessage({ type: 'toolGlobResult', id, error: err.message, pattern });
@@ -246,7 +296,11 @@ export async function applyCodeToDocument(
     // 2. Empty file → write content
     if (!current.trim()) {
         const edit = new vscode.WorkspaceEdit();
-        edit.insert(doc.uri, new vscode.Position(0, 0), cleanCode.endsWith('\n') ? cleanCode : cleanCode + '\n');
+        edit.insert(
+            doc.uri,
+            new vscode.Position(0, 0),
+            cleanCode.endsWith('\n') ? cleanCode : cleanCode + '\n'
+        );
         await vscode.workspace.applyEdit(edit);
         return { applied: true, mode: 'new' };
     }
@@ -258,7 +312,9 @@ export async function applyCodeToDocument(
     }
     const currentLines = current.split('\n');
     const codeLines = cleanCode.split('\n');
-    const sizeSimilar = Math.abs(codeLines.length - currentLines.length) <= Math.max(2, Math.floor(currentLines.length * 0.15));
+    const sizeSimilar =
+        Math.abs(codeLines.length - currentLines.length) <=
+        Math.max(2, Math.floor(currentLines.length * 0.15));
     const overlap = countOverlappingLines(codeLines, currentLines);
     const overlapRatio = codeLines.length > 0 ? overlap / codeLines.length : 0;
     if (sizeSimilar && overlapRatio < 0.5) {
@@ -286,7 +342,7 @@ function countOverlappingLines(codeLines: string[], currentLines: string[]): num
     for (let i = 0; i < maxCheck; i++) {
         const t = codeLines[i].trim();
         if (t.length < 2) continue;
-        if (currentLines.some(fl => linesMatch(fl, t))) overlap++;
+        if (currentLines.some((fl) => linesMatch(fl, t))) overlap++;
     }
     return overlap;
 }
@@ -306,13 +362,19 @@ async function applyPartialEdit(
         return -1;
     };
 
-    let firstBlockIdx = -1, firstFileIdx = -1;
-    let lastBlockIdx = -1, lastFileIdx = -1;
+    let firstBlockIdx = -1,
+        firstFileIdx = -1;
+    let lastBlockIdx = -1,
+        lastFileIdx = -1;
     for (let i = 0; i < codeLines.length; i++) {
         const fi = matchPos(codeLines[i]);
         if (fi !== -1) {
-            if (firstBlockIdx === -1) { firstBlockIdx = i; firstFileIdx = fi; }
-            lastBlockIdx = i; lastFileIdx = fi;
+            if (firstBlockIdx === -1) {
+                firstBlockIdx = i;
+                firstFileIdx = fi;
+            }
+            lastBlockIdx = i;
+            lastFileIdx = fi;
         }
     }
 
@@ -321,9 +383,10 @@ async function applyPartialEdit(
     }
 
     const startPos = new vscode.Position(firstFileIdx, 0);
-    const endPos = lastFileIdx + 1 < currentLines.length
-        ? new vscode.Position(lastFileIdx + 1, 0)
-        : doc.positionAt(doc.getText().length);
+    const endPos =
+        lastFileIdx + 1 < currentLines.length
+            ? new vscode.Position(lastFileIdx + 1, 0)
+            : doc.positionAt(doc.getText().length);
 
     const edit = new vscode.WorkspaceEdit();
     edit.replace(doc.uri, new vscode.Range(startPos, endPos), cleanCode + '\n');
@@ -335,7 +398,7 @@ async function applyPartialEdit(
 export function cleanCodeFence(code: string): string {
     if (!code) return '';
     let clean = code.trim();
-    const match = clean.match(/^```[a-zA-Z0-9_\-\+\.#]*\n([\s\S]*?)\n?```$/);
+    const match = clean.match(/^```[a-zA-Z0-9_\-+#]*\n([\s\S]*?)\n?```$/);
     if (match && match[1]) {
         return match[1].trim();
     }
@@ -382,7 +445,9 @@ export function extractToolCalls(text: string): HostToolCall[] {
                     content: args.content || obj.content
                 });
             }
-        } catch { /* ignore malformed */ }
+        } catch {
+            /* ignore malformed */
+        }
     }
 
     // 2. Balanced-brace JSON tool calls {"tool":"read_file","args":{"path":"..."}}
@@ -395,7 +460,10 @@ export function extractToolCalls(text: string): HostToolCall[] {
                 if (text[i] === '{') depth++;
                 else if (text[i] === '}') {
                     depth--;
-                    if (depth === 0) { endIdx = i; break; }
+                    if (depth === 0) {
+                        endIdx = i;
+                        break;
+                    }
                 }
             }
             if (endIdx !== -1) {
@@ -417,7 +485,9 @@ export function extractToolCalls(text: string): HostToolCall[] {
                             break;
                         }
                     }
-                } catch { /* ignore */ }
+                } catch {
+                    /* ignore */
+                }
             }
             idx = text.indexOf('{', idx + 1);
         }
@@ -425,7 +495,7 @@ export function extractToolCalls(text: string): HostToolCall[] {
 
     // De-duplicate
     const seen = new Set<string>();
-    return calls.filter(c => {
+    return calls.filter((c) => {
         const key = `${c.action}|${c.path || c.query || c.pattern || ''}`;
         if (seen.has(key)) return false;
         seen.add(key);
@@ -454,7 +524,9 @@ export async function executeReadOnlyTool(call: HostToolCall): Promise<{ ok: boo
             const entries = await vscode.workspace.fs.readDirectory(dirUri);
             const listing = entries
                 .map(([name, type]) => (type === vscode.FileType.Directory ? '📁 ' : '📄 ') + name)
-                .sort().slice(0, 200).join('\n');
+                .sort()
+                .slice(0, 200)
+                .join('\n');
             return { ok: true, output: `Directory \`${call.path || '.'}\`:\n${listing}` };
         }
         if (action === 'search') {
@@ -468,16 +540,26 @@ export async function executeReadOnlyTool(call: HostToolCall): Promise<{ ok: boo
                     if (text.length > 200000) continue;
                     const lines = text.split('\n');
                     for (let i = 0; i < lines.length && results.length < 50; i++) {
-                        if (lines[i].toLowerCase().includes(q)) results.push(`${vscode.workspace.asRelativePath(uri)}:${i + 1}`);
+                        if (lines[i].toLowerCase().includes(q))
+                            results.push(`${vscode.workspace.asRelativePath(uri)}:${i + 1}`);
                     }
-                } catch { /* skip */ }
+                } catch {
+                    /* skip */
+                }
                 if (results.length >= 50) break;
             }
-            return { ok: true, output: `Search "${call.query}":\n${results.join('\n') || '(sin resultados)'}` };
+            return {
+                ok: true,
+                output: `Search "${call.query}":\n${results.join('\n') || '(sin resultados)'}`
+            };
         }
         if (action === 'glob') {
-            const matches = await vscode.workspace.findFiles(call.pattern || '**/*', DEFAULT_EXCLUDE_GLOB, 100);
-            const files = matches.map(u => vscode.workspace.asRelativePath(u)).slice(0, 100);
+            const matches = await vscode.workspace.findFiles(
+                call.pattern || '**/*',
+                DEFAULT_EXCLUDE_GLOB,
+                100
+            );
+            const files = matches.map((u) => vscode.workspace.asRelativePath(u)).slice(0, 100);
             return { ok: true, output: `Glob "${call.pattern}":\n${files.join('\n') || '(sin resultados)'}` };
         }
         return { ok: false, output: `Herramienta no soportada en el bucle agente: ${action}` };
@@ -489,7 +571,7 @@ export async function executeReadOnlyTool(call: HostToolCall): Promise<{ ok: boo
 /** Extract code blocks from markdown */
 export function extractCodeBlocks(text: string): { lang: string; code: string; filePath?: string }[] {
     const blocks: { lang: string; code: string; filePath?: string }[] = [];
-    const regex = /```([a-zA-Z0-9_\-\+\.#]*)\n([\s\S]*?)```/g;
+    const regex = /```([a-zA-Z0-9_\-+#]*)\n([\s\S]*?)```/g;
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
         const lang = m[1] || '';
@@ -498,8 +580,13 @@ export function extractCodeBlocks(text: string): { lang: string; code: string; f
         const firstLines = raw.trim().split('\n').slice(0, 3);
         let filePath: string | undefined;
         for (const line of firstLines) {
-            const pm = line.match(/(?:\/\/|#|\/\*|<!--)\s*(?:file\s*:\s*|filepath\s*:\s*)?([a-zA-Z0-9_\-\.\/]+)/i);
-            if (pm && pm[1] && isLikelyFilePath(pm[1])) { filePath = pm[1]; break; }
+            const pm = line.match(
+                /(?:\/\/|#|\/\*|<!--)\s*(?:file\s*:\s*|filepath\s*:\s*)?([a-zA-Z0-9_\-./]+)/i
+            );
+            if (pm && pm[1] && isLikelyFilePath(pm[1])) {
+                filePath = pm[1];
+                break;
+            }
         }
         blocks.push({ lang, code: cleanCodeFence(raw), filePath });
     }

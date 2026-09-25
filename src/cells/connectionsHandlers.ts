@@ -93,16 +93,23 @@ export async function handleTestConnectionUrl(ctx: ConnectionsContext, url: stri
     const start = Date.now();
     try {
         const cleanUrl = url.trim().replace(/\/$/, '');
-        let res = await fetchWithTimeout(`${cleanUrl}/health`, {
-            headers: { 'X-Client-Id': getClientId() }
-        }, 5000).catch(() => null);
+        let res = await fetchWithTimeout(
+            `${cleanUrl}/health`,
+            {
+                headers: { 'X-Client-Id': getClientId() }
+            },
+            5000
+        ).catch(() => null);
 
         if (!res || !res.ok) {
             res = await fetchWithTimeout(cleanUrl, {}, 5000).catch(() => null);
         }
 
         const ms = Date.now() - start;
-        const ok = Boolean(res && (res.ok || res.status === 200 || res.status === 401 || res.status === 404 || res.status === 405));
+        const ok = Boolean(
+            res &&
+            (res.ok || res.status === 200 || res.status === 401 || res.status === 404 || res.status === 405)
+        );
         let statusText = `HTTP ${res?.status}`;
         if (res?.status === 401) statusText += ' (Requiere API Key)';
         ctx.postMessage({
@@ -110,13 +117,14 @@ export async function handleTestConnectionUrl(ctx: ConnectionsContext, url: stri
             ok,
             status: res?.status,
             ms,
-            error: ok ? undefined : (res ? statusText : 'Servidor no responde en esa URL')
+            error: ok ? undefined : res ? statusText : 'Servidor no responde en esa URL'
         });
     } catch (err: any) {
         const ms = Date.now() - start;
         let reason = err.message;
         if (err.name === 'AbortError') reason = 'Timeout — sin respuesta en 5 segundos';
-        else if (err.message.includes('ECONNREFUSED')) reason = 'Conexión rechazada — verifica que el servidor esté activo';
+        else if (err.message.includes('ECONNREFUSED'))
+            reason = 'Conexión rechazada — verifica que el servidor esté activo';
         else if (err.message.includes('ENOTFOUND')) reason = 'Host no encontrado — verifica la URL';
 
         ctx.postMessage({

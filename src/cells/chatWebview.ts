@@ -8,12 +8,7 @@
  */
 
 import * as vscode from 'vscode';
-import * as os from 'os';
-import * as path from 'path';
-import {
-    ConnectionModelsGroup,
-    resetSession
-} from '../core/api';
+import { ConnectionModelsGroup, resetSession } from '../core/api';
 import { ConnectionStore } from '../core/connectionStore';
 import { EventBus, EventPayload } from '../core/eventBus';
 import { getHtmlForWebview } from './htmlShell';
@@ -21,11 +16,7 @@ import { sendMcpServersList } from './mcpHandlers';
 
 import { clearAgentActivity } from './statusBar';
 import { ChatMessage } from '../core/contextWindow';
-import {
-    AgentState,
-    AgentLoopContext,
-    autoVerifyAndFix
-} from './agentLoop';
+import { AgentState, AgentLoopContext, autoVerifyAndFix } from './agentLoop';
 import {
     StreamContext,
     streamFromOllamaLegacy,
@@ -65,7 +56,11 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         private readonly _context?: vscode.ExtensionContext
     ) {
         EventBus.instance.onDidChange(async (e: EventPayload) => {
-            if (e.event === 'modelsUpdated' || e.event === 'modelToggled' || e.event === 'connectionChanged') {
+            if (
+                e.event === 'modelsUpdated' ||
+                e.event === 'modelToggled' ||
+                e.event === 'connectionChanged'
+            ) {
                 await this.refreshState();
             }
         });
@@ -74,7 +69,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     /** Revert the most recent AI edit (Fase 3: snapshot + revert) */
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
+        _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
@@ -144,7 +139,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    public injectCodeContext(contextBlock: { relativePath: string; startLine: number; endLine: number; code: string; lang: string }) {
+    public injectCodeContext(contextBlock: {
+        relativePath: string;
+        startLine: number;
+        endLine: number;
+        code: string;
+        lang: string;
+    }) {
         this.postMessage({
             type: 'injectCodeSnippet',
             contextBlock
@@ -165,7 +166,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             resetSession: () => resetSession(),
             refreshState: () => this.refreshState(),
             handlePrompt: (prompt, model, includeActiveFile, contextType, tabId) =>
-                this._handlePrompt(prompt, model || '', Boolean(includeActiveFile), contextType || 'none', tabId),
+                this._handlePrompt(
+                    prompt,
+                    model || '',
+                    Boolean(includeActiveFile),
+                    contextType || 'none',
+                    tabId
+                ),
             store: this._store,
             cellCtx: () => this._cellCtx(),
             stateCtx: () => this._stateCtx(),
@@ -195,7 +202,10 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     /** Contexto para la célula de diffs (decomposition wave 4) */
     private _diffCtx(): DiffContext {
         return {
-            onEditApplied: () => autoVerifyAndFix(this._agentCtx()).catch(() => { /* best-effort */ })
+            onEditApplied: () =>
+                autoVerifyAndFix(this._agentCtx()).catch(() => {
+                    /* best-effort */
+                })
         };
     }
 
@@ -205,10 +215,14 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             view: this._view,
             agentState: this._agentState,
             tabHistory: this._tabHistory,
-            streamChat: (messages, model, ollamaUrl, tabId) => this._streamOllamaChat(messages, model, ollamaUrl, tabId),
+            streamChat: (messages, model, ollamaUrl, tabId) =>
+                this._streamOllamaChat(messages, model, ollamaUrl, tabId),
             maybeAutoTriggerDiff: (u, r, pf, f) => maybeAutoTriggerDiff(this._diffCtx(), u, r, pf, f),
-            handlePrompt: (prompt, model, includeFile, mode, tabId) => this._handlePrompt(prompt, model || '', Boolean(includeFile), mode || 'none', tabId),
-            clearAbort: () => { this._activeAbortController = null; },
+            handlePrompt: (prompt, model, includeFile, mode, tabId) =>
+                this._handlePrompt(prompt, model || '', Boolean(includeFile), mode || 'none', tabId),
+            clearAbort: () => {
+                this._activeAbortController = null;
+            },
             firstEnabledModel: () => this._store.getEnabledModels()[0] || ''
         };
     }
@@ -234,7 +248,7 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
         await handlePrompt(this._promptHost(), prompt, model, includeActiveFile, contextType, tabId);
     }
 
-        /** Host para la célula del orquestador de prompts (wave 9) */
+    /** Host para la célula del orquestador de prompts (wave 9) */
     private _promptHost(): PromptHost {
         return {
             getView: () => this._view,
@@ -242,15 +256,53 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             agentState: this._agentState,
             modelConnectionMap: this._modelConnectionMap,
             isLocalStreaming: () => this._localModelStreaming,
-            setLocalStreaming: (v) => { this._localModelStreaming = v; },
+            setLocalStreaming: (v) => {
+                this._localModelStreaming = v;
+            },
             getAbort: () => this._activeAbortController,
-            setAbort: (c) => { this._activeAbortController = c; },
+            setAbort: (c) => {
+                this._activeAbortController = c;
+            },
             agentCtx: () => this._agentCtx(),
             diffCtx: () => this._diffCtx(),
-            streamRemote: (baseUrl, apiKey, mdl, fullPrompt, userPrompt, extractedPath, includeActiveFile, tabId) =>
-                this._streamFromRemoteApi(baseUrl, apiKey, mdl, fullPrompt, userPrompt, extractedPath, includeActiveFile, tabId),
-            streamOllamaFallback: (fullPrompt, mdl, userPrompt, extractedPath, includeActiveFile, customOllamaUrl, tabId) =>
-                this._streamFromOllamaFallback(fullPrompt, mdl, userPrompt, extractedPath, includeActiveFile, customOllamaUrl, tabId),
+            streamRemote: (
+                baseUrl,
+                apiKey,
+                mdl,
+                fullPrompt,
+                userPrompt,
+                extractedPath,
+                includeActiveFile,
+                tabId
+            ) =>
+                this._streamFromRemoteApi(
+                    baseUrl,
+                    apiKey,
+                    mdl,
+                    fullPrompt,
+                    userPrompt,
+                    extractedPath,
+                    includeActiveFile,
+                    tabId
+                ),
+            streamOllamaFallback: (
+                fullPrompt,
+                mdl,
+                userPrompt,
+                extractedPath,
+                includeActiveFile,
+                customOllamaUrl,
+                tabId
+            ) =>
+                this._streamFromOllamaFallback(
+                    fullPrompt,
+                    mdl,
+                    userPrompt,
+                    extractedPath,
+                    includeActiveFile,
+                    customOllamaUrl,
+                    tabId
+                ),
             resolveGiskardSysOllama: (url) => this._resolveGiskardSysOllama(url)
         };
     }
@@ -274,9 +326,21 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             abortController: this._activeAbortController,
             lastBotResponse: { text: '' },
             maybeAutoTriggerDiff: (u, r, p, f) => maybeAutoTriggerDiff(this._diffCtx(), u, r, p, f),
-            clearAbort: () => { this._activeAbortController = null; }
+            clearAbort: () => {
+                this._activeAbortController = null;
+            }
         };
-        await streamFromRemoteApi(ctx, baseUrl, apiKey, model, fullPrompt, userPrompt, extractedPath, includeActiveFile, tabId);
+        await streamFromRemoteApi(
+            ctx,
+            baseUrl,
+            apiKey,
+            model,
+            fullPrompt,
+            userPrompt,
+            extractedPath,
+            includeActiveFile,
+            tabId
+        );
         this._agentState.lastBotResponse = ctx.lastBotResponse.text;
     }
 
@@ -295,8 +359,9 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
 
         const config = vscode.workspace.getConfiguration('giskard-assistant');
         const defaultModel = config.get<string>('defaultModel') || 'qwen3-coder:30b';
-        const ollamaBaseUrl = customOllamaUrl || config.get<string>('ollamaBaseUrl') || 'http://127.0.0.1:11434';
-        const targetModel = (model && !model.startsWith('cli:')) ? model : defaultModel;
+        const ollamaBaseUrl =
+            customOllamaUrl || config.get<string>('ollamaBaseUrl') || 'http://127.0.0.1:11434';
+        const targetModel = model && !model.startsWith('cli:') ? model : defaultModel;
 
         const ctx: StreamContext = {
             view: this._view,
@@ -309,7 +374,13 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             this._agentState.lastBotResponse = ctx.lastBotResponse.text;
             clearAgentActivity();
             this._view.webview.postMessage({ type: 'streamComplete', model: targetModel, tabId });
-            await maybeAutoTriggerDiff(this._diffCtx(), userPrompt || fullPrompt, this._agentState.lastBotResponse, extractedPath, includeActiveFile);
+            await maybeAutoTriggerDiff(
+                this._diffCtx(),
+                userPrompt || fullPrompt,
+                this._agentState.lastBotResponse,
+                extractedPath,
+                includeActiveFile
+            );
         } catch (err: any) {
             if (err.name === 'AbortError') return;
             if (this._view) {
@@ -357,24 +428,22 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
     private _setWebviewMessageListener(webview: vscode.Webview) {
         setWebviewMessageListener(webview, this._routerDeps());
     }
-
 }
 
 let _chatTabCounter = 1;
 
-export function createNewChatPanelTab(context: vscode.ExtensionContext, store: ConnectionStore, title?: string) {
+export function createNewChatPanelTab(
+    context: vscode.ExtensionContext,
+    store: ConnectionStore,
+    title?: string
+) {
     _chatTabCounter++;
     const panelTitle = title || `GISKARD #${_chatTabCounter}`;
-    const panel = vscode.window.createWebviewPanel(
-        'giskard-chat-tab',
-        panelTitle,
-        vscode.ViewColumn.Beside,
-        {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [context.extensionUri]
-        }
-    );
+    const panel = vscode.window.createWebviewPanel('giskard-chat-tab', panelTitle, vscode.ViewColumn.Beside, {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [context.extensionUri]
+    });
 
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'giskard.svg');
 

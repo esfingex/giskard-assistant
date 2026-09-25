@@ -29,10 +29,17 @@ export function getPeakInfo(now: Date = new Date()): PeakInfo {
     let next: Date | null = null;
     for (let d = 0; d < 8 && !next; d++) {
         for (const b of boundaries) {
-            const cand = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + d, b, 0, 0));
-            if (cand <= now) { continue; }
+            const cand = new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + d, b, 0, 0)
+            );
+            if (cand <= now) {
+                continue;
+            }
             const cd = cand.getUTCDay();
-            if (cd >= 1 && cd <= 5) { next = cand; break; }
+            if (cd >= 1 && cd <= 5) {
+                next = cand;
+                break;
+            }
         }
     }
 
@@ -43,7 +50,10 @@ export function getPeakInfo(now: Date = new Date()): PeakInfo {
     };
 }
 
-export async function fetchDeepseekModels(baseUrl: string = DEEPSEEK_DEFAULT_URL, apiKey?: string): Promise<string[]> {
+export async function fetchDeepseekModels(
+    baseUrl: string = DEEPSEEK_DEFAULT_URL,
+    apiKey?: string
+): Promise<string[]> {
     try {
         const cleanUrl = baseUrl.replace(/\/$/, '');
         const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
@@ -56,6 +66,6 @@ export async function fetchDeepseekModels(baseUrl: string = DEEPSEEK_DEFAULT_URL
                 return data.data.map((m: any) => m.id || m.name || String(m));
             }
         }
-    } catch { }
+    } catch {}
     return [];
 }

@@ -11,7 +11,7 @@ import { fetchWithTimeout, CLIENT_ID } from '../core/api';
 const DEFAULT_INLINE_MODEL = 'qwen2.5-coder:1.5b';
 
 export class GiskardInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
-    constructor(private readonly store: ConnectionStore) { }
+    constructor(private readonly store: ConnectionStore) {}
 
     async provideInlineCompletionItems(
         document: vscode.TextDocument,
@@ -21,7 +21,9 @@ export class GiskardInlineCompletionProvider implements vscode.InlineCompletionI
     ): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList | null> {
         if (token.isCancellationRequested || position.line < 0) return null;
 
-        const prefix = document.getText(new vscode.Range(new vscode.Position(Math.max(0, position.line - 15), 0), position));
+        const prefix = document.getText(
+            new vscode.Range(new vscode.Position(Math.max(0, position.line - 15), 0), position)
+        );
         if (!prefix.trim()) return null;
 
         try {
@@ -41,16 +43,20 @@ export class GiskardInlineCompletionProvider implements vscode.InlineCompletionI
             };
             if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
-            const res = await fetchWithTimeout(`${cleanUrl}/chat/completions`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    model,
-                    messages: [{ role: 'user', content: `Complete code inline:\n${prefix}` }],
-                    max_tokens: 48,
-                    temperature: 0.2
-                })
-            }, 2500).catch(() => null);
+            const res = await fetchWithTimeout(
+                `${cleanUrl}/chat/completions`,
+                {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        model,
+                        messages: [{ role: 'user', content: `Complete code inline:\n${prefix}` }],
+                        max_tokens: 48,
+                        temperature: 0.2
+                    })
+                },
+                2500
+            ).catch(() => null);
 
             if (res && res.ok) {
                 const data: any = await res.json().catch(() => null);
@@ -60,7 +66,7 @@ export class GiskardInlineCompletionProvider implements vscode.InlineCompletionI
                     return [new vscode.InlineCompletionItem(cleanText, new vscode.Range(position, position))];
                 }
             }
-        } catch { }
+        } catch {}
 
         return null;
     }

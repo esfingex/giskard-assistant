@@ -9,7 +9,7 @@ import * as path from 'path';
 
 export type LanguageCode = 'en' | 'es';
 
-let cachedLocales: Record<LanguageCode, any> = {
+const cachedLocales: Record<LanguageCode, any> = {
     en: null,
     es: null
 };
@@ -38,11 +38,69 @@ export function loadTranslations(extensionUri: vscode.Uri, lang?: LanguageCode):
 
     // Fallback to embedded English dictionary if file load fails
     return {
-        tabs: { local: "⚙️ Local AI", remote: "🌐 Remote API", mcp: "🔌 MCP Servers", palette: "🎨 Color Theme" },
-        status: { tokens: "🔢 Tokens", clearContext: "🗑️ Clear Context", settings: "⚙️ Settings", offline: "⚡ OFFLINE MODE" },
-        connections: { title: "🔌 AI Connections Management", name: "Connection Name:", type: "Type:", url: "Backend / API URL:", tag: "Tag / Category:", apiKey: "API Key / Token:", test: "🧪 Test URL", add: "➕ Save Connection", active: "★ Active", activate: "Activate", delete: "Delete" },
-        mcp: { title: "🔌 Model Context Protocol (MCP) Configuration", import: "📂 Import mcp_conf.js / config.json", name: "MCP Server Name:", type: "Type:", cmd: "Command or URL:", test: "🧪 Test MCP", add: "➕ Add MCP Server", scan: "🔍 Scan MCP Services", active: "🟢 Active", inactive: "⚪ Inactive", availableServices: "🛠️ Available Services/Tools" },
-        chat: { placeholder: "Ask AI assistant... (Shift+Enter for new line)", send: "Send ↵", stop: "Stop ⏹️", compress: "Compress Context", thinking: "Thinking...", applyDiff: "📝 Apply Diff", applyLastCode: "🚀 Apply last code block", copy: "📋 Copy", runShell: "⚡ Shell", openFile: "📄 Open" },
-        palette: { title: "🎨 Workspace Color Customization", presets: "Presets:", white: "Minimal White", cyan: "Neon Cyan", emerald: "Emerald Cyber", purple: "Purple Synth", userFont: "💬 User Text Color:", headerFont: "📑 Header Title Color:", accentColor: "⚡ Accent Border Color:", userBg: "💬 User Bubble (Background):", botBg: "🤖 AI Bubble (Background):", thinkBg: "💡 Reasoning Box (Background):" }
+        tabs: {
+            local: '⚙️ Local AI',
+            remote: '🌐 Remote API',
+            mcp: '🔌 MCP Servers',
+            palette: '🎨 Color Theme'
+        },
+        status: {
+            tokens: '🔢 Tokens',
+            clearContext: '🗑️ Clear Context',
+            settings: '⚙️ Settings',
+            offline: '⚡ OFFLINE MODE'
+        },
+        connections: {
+            title: '🔌 AI Connections Management',
+            name: 'Connection Name:',
+            type: 'Type:',
+            url: 'Backend / API URL:',
+            tag: 'Tag / Category:',
+            apiKey: 'API Key / Token:',
+            test: '🧪 Test URL',
+            add: '➕ Save Connection',
+            active: '★ Active',
+            activate: 'Activate',
+            delete: 'Delete'
+        },
+        mcp: {
+            title: '🔌 Model Context Protocol (MCP) Configuration',
+            import: '📂 Import mcp_conf.js / config.json',
+            name: 'MCP Server Name:',
+            type: 'Type:',
+            cmd: 'Command or URL:',
+            test: '🧪 Test MCP',
+            add: '➕ Add MCP Server',
+            scan: '🔍 Scan MCP Services',
+            active: '🟢 Active',
+            inactive: '⚪ Inactive',
+            availableServices: '🛠️ Available Services/Tools'
+        },
+        chat: {
+            placeholder: 'Ask AI assistant... (Shift+Enter for new line)',
+            send: 'Send ↵',
+            stop: 'Stop ⏹️',
+            compress: 'Compress Context',
+            thinking: 'Thinking...',
+            applyDiff: '📝 Apply Diff',
+            applyLastCode: '🚀 Apply last code block',
+            copy: '📋 Copy',
+            runShell: '⚡ Shell',
+            openFile: '📄 Open'
+        },
+        palette: {
+            title: '🎨 Workspace Color Customization',
+            presets: 'Presets:',
+            white: 'Minimal White',
+            cyan: 'Neon Cyan',
+            emerald: 'Emerald Cyber',
+            purple: 'Purple Synth',
+            userFont: '💬 User Text Color:',
+            headerFont: '📑 Header Title Color:',
+            accentColor: '⚡ Accent Border Color:',
+            userBg: '💬 User Bubble (Background):',
+            botBg: '🤖 AI Bubble (Background):',
+            thinkBg: '💡 Reasoning Box (Background):'
+        }
     };
 }

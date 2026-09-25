@@ -12,13 +12,19 @@ import * as vscode from 'vscode';
 import { GiskardChatWebviewProvider, createNewChatPanelTab } from './cells/chatWebview';
 import { revertLastAiEdit } from './cells/diffHandlers';
 import { registerSandboxCommands } from './cells/sandboxCommands';
-import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore, fetchLlmModels } from './core/api';
+import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
 import { EventBus } from './core/eventBus';
 
 import { GiskardStatusBar, registerStatusBarInstance } from './cells/statusBar';
 import { GiskardInlineCompletionProvider } from './cells/inlineCompletionProvider';
-import { GiskardLocalModelsTreeProvider, GiskardRemoteConnsTreeProvider, GiskardThemePaletteTreeProvider, GiskardMcpServersTreeProvider, GiskardFileExclusionsTreeProvider } from './cells/treeViewProvider';
+import {
+    GiskardLocalModelsTreeProvider,
+    GiskardRemoteConnsTreeProvider,
+    GiskardThemePaletteTreeProvider,
+    GiskardMcpServersTreeProvider,
+    GiskardFileExclusionsTreeProvider
+} from './cells/treeViewProvider';
 import { handleDiscoverMcpTools } from './cells/mcpHandlers';
 import { GiskardModelSettingsWebviewProvider } from './cells/modelSettingsWebview';
 
@@ -65,9 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // 1. Célula Webview Sidebar Chat
     const provider = new GiskardChatWebviewProvider(context.extensionUri, store, context);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('giskard.chatView', provider)
-    );
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider('giskard.chatView', provider));
 
     // 1.1 Fase 3c: Revert last AI edit (one-click undo of applied changes)
     context.subscriptions.push(
@@ -89,11 +93,26 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('💬✨ New chat context initialized.');
         }),
         vscode.commands.registerCommand('giskard-assistant.addModelOrConnection', async () => {
-            const action = await vscode.window.showQuickPick([
-                { label: '🦙 Pull Local Ollama Model', detail: 'Download/Pull a model into Ollama (e.g. qwen2.5-coder, deepseek-r1:8b, llama3.2)', id: 'ollama-pull' },
-                { label: '🌐 Add Remote AI Provider', detail: 'Configure DeepSeek, NVIDIA NIM, OpenAI, Anthropic, Gemini API Key & URL', id: 'remote-conn' },
-                { label: '🦀 Connect to Giskard-Sys Backend', detail: 'Connect to Rust Axum local backend (default port 3500)', id: 'giskard-sys' }
-            ], { placeHolder: 'Select Action to Add AI Model or Provider' });
+            const action = await vscode.window.showQuickPick(
+                [
+                    {
+                        label: '🦙 Pull Local Ollama Model',
+                        detail: 'Download/Pull a model into Ollama (e.g. qwen2.5-coder, deepseek-r1:8b, llama3.2)',
+                        id: 'ollama-pull'
+                    },
+                    {
+                        label: '🌐 Add Remote AI Provider',
+                        detail: 'Configure DeepSeek, NVIDIA NIM, OpenAI, Anthropic, Gemini API Key & URL',
+                        id: 'remote-conn'
+                    },
+                    {
+                        label: '🦀 Connect to Giskard-Sys Backend',
+                        detail: 'Connect to Rust Axum local backend (default port 3500)',
+                        id: 'giskard-sys'
+                    }
+                ],
+                { placeHolder: 'Select Action to Add AI Model or Provider' }
+            );
 
             if (!action) return;
 
@@ -105,7 +124,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (!modelName || !modelName.trim()) return;
 
                 const targetModel = modelName.trim();
-                vscode.window.showInformationMessage(`🦙 Pulling Ollama model '${targetModel}' in background...`);
+                vscode.window.showInformationMessage(
+                    `🦙 Pulling Ollama model '${targetModel}' in background...`
+                );
 
                 const terminal = vscode.window.createTerminal(`Ollama Pull ${targetModel}`);
                 terminal.show();
@@ -130,13 +151,18 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.toggleConnectionActive', async (arg: any) => {
-            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            const rawId =
+                typeof arg === 'number'
+                    ? arg
+                    : typeof arg === 'string'
+                      ? Number(arg)
+                      : arg?.rawData?.id || arg?.id;
             if (rawId === undefined || rawId === null) return;
 
             const connId = Number(rawId);
             await store.toggleActive(connId);
 
-            const conn = store.getAll().find(c => Number(c.id) === connId);
+            const conn = store.getAll().find((c) => Number(c.id) === connId);
             const nameStr = conn ? conn.name : 'AI Connection';
             const isActive = conn ? conn.isActive : false;
 
@@ -149,12 +175,17 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" ${statusStr}.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.removeRemoteConnectionTree', async (arg: any) => {
-            const rawId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.connectionId ?? arg?.rawData?.id ?? arg?.id));
+            const rawId =
+                typeof arg === 'number'
+                    ? arg
+                    : typeof arg === 'string'
+                      ? Number(arg)
+                      : (arg?.rawData?.connectionId ?? arg?.rawData?.id ?? arg?.id);
             if (rawId === undefined || rawId === null) return;
 
             const connId = Number(rawId);
-            const conn = store.getAll().find(c => Number(c.id) === connId);
-            const nameStr = conn ? conn.name : (arg?.rawData?.connectionName || 'AI Connection');
+            const conn = store.getAll().find((c) => Number(c.id) === connId);
+            const nameStr = conn ? conn.name : arg?.rawData?.connectionName || 'AI Connection';
 
             const confirm = await vscode.window.showWarningMessage(
                 `Delete AI connection profile '${nameStr}'?`,
@@ -171,71 +202,164 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`✓ AI Connection "${nameStr}" deleted.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
-            const providerPick = await vscode.window.showQuickPick([
-                { label: '🦙 Ollama Local', url: 'http://localhost:11434', tag: 'ollama', type: 'local', detail: 'Local Ollama instance on http://localhost:11434' },
-                { label: '🦀 Giskard-Sys Backend', url: 'http://localhost:3500', tag: 'giskard-sys', type: 'local', detail: 'Local Rust Axum server on http://localhost:3500' },
-                { label: '🐳 DeepSeek API', url: 'https://api.deepseek.com/v1', tag: 'deepseek', type: 'remote', detail: 'DeepSeek Chat & Reasoner API' },
-                { label: '🟢 NVIDIA NIM API', url: 'https://integrate.api.nvidia.com/v1', tag: 'nvidia', type: 'remote', detail: 'NVIDIA NIM API microservices' },
-                { label: '⚡ OpenAI API', url: 'https://api.openai.com/v1', tag: 'openai', type: 'remote', detail: 'OpenAI GPT-4o / o1 / o3 models' },
-                { label: '🧠 Anthropic Claude API', url: 'https://api.anthropic.com/v1', tag: 'anthropic', type: 'remote', detail: 'Claude 3.5 Sonnet / Haiku / Opus' },
-                { label: '✨ Google Gemini API', url: 'https://generativelanguage.googleapis.com/v1beta', tag: 'gemini', type: 'remote', detail: 'Gemini 1.5 Pro / Flash models' },
-                { label: '🌙 Moonshot Kimi API', url: 'https://api.moonshot.cn/v1', tag: 'kimi', type: 'remote', detail: 'Moonshot Kimi LLM API' },
-                { label: '☁️ Qwen / DashScope API', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', tag: 'qwen', type: 'remote', detail: 'Alibaba Qwen LLM models' },
-                { label: '✅ Custom AI Endpoint…', url: '', tag: 'custom', type: 'remote', detail: 'Configure any OpenAI-compatible API endpoint' }
-            ], { placeHolder: 'Select AI Provider / Connection to Add' });
+            const providerPick = await vscode.window.showQuickPick(
+                [
+                    {
+                        label: '🦙 Ollama Local',
+                        url: 'http://localhost:11434',
+                        tag: 'ollama',
+                        type: 'local',
+                        detail: 'Local Ollama instance on http://localhost:11434'
+                    },
+                    {
+                        label: '🦀 Giskard-Sys Backend',
+                        url: 'http://localhost:3500',
+                        tag: 'giskard-sys',
+                        type: 'local',
+                        detail: 'Local Rust Axum server on http://localhost:3500'
+                    },
+                    {
+                        label: '🐳 DeepSeek API',
+                        url: 'https://api.deepseek.com/v1',
+                        tag: 'deepseek',
+                        type: 'remote',
+                        detail: 'DeepSeek Chat & Reasoner API'
+                    },
+                    {
+                        label: '🟢 NVIDIA NIM API',
+                        url: 'https://integrate.api.nvidia.com/v1',
+                        tag: 'nvidia',
+                        type: 'remote',
+                        detail: 'NVIDIA NIM API microservices'
+                    },
+                    {
+                        label: '⚡ OpenAI API',
+                        url: 'https://api.openai.com/v1',
+                        tag: 'openai',
+                        type: 'remote',
+                        detail: 'OpenAI GPT-4o / o1 / o3 models'
+                    },
+                    {
+                        label: '🧠 Anthropic Claude API',
+                        url: 'https://api.anthropic.com/v1',
+                        tag: 'anthropic',
+                        type: 'remote',
+                        detail: 'Claude 3.5 Sonnet / Haiku / Opus'
+                    },
+                    {
+                        label: '✨ Google Gemini API',
+                        url: 'https://generativelanguage.googleapis.com/v1beta',
+                        tag: 'gemini',
+                        type: 'remote',
+                        detail: 'Gemini 1.5 Pro / Flash models'
+                    },
+                    {
+                        label: '🌙 Moonshot Kimi API',
+                        url: 'https://api.moonshot.cn/v1',
+                        tag: 'kimi',
+                        type: 'remote',
+                        detail: 'Moonshot Kimi LLM API'
+                    },
+                    {
+                        label: '☁️ Qwen / DashScope API',
+                        url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        tag: 'qwen',
+                        type: 'remote',
+                        detail: 'Alibaba Qwen LLM models'
+                    },
+                    {
+                        label: '✅ Custom AI Endpoint…',
+                        url: '',
+                        tag: 'custom',
+                        type: 'remote',
+                        detail: 'Configure any OpenAI-compatible API endpoint'
+                    }
+                ],
+                { placeHolder: 'Select AI Provider / Connection to Add' }
+            );
 
             if (!providerPick) return;
 
             let name = providerPick.label.replace(/^[^\s]+\s*/, '');
             let url = providerPick.url;
             let tag = providerPick.tag;
-            let type: 'local' | 'remote' = providerPick.type as any;
+            const type: 'local' | 'remote' = providerPick.type as any;
 
             if (providerPick.tag === 'custom') {
-                const customName = await vscode.window.showInputBox({ prompt: 'Connection Profile Name', placeHolder: 'e.g. My Custom LLM Server' });
+                const customName = await vscode.window.showInputBox({
+                    prompt: 'Connection Profile Name',
+                    placeHolder: 'e.g. My Custom LLM Server'
+                });
                 if (!customName) return;
                 name = customName;
 
-                const customUrl = await vscode.window.showInputBox({ prompt: 'Base URL', placeHolder: 'e.g. http://localhost:8080/v1' });
+                const customUrl = await vscode.window.showInputBox({
+                    prompt: 'Base URL',
+                    placeHolder: 'e.g. http://localhost:8080/v1'
+                });
                 if (!customUrl) return;
                 url = customUrl;
 
-                const customTag = await vscode.window.showInputBox({ prompt: 'Provider Tag (e.g. custom, vllm, lm-studio)', value: 'custom' });
+                const customTag = await vscode.window.showInputBox({
+                    prompt: 'Provider Tag (e.g. custom, vllm, lm-studio)',
+                    value: 'custom'
+                });
                 tag = customTag || 'custom';
             } else {
-                const customUrl = await vscode.window.showInputBox({ prompt: `Base URL for ${name}`, value: url });
+                const customUrl = await vscode.window.showInputBox({
+                    prompt: `Base URL for ${name}`,
+                    value: url
+                });
                 if (!customUrl) return;
                 url = customUrl;
             }
 
             let apiKey: string | undefined = undefined;
             if (type === 'remote' || tag !== 'ollama') {
-                apiKey = await vscode.window.showInputBox({ prompt: `API Key / Bearer Token for ${name} (Optional for local)`, password: true });
+                apiKey = await vscode.window.showInputBox({
+                    prompt: `API Key / Bearer Token for ${name} (Optional for local)`,
+                    password: true
+                });
             }
 
-            const id = await store.addConnection(name, type, url, tag, apiKey);
+            await store.addConnection(name, type, url, tag, apiKey);
             remoteConnsTree.refresh();
             localModelsTree.refresh();
             await provider.refreshState();
             vscode.window.showInformationMessage(`✓ AI Connection "${name}" added and activated.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.testMcpServerTree', async (arg: any) => {
-            const serverId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            const serverId =
+                typeof arg === 'number'
+                    ? arg
+                    : typeof arg === 'string'
+                      ? Number(arg)
+                      : arg?.rawData?.id || arg?.id;
             if (!serverId) return;
 
-            const server = store.getMcpServers().find(s => s.id === Number(serverId));
+            const server = store.getMcpServers().find((s) => s.id === Number(serverId));
             if (!server) return;
 
-            vscode.window.showInformationMessage(`🧪 Testing connection & discovering tools for '${server.name}'...`);
+            vscode.window.showInformationMessage(
+                `🧪 Testing connection & discovering tools for '${server.name}'...`
+            );
             await handleDiscoverMcpTools(provider.view, store, Number(serverId));
             mcpServersTree.refresh();
         }),
         vscode.commands.registerCommand('giskard-assistant.addMcpServerTree', async () => {
-            const name = await vscode.window.showInputBox({ prompt: 'MCP Server Name', placeHolder: 'e.g. filesystem' });
+            const name = await vscode.window.showInputBox({
+                prompt: 'MCP Server Name',
+                placeHolder: 'e.g. filesystem'
+            });
             if (!name) return;
-            const type = await vscode.window.showQuickPick(['stdio', 'sse'], { placeHolder: 'MCP Server Type' });
+            const type = await vscode.window.showQuickPick(['stdio', 'sse'], {
+                placeHolder: 'MCP Server Type'
+            });
             if (!type) return;
-            const commandOrUrl = await vscode.window.showInputBox({ prompt: 'MCP Server Command or URL', placeHolder: 'e.g. npx -y @modelcontextprotocol/server-filesystem .' });
+            const commandOrUrl = await vscode.window.showInputBox({
+                prompt: 'MCP Server Command or URL',
+                placeHolder: 'e.g. npx -y @modelcontextprotocol/server-filesystem .'
+            });
             if (!commandOrUrl) return;
 
             await store.addMcpServer(name, type as any, commandOrUrl);
@@ -244,7 +368,10 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`✓ MCP Server "${name}" added.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.addExclusionPatternTree', async () => {
-            const pattern = await vscode.window.showInputBox({ prompt: 'Exclusion Pattern or Gitignore', placeHolder: 'e.g. *.log or build/' });
+            const pattern = await vscode.window.showInputBox({
+                prompt: 'Exclusion Pattern or Gitignore',
+                placeHolder: 'e.g. *.log or build/'
+            });
             if (!pattern) return;
 
             const current = store.getExclusionPatterns();
@@ -257,7 +384,8 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.removeMcpServerTree', async (arg: any) => {
-            const serverId = typeof arg === 'string' || typeof arg === 'number' ? arg : (arg?.rawData?.id || arg?.id);
+            const serverId =
+                typeof arg === 'string' || typeof arg === 'number' ? arg : arg?.rawData?.id || arg?.id;
             if (!serverId) return;
             await store.removeMcpServer(Number(serverId));
             mcpServersTree.refresh();
@@ -265,7 +393,12 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('✓ MCP Server removed.');
         }),
         vscode.commands.registerCommand('giskard-assistant.toggleMcpServerTree', async (arg: any) => {
-            const serverId = typeof arg === 'number' ? arg : (typeof arg === 'string' ? Number(arg) : (arg?.rawData?.id || arg?.id));
+            const serverId =
+                typeof arg === 'number'
+                    ? arg
+                    : typeof arg === 'string'
+                      ? Number(arg)
+                      : arg?.rawData?.id || arg?.id;
             if (!serverId) return;
             const newState = await store.toggleMcpServer(Number(serverId));
             mcpServersTree.refresh();
@@ -284,10 +417,11 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`✓ MCP Tool '${toolId}' ${statusStr}.`);
         }),
         vscode.commands.registerCommand('giskard-assistant.removeExclusionPatternTree', async (arg: any) => {
-            const pattern = typeof arg === 'string' ? arg : (arg?.rawData || arg?.label || '').replace(/^🚫\s*/, '');
+            const pattern =
+                typeof arg === 'string' ? arg : (arg?.rawData || arg?.label || '').replace(/^🚫\s*/, '');
             if (!pattern) return;
             let current = store.getExclusionPatterns();
-            current = current.filter(p => p !== pattern);
+            current = current.filter((p) => p !== pattern);
             await store.saveExclusionPatterns(current);
             fileExclusionsTree.refresh();
             provider.postMessage({ type: 'exclusionPatternsLoaded', patterns: current });
@@ -303,7 +437,12 @@ export async function activate(context: vscode.ExtensionContext) {
             if (typeof arg === 'string') {
                 modelName = arg;
             } else if (arg && typeof arg === 'object') {
-                modelName = typeof arg.label === 'string' ? arg.label : (typeof arg.rawData === 'string' ? arg.rawData : '');
+                modelName =
+                    typeof arg.label === 'string'
+                        ? arg.label
+                        : typeof arg.rawData === 'string'
+                          ? arg.rawData
+                          : '';
             }
             if (!modelName) return;
 
@@ -374,13 +513,16 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('giskard-assistant.filterCapabilities', async () => {
-            const pick = await vscode.window.showQuickPick([
-                { label: '🧠 Deep Reasoning / Thinking', key: 'reasoning' },
-                { label: '🛠️ Tools & Coder', key: 'tools' },
-                { label: '👁️ Multimodal Vision', key: 'vision' },
-                { label: '🧩 Vectors & Embeddings', key: 'embedding' },
-                { label: '✨ All Models (No Filter)', key: 'all' }
-            ], { placeHolder: 'Select capability to filter models tree' });
+            const pick = await vscode.window.showQuickPick(
+                [
+                    { label: '🧠 Deep Reasoning / Thinking', key: 'reasoning' },
+                    { label: '🛠️ Tools & Coder', key: 'tools' },
+                    { label: '👁️ Multimodal Vision', key: 'vision' },
+                    { label: '🧩 Vectors & Embeddings', key: 'embedding' },
+                    { label: '✨ All Models (No Filter)', key: 'all' }
+                ],
+                { placeHolder: 'Select capability to filter models tree' }
+            );
             if (pick) {
                 localModelsTree.setCapabilityFilter(pick.key);
                 vscode.window.showInformationMessage(`✓ Capability filter active: ${pick.label}`);
@@ -404,18 +546,32 @@ export async function activate(context: vscode.ExtensionContext) {
             await vscode.commands.executeCommand('workbench.view.extension.giskard-explorer');
         }),
         vscode.commands.registerCommand('giskard-assistant.addServer', async () => {
-            const name = await vscode.window.showInputBox({ prompt: 'Nombre de la Conexión (ej. Mi Servidor Ollama, NVIDIA NIM, DeepSeek)', placeHolder: 'NVIDIA NIM Prod' });
+            const name = await vscode.window.showInputBox({
+                prompt: 'Nombre de la Conexión (ej. Mi Servidor Ollama, NVIDIA NIM, DeepSeek)',
+                placeHolder: 'NVIDIA NIM Prod'
+            });
             if (!name) return;
-            const url = await vscode.window.showInputBox({ prompt: 'URL Base del Endpoint API (ej. https://integrate.api.nvidia.com/v1 o http://localhost:11434)', placeHolder: 'https://integrate.api.nvidia.com/v1' });
+            const url = await vscode.window.showInputBox({
+                prompt: 'URL Base del Endpoint API (ej. https://integrate.api.nvidia.com/v1 o http://localhost:11434)',
+                placeHolder: 'https://integrate.api.nvidia.com/v1'
+            });
             if (!url) return;
-            const tag = await vscode.window.showInputBox({ prompt: 'Tag / Proveedor (nvidia, deepseek, ollama, openai, gemini, qwen)', placeHolder: 'nvidia' });
+            const tag = await vscode.window.showInputBox({
+                prompt: 'Tag / Proveedor (nvidia, deepseek, ollama, openai, gemini, qwen)',
+                placeHolder: 'nvidia'
+            });
             if (!tag) return;
-            const apiKey = await vscode.window.showInputBox({ prompt: 'API Key (Opcional para local)', password: true });
+            const apiKey = await vscode.window.showInputBox({
+                prompt: 'API Key (Opcional para local)',
+                password: true
+            });
 
             await store.addConnection(name, 'remote', url, tag.toLowerCase(), apiKey || undefined);
             localModelsTree.refresh();
             remoteConnsTree.refresh();
-            vscode.window.showInformationMessage(`✓ Servidor '${name}' agregado y activado con éxito en Giskard!`);
+            vscode.window.showInformationMessage(
+                `✓ Servidor '${name}' agregado y activado con éxito en Giskard!`
+            );
         }),
         vscode.commands.registerCommand('giskard-assistant.refreshTree', () => {
             localModelsTree.refresh();
@@ -425,11 +581,15 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('giskard-assistant.openChat', async () => {
             await vscode.commands.executeCommand('giskard.chatView.focus');
-            await vscode.commands.executeCommand('workbench.action.focusSecondarySideBar').then(undefined, () => {});
+            await vscode.commands
+                .executeCommand('workbench.action.focusSecondarySideBar')
+                .then(undefined, () => {});
         }),
         vscode.commands.registerCommand('giskard-assistant.openChatRight', async () => {
             await vscode.commands.executeCommand('giskard.chatView.focus');
-            await vscode.commands.executeCommand('workbench.action.focusSecondarySideBar').then(undefined, () => {});
+            await vscode.commands
+                .executeCommand('workbench.action.focusSecondarySideBar')
+                .then(undefined, () => {});
         })
     );
 
@@ -458,9 +618,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             // Capture selected text or full cursor block (current line if no selection)
             const selectedText = document.getText(
-                selection.isEmpty
-                    ? document.lineAt(selection.active.line).range
-                    : selection
+                selection.isEmpty ? document.lineAt(selection.active.line).range : selection
             );
 
             const relativePath = vscode.workspace.asRelativePath(document.uri);

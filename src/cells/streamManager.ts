@@ -40,7 +40,7 @@ export async function streamFromGiskardSys(
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'text/event-stream',
+            Accept: 'text/event-stream',
             'X-Client-Id': getClientId(),
             'X-Client-Token': getClientToken()
         },
@@ -100,7 +100,9 @@ export async function streamFromGiskardSys(
                         tabId
                     });
                 }
-            } catch { /* skip malformed SSE chunks */ }
+            } catch {
+                /* skip malformed SSE chunks */
+            }
         }
     }
 
@@ -181,7 +183,9 @@ export async function streamFromOllamaLegacy(
                         tabId
                     });
                 }
-            } catch { /* skip malformed lines */ }
+            } catch {
+                /* skip malformed lines */
+            }
         }
     }
 
@@ -243,7 +247,8 @@ export async function streamOllamaChat(
                 const json = JSON.parse(trimmed);
                 let token = '';
                 if (json.message && json.message.content) token = json.message.content;
-                else if (json.message && json.message.reasoning_content) token = json.message.reasoning_content;
+                else if (json.message && json.message.reasoning_content)
+                    token = json.message.reasoning_content;
                 else if (json.thinking) token = json.thinking;
 
                 if (token) {
@@ -255,7 +260,9 @@ export async function streamOllamaChat(
                         tabId
                     });
                 }
-            } catch { /* skip */ }
+            } catch {
+                /* skip */
+            }
         }
     }
 
@@ -269,7 +276,12 @@ export interface RemoteStreamContext {
     view: vscode.WebviewView;
     abortController: AbortController;
     lastBotResponse: { text: string };
-    maybeAutoTriggerDiff(userPrompt: string, reply: string, extractedPath?: string, includeActiveFile?: boolean): Promise<void>;
+    maybeAutoTriggerDiff(
+        userPrompt: string,
+        reply: string,
+        extractedPath?: string,
+        includeActiveFile?: boolean
+    ): Promise<void>;
     clearAbort(): void;
 }
 
@@ -286,7 +298,7 @@ export async function streamFromRemoteApi(
 ): Promise<void> {
     const view = ctx.view;
     if (!view) return;
-    
+
     const signal = ctx.abortController.signal;
 
     let cleanUrl = baseUrl.trim().replace(/\/$/, '');
@@ -297,22 +309,28 @@ export async function streamFromRemoteApi(
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream'
+        Accept: 'text/event-stream'
     };
     if (apiKey && apiKey.trim()) {
         headers['Authorization'] = `Bearer ${apiKey.trim()}`;
     }
     let safePrompt = fullPrompt;
     if (safePrompt.length > 100000) {
-        safePrompt = safePrompt.substring(0, 100000) + '\n\n... [Prompt contextual truncado para no exceder los límites del servidor remoto]';
+        safePrompt =
+            safePrompt.substring(0, 100000) +
+            '\n\n... [Prompt contextual truncado para no exceder los límites del servidor remoto]';
     }
     const maxResponseTokens = 4096;
 
     // Larger models (550B+) need more time to queue and start streaming on free tier
     const modelLower = model.toLowerCase();
-    const isLargeModel = modelLower.includes('550b') || modelLower.includes('405b') ||
-                         modelLower.includes('671b') || modelLower.includes('ultra') ||
-                         modelLower.includes('235b') || modelLower.includes('200b');
+    const isLargeModel =
+        modelLower.includes('550b') ||
+        modelLower.includes('405b') ||
+        modelLower.includes('671b') ||
+        modelLower.includes('ultra') ||
+        modelLower.includes('235b') ||
+        modelLower.includes('200b');
     const timeoutMs = isLargeModel ? 180000 : 90000;
 
     const timeoutId = setTimeout(() => {
@@ -321,13 +339,12 @@ export async function streamFromRemoteApi(
         }
     }, timeoutMs);
 
-
     try {
         const response = await fetch(cleanUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify({
-                model: model,
+                model,
                 messages: [{ role: 'user', content: safePrompt }],
                 stream: true,
                 temperature: 0.7,
@@ -413,9 +430,14 @@ export async function streamFromRemoteApi(
 
                         if (contentToken) {
                             accumulated += contentToken;
-                            view.webview.postMessage({ type: 'streamToken', token: contentToken, model, tabId });
+                            view.webview.postMessage({
+                                type: 'streamToken',
+                                token: contentToken,
+                                model,
+                                tabId
+                            });
                         }
-                    } catch { }
+                    } catch {}
                 }
             }
         }
@@ -423,8 +445,12 @@ export async function streamFromRemoteApi(
         ctx.lastBotResponse.text = accumulated;
         clearAgentActivity();
         view.webview.postMessage({ type: 'streamComplete', model, tabId });
-        await ctx.maybeAutoTriggerDiff(userPrompt || fullPrompt, accumulated, extractedPath, includeActiveFile);
-
+        await ctx.maybeAutoTriggerDiff(
+            userPrompt || fullPrompt,
+            accumulated,
+            extractedPath,
+            includeActiveFile
+        );
     } catch (err: any) {
         if (err.name === 'AbortError') {
             view.webview.postMessage({
@@ -445,7 +471,6 @@ export async function streamFromRemoteApi(
         ctx.clearAbort();
     }
 }
-
 
 // ─── Giskard-Sys Ollama URL resolution (cached 60s) ───────────────────────────
 
@@ -474,7 +499,9 @@ export async function resolveGiskardSysOllama(connectorUrl: string): Promise<str
                 }
             }
         }
-    } catch { /* sin conectividad con giskard-sys */ }
+    } catch {
+        /* sin conectividad con giskard-sys */
+    }
 
     _giskardSysOllamaCache = { url: connectorUrl, value: result, at: now };
     return result;

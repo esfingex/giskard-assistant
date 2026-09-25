@@ -4,9 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as cp from 'child_process';
 import { ConnectionStore, McpTool } from '../core/connectionStore';
 import { fetchWithTimeout, execCliCommand } from '../core/api';
@@ -44,7 +42,11 @@ export async function handleAddMcpServer(
     }
 }
 
-export async function handleRemoveMcpServer(view: vscode.WebviewView | undefined, store: ConnectionStore, id: number) {
+export async function handleRemoveMcpServer(
+    view: vscode.WebviewView | undefined,
+    store: ConnectionStore,
+    id: number
+) {
     if (!view) return;
     try {
         await store.removeMcpServer(id);
@@ -55,7 +57,11 @@ export async function handleRemoveMcpServer(view: vscode.WebviewView | undefined
     }
 }
 
-export async function handleToggleMcpServer(view: vscode.WebviewView | undefined, store: ConnectionStore, id: number) {
+export async function handleToggleMcpServer(
+    view: vscode.WebviewView | undefined,
+    store: ConnectionStore,
+    id: number
+) {
     if (!view) return;
     try {
         await store.toggleMcpServer(id);
@@ -84,7 +90,15 @@ export async function handleToggleMcpTool(
 export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | undefined, query: string) {
     if (!view || !query || !query.trim()) return;
     try {
-        const resData: any = await execCliCommand('npx', '-y', '@smithery/cli', 'mcp', 'search', query.trim(), '--json');
+        const resData: any = await execCliCommand(
+            'npx',
+            '-y',
+            '@smithery/cli',
+            'mcp',
+            'search',
+            query.trim(),
+            '--json'
+        );
         let results: any[] = [];
         if (resData && resData.success && resData.data) {
             try {
@@ -92,17 +106,22 @@ export async function handleSearchSmitheryRegistry(view: vscode.WebviewView | un
                 if (parsed && Array.isArray(parsed.servers)) {
                     results = parsed.servers;
                 }
-            } catch { }
+            } catch {}
         }
         view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), results });
     } catch (err: any) {
-        view.webview.postMessage({ type: 'smitherySearchResults', query: query.trim(), error: err.message, results: [] });
+        view.webview.postMessage({
+            type: 'smitherySearchResults',
+            query: query.trim(),
+            error: err.message,
+            results: []
+        });
     }
 }
 
 /** Queries live SSE MCP Server (e.g. Supergateway on http://localhost:3070) over SSE transport in ~130ms */
 export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
-    let cleanUrl = serverUrl.trim();
+    const cleanUrl = serverUrl.trim();
     const sseUrl = cleanUrl.endsWith('/sse') ? cleanUrl : `${cleanUrl.replace(/\/$/, '')}/sse`;
     const hostUrl = sseUrl.substring(0, sseUrl.indexOf('/sse'));
 
@@ -111,7 +130,7 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
         const timeout = setTimeout(() => controller.abort(), 6000);
 
         const response = await fetch(sseUrl, {
-            headers: { 'Accept': 'text/event-stream' },
+            headers: { Accept: 'text/event-stream' },
             signal: controller.signal
         });
 
@@ -143,9 +162,13 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                         jsonrpc: '2.0',
                         id: 1,
                         method: 'initialize',
-                        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'giskard-assistant', version: '4.2.0' } }
+                        params: {
+                            protocolVersion: '2024-11-05',
+                            capabilities: {},
+                            clientInfo: { name: 'giskard-assistant', version: '4.2.0' }
+                        }
                     })
-                }).catch(() => { });
+                }).catch(() => {});
             }
 
             const lines = text.split('\n');
@@ -161,26 +184,29 @@ export async function querySseMcpTools(serverUrl: string): Promise<McpTool[]> {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
-                            }).catch(() => { });
+                            }).catch(() => {});
 
                             fetch(postUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
-                            }).catch(() => { });
+                            }).catch(() => {});
                         }
                         // When tools/list response arrives -> return instantly
                         if (json.id === 2 && json.result && Array.isArray(json.result.tools)) {
                             clearTimeout(timeout);
-                            try { reader.cancel(); } catch { }
+                            try {
+                                reader.cancel();
+                            } catch {}
                             return json.result.tools.map((t: any) => ({
                                 id: t.name || t.id,
                                 name: t.name || 'tool',
-                                description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
+                                description:
+                                    t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
                                 enabled: true
                             }));
                         }
-                    } catch { }
+                    } catch {}
                 }
             }
         }
@@ -205,8 +231,10 @@ export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[
         }
 
         let output = '';
-        let timeout = setTimeout(() => {
-            try { proc.kill(); } catch { }
+        const timeout = setTimeout(() => {
+            try {
+                proc.kill();
+            } catch {}
             resolve([]);
         }, 5000);
 
@@ -219,16 +247,19 @@ export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[
                     const json = JSON.parse(line.trim());
                     if (json.result && Array.isArray(json.result.tools)) {
                         clearTimeout(timeout);
-                        try { proc.kill(); } catch { }
+                        try {
+                            proc.kill();
+                        } catch {}
                         const tools: McpTool[] = json.result.tools.map((t: any) => ({
                             id: t.name || t.id,
                             name: t.name || 'tool',
-                            description: t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
+                            description:
+                                t.description || t.title || 'Herramienta MCP autogenerada dinámicamente',
                             enabled: true
                         }));
                         return resolve(tools);
                     }
-                } catch { }
+                } catch {}
             }
         });
 
@@ -238,26 +269,29 @@ export async function queryStdioMcpTools(commandOrUrl: string): Promise<McpTool[
         });
 
         try {
-            const initReq = JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'initialize',
-                params: {
-                    protocolVersion: '2024-11-05',
-                    capabilities: {},
-                    clientInfo: { name: 'giskard-assistant', version: '4.2.0' }
-                }
-            }) + '\n';
+            const initReq =
+                JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'initialize',
+                    params: {
+                        protocolVersion: '2024-11-05',
+                        capabilities: {},
+                        clientInfo: { name: 'giskard-assistant', version: '4.2.0' }
+                    }
+                }) + '\n';
 
             proc.stdin.write(initReq);
 
             setTimeout(() => {
                 try {
-                    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+                    proc.stdin.write(
+                        JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n'
+                    );
                     proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) + '\n');
-                } catch { }
+                } catch {}
             }, 400);
-        } catch { }
+        } catch {}
     });
 }
 
@@ -267,12 +301,12 @@ export async function handleDiscoverMcpTools(
     serverId: number
 ) {
     if (!view) return;
-    const server = store.getMcpServers().find(s => s.id === serverId);
+    const server = store.getMcpServers().find((s) => s.id === serverId);
     if (!server) return;
 
     try {
         let tools: McpTool[] = [];
-        let baseUrl = server.commandOrUrl.trim();
+        const baseUrl = server.commandOrUrl.trim();
 
         if (baseUrl.startsWith('http')) {
             const cleanUrl = baseUrl.replace(/\/$/, '');
@@ -287,11 +321,13 @@ export async function handleDiscoverMcpTools(
                         const toolCategory = m[1];
                         const docPath = m[2];
                         const apiPath = docPath.replace('/docs', '/openapi.json');
-                        const subRes = await fetchWithTimeout(`${cleanUrl}${apiPath}`, {}, 3000).catch(() => null);
+                        const subRes = await fetchWithTimeout(`${cleanUrl}${apiPath}`, {}, 3000).catch(
+                            () => null
+                        );
                         if (subRes && subRes.ok) {
                             const subData: any = await subRes.json().catch(() => null);
                             if (subData && subData.paths) {
-                                Object.keys(subData.paths).forEach(p => {
+                                Object.keys(subData.paths).forEach((p) => {
                                     const toolName = p.replace(/^\//, '');
                                     if (toolName) {
                                         tools.push({
@@ -308,7 +344,7 @@ export async function handleDiscoverMcpTools(
                 }
 
                 if (tools.length === 0 && openApiData && openApiData.paths) {
-                    Object.keys(openApiData.paths).forEach(p => {
+                    Object.keys(openApiData.paths).forEach((p) => {
                         const toolName = p.replace(/^\//, '');
                         if (toolName) {
                             tools.push({
@@ -349,30 +385,38 @@ export async function handleDiscoverMcpTools(
         }
 
         await store.updateMcpTools(serverId, tools);
-        vscode.window.showInformationMessage(`✓ ${tools.length} MCP tools discovered dynamically for "${server.name}".`);
+        vscode.window.showInformationMessage(
+            `✓ ${tools.length} MCP tools discovered dynamically for "${server.name}".`
+        );
         await sendMcpServersList(view, store);
     } catch (err: any) {
         vscode.window.showErrorMessage(`Error discovering MCP tools: ${err.message}`);
     }
 }
 
-export async function handleTestMcpServer(view: vscode.WebviewView | undefined, type: string, commandOrUrl: string) {
+export async function handleTestMcpServer(
+    view: vscode.WebviewView | undefined,
+    type: string,
+    commandOrUrl: string
+) {
     if (!view) return;
     const start = Date.now();
     try {
-        let cleanUrl = commandOrUrl.trim();
+        const cleanUrl = commandOrUrl.trim();
 
         if (cleanUrl.startsWith('http')) {
             const sseUrl = cleanUrl.endsWith('/sse') ? cleanUrl : `${cleanUrl.replace(/\/$/, '')}/sse`;
 
-            let res = await fetch(sseUrl, { headers: { 'Accept': 'text/event-stream' } }).catch(() => null);
+            let res = await fetch(sseUrl, { headers: { Accept: 'text/event-stream' } }).catch(() => null);
             if (!res || !res.ok) {
                 res = await fetch(cleanUrl).catch(() => null);
             }
 
             const ms = Date.now() - start;
             if (res && (res.ok || res.status === 200 || res.status === 404)) {
-                try { res.body?.cancel(); } catch { }
+                try {
+                    res.body?.cancel();
+                } catch {}
                 return view.webview.postMessage({ type: 'mcpTested', ok: true, ms });
             }
 
@@ -389,7 +433,7 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
             view.webview.postMessage({
                 type: 'mcpTested',
                 ok,
-                error: ok ? undefined : (resData.error || 'Docker not responding'),
+                error: ok ? undefined : resData.error || 'Docker not responding',
                 ms
             });
         } else {
@@ -412,20 +456,20 @@ export async function handleTestMcpServer(view: vscode.WebviewView | undefined, 
 }
 
 export function getActiveMcpPromptContext(store: ConnectionStore): string {
-    const activeMcpServers = store.getMcpServers().filter(s => s.isActive);
+    const activeMcpServers = store.getMcpServers().filter((s) => s.isActive);
     if (activeMcpServers.length === 0) return '';
 
     let text = '[HERRAMIENTAS MCP ACTIVAS EN EL ENTORNO]:\n';
     text += 'Puedes invocar cualquiera de las siguientes herramientas MCP en tu respuesta usando:\n';
     text += '{"tool": "nombre_de_herramienta", "args": {"parametro": "valor"}}\n\n';
 
-    activeMcpServers.forEach(s => {
+    activeMcpServers.forEach((s) => {
         text += `▶ Servidor MCP: ${s.name} [${s.type.toUpperCase()}] (${s.commandOrUrl})\n`;
         if (s.tools && s.tools.length > 0) {
-            const enabledTools = s.tools.filter(t => t.enabled);
+            const enabledTools = s.tools.filter((t) => t.enabled);
             if (enabledTools.length > 0) {
                 text += '  Herramientas Habilitadas:\n';
-                enabledTools.forEach(t => {
+                enabledTools.forEach((t) => {
                     text += `  • ${t.name}: ${t.description}\n`;
                 });
             } else {

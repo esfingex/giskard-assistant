@@ -58,8 +58,10 @@ export class GiskardTreeItem extends vscode.TreeItem {
 }
 
 export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> =
+        new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> =
+        this._onDidChangeTreeData.event;
 
     private activeCapabilityFilter: string = 'all';
     private activeSearchQuery: string = '';
@@ -90,19 +92,25 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
         // If child of a connection group, return models in that group
         const modelsList = Array.isArray(element?.rawData) ? element?.rawData : element?.rawData?.models;
         if (element && element.itemType === 'header' && Array.isArray(modelsList)) {
-            return modelsList.map((m: string) => new GiskardTreeItem(
-                m,
-                vscode.TreeItemCollapsibleState.None,
-                'local-model',
-                { isEnabled: enabledModels.includes(m) }
-            ));
+            return modelsList.map(
+                (m: string) =>
+                    new GiskardTreeItem(m, vscode.TreeItemCollapsibleState.None, 'local-model', {
+                        isEnabled: enabledModels.includes(m)
+                    })
+            );
         }
 
         // Root level: return connection groups
         try {
             const groups = await fetchLlmModelsGrouped();
             if (!groups || groups.length === 0) {
-                return [new GiskardTreeItem('No connections/models detected', vscode.TreeItemCollapsibleState.None, 'header')];
+                return [
+                    new GiskardTreeItem(
+                        'No connections/models detected',
+                        vscode.TreeItemCollapsibleState.None,
+                        'header'
+                    )
+                ];
             }
 
             const filteredGroups: GiskardTreeItem[] = [];
@@ -112,7 +120,7 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
 
                 // 1. Filter by Capability
                 if (this.activeCapabilityFilter && this.activeCapabilityFilter !== 'all') {
-                    matchingModels = matchingModels.filter(m => {
+                    matchingModels = matchingModels.filter((m) => {
                         const caps = getModelCapabilities(m);
                         if (this.activeCapabilityFilter === 'reasoning') return caps.thinking;
                         if (this.activeCapabilityFilter === 'tools') return caps.tools;
@@ -125,7 +133,7 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                 // 2. Filter by Search Query
                 if (this.activeSearchQuery && this.activeSearchQuery.trim()) {
                     const q = this.activeSearchQuery.toLowerCase().trim();
-                    matchingModels = matchingModels.filter(m => m.toLowerCase().includes(q));
+                    matchingModels = matchingModels.filter((m) => m.toLowerCase().includes(q));
                 }
 
                 if (matchingModels.length > 0) {
@@ -135,14 +143,24 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
                         title,
                         vscode.TreeItemCollapsibleState.Expanded,
                         'header',
-                        { id: grp.connectionId, connectionId: grp.connectionId, connectionName: grp.connectionName, models: matchingModels }
+                        {
+                            id: grp.connectionId,
+                            connectionId: grp.connectionId,
+                            connectionName: grp.connectionName,
+                            models: matchingModels
+                        }
                     );
                     item.iconPath = new vscode.ThemeIcon('server');
                     item.contextValue = 'connectionHeaderGroup';
 
                     let filterTag = '';
                     if (this.activeCapabilityFilter && this.activeCapabilityFilter !== 'all') {
-                        const iconMap: Record<string, string> = { reasoning: '🧠 Reasoning', tools: '🛠️ Tools', vision: '👁️ Vision', embedding: '🧩 Embedding' };
+                        const iconMap: Record<string, string> = {
+                            reasoning: '🧠 Reasoning',
+                            tools: '🛠️ Tools',
+                            vision: '👁️ Vision',
+                            embedding: '🧩 Embedding'
+                        };
                         filterTag += iconMap[this.activeCapabilityFilter] || this.activeCapabilityFilter;
                     }
                     if (this.activeSearchQuery && this.activeSearchQuery.trim()) {
@@ -163,14 +181,22 @@ export class GiskardLocalModelsTreeProvider implements vscode.TreeDataProvider<G
 
             return filteredGroups;
         } catch (err: any) {
-            return [new GiskardTreeItem(`Error loading models: ${err.message}`, vscode.TreeItemCollapsibleState.None, 'header')];
+            return [
+                new GiskardTreeItem(
+                    `Error loading models: ${err.message}`,
+                    vscode.TreeItemCollapsibleState.None,
+                    'header'
+                )
+            ];
         }
     }
 }
 
 export class GiskardRemoteConnsTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> =
+        new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> =
+        this._onDidChangeTreeData.event;
 
     constructor(private readonly store: ConnectionStore) {}
 
@@ -186,15 +212,25 @@ export class GiskardRemoteConnsTreeProvider implements vscode.TreeDataProvider<G
         if (element) return [];
         const conns = this.store.getAll();
         if (conns.length === 0) {
-            return [new GiskardTreeItem('No saved connection profiles', vscode.TreeItemCollapsibleState.None, 'header')];
+            return [
+                new GiskardTreeItem(
+                    'No saved connection profiles',
+                    vscode.TreeItemCollapsibleState.None,
+                    'header'
+                )
+            ];
         }
-        return conns.map(c => new GiskardTreeItem(c.name, vscode.TreeItemCollapsibleState.None, 'remote-conn', c));
+        return conns.map(
+            (c) => new GiskardTreeItem(c.name, vscode.TreeItemCollapsibleState.None, 'remote-conn', c)
+        );
     }
 }
 
 export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> =
+        new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> =
+        this._onDidChangeTreeData.event;
 
     getTreeItem(element: GiskardTreeItem): vscode.TreeItem {
         return element;
@@ -208,7 +244,7 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
             { label: '☀️ Clean Studio Light', icon: 'sun', preset: 'white' },
             { label: '🌌 Midnight Emerald', icon: 'sparkle', preset: 'emerald' }
         ];
-        return themes.map(t => {
+        return themes.map((t) => {
             const item = new GiskardTreeItem(t.label, vscode.TreeItemCollapsibleState.None, 'header', t);
             item.iconPath = new vscode.ThemeIcon(t.icon);
             item.contextValue = 'themeItem';
@@ -223,8 +259,10 @@ export class GiskardThemePaletteTreeProvider implements vscode.TreeDataProvider<
 }
 
 export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> =
+        new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> =
+        this._onDidChangeTreeData.event;
 
     constructor(private readonly store: ConnectionStore) {}
 
@@ -240,12 +278,20 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
         if (!element) {
             const servers = this.store.getMcpServers();
             if (servers.length === 0) {
-                return [new GiskardTreeItem('No MCP Servers configured', vscode.TreeItemCollapsibleState.None, 'header')];
+                return [
+                    new GiskardTreeItem(
+                        'No MCP Servers configured',
+                        vscode.TreeItemCollapsibleState.None,
+                        'header'
+                    )
+                ];
             }
-            return servers.map(s => {
+            return servers.map((s) => {
                 const item = new GiskardTreeItem(
                     s.name,
-                    s.tools && s.tools.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                    s.tools && s.tools.length > 0
+                        ? vscode.TreeItemCollapsibleState.Collapsed
+                        : vscode.TreeItemCollapsibleState.None,
                     'header',
                     s
                 );
@@ -277,12 +323,11 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
             return tools.map((t: any) => {
                 const isEnabled = t.enabled !== false;
                 const toolId = t.id || t.name;
-                const item = new GiskardTreeItem(
-                    t.name,
-                    vscode.TreeItemCollapsibleState.None,
-                    'header',
-                    { serverId, toolId, tool: t }
-                );
+                const item = new GiskardTreeItem(t.name, vscode.TreeItemCollapsibleState.None, 'header', {
+                    serverId,
+                    toolId,
+                    tool: t
+                });
                 item.description = t.description || 'MCP Tool';
                 item.iconPath = isEnabled
                     ? new vscode.ThemeIcon('symbol-method', new vscode.ThemeColor('testing.iconPassed'))
@@ -309,8 +354,10 @@ export class GiskardMcpServersTreeProvider implements vscode.TreeDataProvider<Gi
 }
 
 export class GiskardFileExclusionsTreeProvider implements vscode.TreeDataProvider<GiskardTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> = new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<GiskardTreeItem | undefined | null | void> =
+        new vscode.EventEmitter<GiskardTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<GiskardTreeItem | undefined | null | void> =
+        this._onDidChangeTreeData.event;
 
     constructor(private readonly store: ConnectionStore) {}
 
@@ -326,9 +373,15 @@ export class GiskardFileExclusionsTreeProvider implements vscode.TreeDataProvide
         if (element) return [];
         const patterns = this.store.getExclusionPatterns();
         if (patterns.length === 0) {
-            return [new GiskardTreeItem('No exclusion patterns configured', vscode.TreeItemCollapsibleState.None, 'header')];
+            return [
+                new GiskardTreeItem(
+                    'No exclusion patterns configured',
+                    vscode.TreeItemCollapsibleState.None,
+                    'header'
+                )
+            ];
         }
-        return patterns.map(p => {
+        return patterns.map((p) => {
             const item = new GiskardTreeItem(`🚫 ${p}`, vscode.TreeItemCollapsibleState.None, 'header', p);
             item.iconPath = new vscode.ThemeIcon('exclude');
             item.contextValue = 'exclusionPattern';

@@ -27,7 +27,13 @@ function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
     if (m.startsWith('local:')) {
         return { tag: 'OLLAMA', label: 'Local Swarm (Ollama)', type: 'ollama' };
     }
-    if (m.includes('nvidia') || m.includes('nemotron') || m.includes('llama') || m.includes('gpt-oss') || m.includes('mistralai')) {
+    if (
+        m.includes('nvidia') ||
+        m.includes('nemotron') ||
+        m.includes('llama') ||
+        m.includes('gpt-oss') ||
+        m.includes('mistralai')
+    ) {
         return { tag: 'NVIDIA', label: 'NVIDIA NIM API', type: 'cli' };
     }
     if (m.includes('deepseek')) {
@@ -45,22 +51,45 @@ function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
     if (m.includes('claude')) {
         return { tag: 'CLAUDE', label: 'Anthropic Claude', type: 'cli' };
     }
-    
+
     const tagUpper = (fallbackTag || 'NVIDIA').toUpperCase();
-    const tagClass = ['NVIDIA', 'DEEPSEEK', 'KIMI', 'QWEN', 'OPENAI', 'ANTHROPIC', 'GEMINI'].includes(tagUpper) ? 'cli' : 'ollama';
+    const tagClass = ['NVIDIA', 'DEEPSEEK', 'KIMI', 'QWEN', 'OPENAI', 'ANTHROPIC', 'GEMINI'].includes(
+        tagUpper
+    )
+        ? 'cli'
+        : 'ollama';
     return { tag: tagUpper, label: fallbackName || 'AI Model', type: tagClass };
 }
 
 function getModelCapabilityBadges(modelName) {
     const l = (modelName || '').toLowerCase();
     let badges = '';
-    if (l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('nemotron-3') || l.includes('thinking')) {
+    if (
+        l.includes('r1') ||
+        l.includes('reasoner') ||
+        l.includes('qwq') ||
+        l.includes('nemotron-3') ||
+        l.includes('thinking')
+    ) {
         badges += ' <span title="Pensamiento Profundo / Reasoning" style="font-size:10px;">🧠</span>';
     }
-    if (l.includes('instruct') || l.includes('coder') || l.includes('gpt') || l.includes('claude') || l.includes('gemini') || l.includes('llama-3')) {
+    if (
+        l.includes('instruct') ||
+        l.includes('coder') ||
+        l.includes('gpt') ||
+        l.includes('claude') ||
+        l.includes('gemini') ||
+        l.includes('llama-3')
+    ) {
         badges += ' <span title="Herramientas & Edición de Código" style="font-size:10px;">🛠️</span>';
     }
-    if (l.includes('vision') || l.includes('vl') || l.includes('gpt-4o') || l.includes('gemini-1.5') || l.includes('gemini-2')) {
+    if (
+        l.includes('vision') ||
+        l.includes('vl') ||
+        l.includes('gpt-4o') ||
+        l.includes('gemini-1.5') ||
+        l.includes('gemini-2')
+    ) {
         badges += ' <span title="Visión Multimodal" style="font-size:10px;">👁️</span>';
     }
     if (l.includes('embed') || l.includes('bge') || l.includes('nomic')) {
@@ -93,14 +122,14 @@ function renderModelFilterList(payload) {
     const localModels = lastModelsPayload.localModels || [];
 
     if (groups.length > 0) {
-        groups.forEach(grp => {
+        groups.forEach((grp) => {
             const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
             html += `<details open style="margin-bottom:8px;">
                 <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
                     🔌 Conexión: ${escapeHtml(grp.connectionName)} [${escapeHtml(tagUpper)}] (${grp.models.length} detectados)
                 </summary>
                 <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-            grp.models.forEach(m => {
+            grp.models.forEach((m) => {
                 const meta = getModelProviderMeta(m, grp.connectionTag, grp.connectionName);
                 const isChecked = !enabled || enabled.includes(m);
                 const badges = getModelCapabilityBadges(m);
@@ -114,20 +143,20 @@ function renderModelFilterList(payload) {
         });
     } else if (activeModels.length > 0) {
         const grouped = {};
-        activeModels.forEach(m => {
+        activeModels.forEach((m) => {
             const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
             if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
             grouped[meta.label].items.push(m);
         });
 
-        Object.keys(grouped).forEach(groupLabel => {
+        Object.keys(grouped).forEach((groupLabel) => {
             const grp = grouped[groupLabel];
             html += `<details open style="margin-bottom:8px;">
                 <summary style="font-size:10px;font-weight:bold;color:#38bdf8;cursor:pointer;user-select:none;padding:2px 0;">
                     🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} detectados)
                 </summary>
                 <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-            grp.items.forEach(m => {
+            grp.items.forEach((m) => {
                 const isChecked = !enabled || enabled.includes(m);
                 const badges = getModelCapabilityBadges(m);
                 html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
@@ -147,7 +176,7 @@ function renderModelFilterList(payload) {
                 🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} detectados)
             </summary>
             <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;padding-left:6px;">`;
-        localModels.forEach(m => {
+        localModels.forEach((m) => {
             const isChecked = !enabled || enabled.includes(`local:${m}`);
             html += `<label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; margin-bottom: 2px;">
                 <input type="checkbox" class="model-filter-cb" value="local:${escapeHtml(m)}" ${isChecked ? 'checked' : ''}>
@@ -159,15 +188,18 @@ function renderModelFilterList(payload) {
     }
 
     if (!html) {
-        html = '<div style="font-size:10px;opacity:0.6;">Sin modelos detectados. Configura o activa conexiones en la pestaña API Remota.</div>';
+        html =
+            '<div style="font-size:10px;opacity:0.6;">Sin modelos detectados. Configura o activa conexiones en la pestaña API Remota.</div>';
     }
 
     modelFilterList.innerHTML = html;
 
-    modelFilterList.querySelectorAll('.model-filter-cb').forEach(cb => {
+    modelFilterList.querySelectorAll('.model-filter-cb').forEach((cb) => {
         cb.addEventListener('change', () => {
             const selected = [];
-            modelFilterList.querySelectorAll('.model-filter-cb:checked').forEach(c => selected.push(c.value));
+            modelFilterList
+                .querySelectorAll('.model-filter-cb:checked')
+                .forEach((c) => selected.push(c.value));
             setEnabledModels(selected);
             updateModelDropdown();
         });
@@ -181,22 +213,25 @@ function updateModelDropdown() {
     const currentVal = modelSelect.value;
     const enabled = getEnabledModels();
     const groups = lastModelsPayload.groups || [];
-    const activeModels = (lastModelsPayload.models || []).filter(m => !enabled || enabled.includes(m));
-    const localModels = (lastModelsPayload.localModels || []).filter(m => !enabled || enabled.includes(`local:${m}`));
+    const activeModels = (lastModelsPayload.models || []).filter((m) => !enabled || enabled.includes(m));
+    const localModels = (lastModelsPayload.localModels || []).filter(
+        (m) => !enabled || enabled.includes(`local:${m}`)
+    );
     const showGemini = !enabled || enabled.includes('cli:gemini');
     const showClaude = !enabled || enabled.includes('cli:claude');
 
     let html = '';
 
     if (groups.length > 0) {
-        groups.forEach(grp => {
+        groups.forEach((grp) => {
             const tagUpper = (grp.connectionTag || 'AI').toUpperCase();
-            const grpFiltered = grp.models.filter(m => !enabled || enabled.includes(m));
+            const grpFiltered = grp.models.filter((m) => !enabled || enabled.includes(m));
             if (grpFiltered.length > 0) {
                 html += `<optgroup label="🔌 ${escapeHtml(grp.connectionName)} [${escapeHtml(tagUpper)}] (${grpFiltered.length} activos)">`;
-                grpFiltered.forEach(m => {
+                grpFiltered.forEach((m) => {
                     let label = m;
-                    if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
+                    if (m.includes('120b') || m.includes('coder') || m.includes('distill'))
+                        label += ' (Coder/Reasoning ⚡)';
                     html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
                 });
                 html += '</optgroup>';
@@ -204,18 +239,19 @@ function updateModelDropdown() {
         });
     } else if (activeModels.length > 0) {
         const grouped = {};
-        activeModels.forEach(m => {
+        activeModels.forEach((m) => {
             const meta = getModelProviderMeta(m, lastModelsPayload.activeTag, lastModelsPayload.activeName);
             if (!grouped[meta.label]) grouped[meta.label] = { meta, items: [] };
             grouped[meta.label].items.push(m);
         });
 
-        Object.keys(grouped).forEach(groupLabel => {
+        Object.keys(grouped).forEach((groupLabel) => {
             const grp = grouped[groupLabel];
             html += `<optgroup label="🟢 ${escapeHtml(grp.meta.label)} [${escapeHtml(grp.meta.tag)}] (${grp.items.length} activos)">`;
-            grp.items.forEach(m => {
+            grp.items.forEach((m) => {
                 let label = m;
-                if (m.includes('120b') || m.includes('coder') || m.includes('distill')) label += ' (Coder/Reasoning ⚡)';
+                if (m.includes('120b') || m.includes('coder') || m.includes('distill'))
+                    label += ' (Coder/Reasoning ⚡)';
                 html += `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
             });
             html += '</optgroup>';
@@ -224,7 +260,7 @@ function updateModelDropdown() {
 
     if (localModels.length > 0) {
         html += `<optgroup label="🦙 Modelos Locales en el Sistema (Ollama - ${localModels.length} activos)">`;
-        localModels.forEach(m => {
+        localModels.forEach((m) => {
             html += `<option value="local:${escapeHtml(m)}">Local: ${escapeHtml(m)}</option>`;
         });
         html += '</optgroup>';
@@ -258,12 +294,13 @@ function renderConnectionsList(connections) {
     const connectionsListDiv = document.getElementById('connections-list');
     if (!connectionsListDiv) return;
     if (!connections || connections.length === 0) {
-        connectionsListDiv.innerHTML = '<span style="font-size:9px;opacity:0.5;">Sin conexiones guardadas</span>';
+        connectionsListDiv.innerHTML =
+            '<span style="font-size:9px;opacity:0.5;">Sin conexiones guardadas</span>';
         return;
     }
 
     let html = '';
-    connections.forEach(c => {
+    connections.forEach((c) => {
         const activeBadge = c.isActive
             ? `<button type="button" class="btn-act-conn active" data-id="${c.id}" style="padding:2px 7px;font-size:9px;background:#16a34a;color:#ffffff;border:none;border-radius:3px;cursor:pointer;font-weight:bold;box-shadow:0 0 4px rgba(22,163,74,0.4);" title="Clic para desactivar esta conexión">★ Activa</button>`
             : `<button type="button" class="btn-act-conn" data-id="${c.id}" style="padding:2px 7px;font-size:9px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:3px;cursor:pointer;" title="Clic para activar esta conexión">Activar</button>`;
@@ -285,14 +322,14 @@ function renderConnectionsList(connections) {
 
     connectionsListDiv.innerHTML = html;
 
-    connectionsListDiv.querySelectorAll('.btn-act-conn').forEach(btn => {
+    connectionsListDiv.querySelectorAll('.btn-act-conn').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = parseInt(btn.getAttribute('data-id'), 10);
             if (id) vscode.postMessage({ type: 'activateConnection', id });
         });
     });
 
-    connectionsListDiv.querySelectorAll('.btn-del-conn').forEach(btn => {
+    connectionsListDiv.querySelectorAll('.btn-del-conn').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = parseInt(btn.getAttribute('data-id'), 10);
             if (id) vscode.postMessage({ type: 'removeConnection', id });
@@ -362,10 +399,12 @@ function renderConnectionsList(connections) {
         testConnBtn.addEventListener('click', () => {
             const url = connUrlInp ? connUrlInp.value.trim() : '';
             if (!url) {
-                if (connStatusDiv) connStatusDiv.innerHTML = '<span style="color:#f87171;">Escribe una URL primero</span>';
+                if (connStatusDiv)
+                    connStatusDiv.innerHTML = '<span style="color:#f87171;">Escribe una URL primero</span>';
                 return;
             }
-            if (connStatusDiv) connStatusDiv.innerHTML = '<span style="color:#38bdf8;">⏳ Probando conexión...</span>';
+            if (connStatusDiv)
+                connStatusDiv.innerHTML = '<span style="color:#38bdf8;">⏳ Probando conexión...</span>';
             vscode.postMessage({ type: 'testConnectionUrl', url });
         });
     }
@@ -406,20 +445,35 @@ function renderConnectionsList(connections) {
     if (saveExclusionsBtn && exclusionPatternsInput) {
         saveExclusionsBtn.addEventListener('click', () => {
             const raw = exclusionPatternsInput.value || '';
-            const patterns = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            const patterns = raw
+                .split(/[\n,]+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
             vscode.postMessage({ type: 'saveExclusionPatterns', patterns });
         });
     }
 
     if (resetExclusionsBtn && exclusionPatternsInput) {
         resetExclusionsBtn.addEventListener('click', () => {
-            const defaultExclusions = ['node_modules', 'out', 'dist', 'target', 'build', 'coverage', '.git', '.gemini', '.cache', 'venv', '.venv'];
+            const defaultExclusions = [
+                'node_modules',
+                'out',
+                'dist',
+                'target',
+                'build',
+                'coverage',
+                '.git',
+                '.gemini',
+                '.cache',
+                'venv',
+                '.venv'
+            ];
             exclusionPatternsInput.value = defaultExclusions.join(', ');
             vscode.postMessage({ type: 'saveExclusionPatterns', patterns: defaultExclusions });
         });
     }
 
-    window.addEventListener('message', event => {
+    window.addEventListener('message', (event) => {
         const message = event.data;
         if (message.type === 'exclusionPatternsLoaded') {
             if (exclusionPatternsInput && Array.isArray(message.patterns)) {

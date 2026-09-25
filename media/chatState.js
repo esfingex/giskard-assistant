@@ -8,7 +8,6 @@
  * mcpView -> chatRouter -> chatView.
  */
 
-
 const modelPickerBtn = document.getElementById('model-picker-btn');
 const modelPopoverCard = document.getElementById('model-popover-card');
 const popoverSearchInput = document.getElementById('popover-search-input');
@@ -40,15 +39,13 @@ function cleanModelName(m) {
 }
 
 // ── Internal Sub-Tabs State Management ──────────────────────────────
-let _subTabs = [
-    { id: 'tab-1', title: 'Chat 1', model: '', messagesHtml: '' }
-];
+let _subTabs = [{ id: 'tab-1', title: 'Chat 1', model: '', messagesHtml: '' }];
 let _activeTabId = 'tab-1';
 let _subTabCounter = 1;
 
 const newChatBtn = document.getElementById('new-chat-btn');
 if (newChatBtn) {
-    newChatBtn.addEventListener('click', function() {
+    newChatBtn.addEventListener('click', function () {
         createNewSubTab();
     });
 }
@@ -91,17 +88,31 @@ function getModelMaxContext(modelName) {
 }
 
 const ctxMedia = document.getElementById('ctx-media');
-if (ctxMedia) ctxMedia.addEventListener('click', () => { selectedContextType = 'media'; addCtxBtn.textContent = '✓ +media'; if (ctxMenu) ctxMenu.style.display = 'none'; });
+if (ctxMedia)
+    ctxMedia.addEventListener('click', () => {
+        selectedContextType = 'media';
+        addCtxBtn.textContent = '✓ +media';
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
 
 const ctxMentions = document.getElementById('ctx-mentions');
-if (ctxMentions) ctxMentions.addEventListener('click', () => { selectedContextType = 'mentions'; addCtxBtn.textContent = '✓ +mentions'; if (ctxMenu) ctxMenu.style.display = 'none'; });
+if (ctxMentions)
+    ctxMentions.addEventListener('click', () => {
+        selectedContextType = 'mentions';
+        addCtxBtn.textContent = '✓ +mentions';
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
 
 const ctxGraphify = document.getElementById('ctx-graphify');
 
 const ctxSkills = document.getElementById('ctx-skills');
 
 const ctxCheck = document.getElementById('ctx-action-check');
-if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
+if (ctxCheck)
+    ctxCheck.addEventListener('click', () => {
+        vscode.postMessage({ type: 'actionBtn', action: 'cargo check' });
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
 
 const ctxPython = document.getElementById('ctx-action-python');
 const stopBtn = document.getElementById('stop-btn');

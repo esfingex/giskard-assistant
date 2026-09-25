@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ConnectionStore, DEFAULT_MODEL_SETTINGS, ModelSettings } from '../core/connectionStore';
+import { ConnectionStore, ModelSettings } from '../core/connectionStore';
 import { fetchWithTimeout, fetchLlmModelsGrouped } from '../core/api';
 
 export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewProvider {
@@ -13,23 +13,28 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly store: ConnectionStore
-    ) { }
+    ) {}
 
     public async refresh() {
         if (this._view) {
             const groups = await fetchLlmModelsGrouped().catch(() => []);
-            const localGroups = groups.filter(g => {
+            const localGroups = groups.filter((g) => {
                 const tag = (g.connectionTag || '').toLowerCase();
                 const url = (g.connectionUrl || '').toLowerCase();
-                return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
+                return (
+                    tag.includes('ollama') ||
+                    tag.includes('giskard') ||
+                    url.includes('11434') ||
+                    url.includes('3500')
+                );
             });
 
             const enabledModels = this.store.getEnabledModels();
             const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
-            localGroups.forEach(g => {
+            localGroups.forEach((g) => {
                 const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
-                g.models.forEach(m => {
+                g.models.forEach((m) => {
                     if (enabledModels.length === 0 || enabledModels.includes(m)) {
                         modelList.push({
                             id: m,
@@ -47,7 +52,7 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
+        _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
@@ -62,18 +67,23 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
             switch (message.command) {
                 case 'loadModels': {
                     const groups = await fetchLlmModelsGrouped().catch(() => []);
-                    const localGroups = groups.filter(g => {
+                    const localGroups = groups.filter((g) => {
                         const tag = (g.connectionTag || '').toLowerCase();
                         const url = (g.connectionUrl || '').toLowerCase();
-                        return tag.includes('ollama') || tag.includes('giskard') || url.includes('11434') || url.includes('3500');
+                        return (
+                            tag.includes('ollama') ||
+                            tag.includes('giskard') ||
+                            url.includes('11434') ||
+                            url.includes('3500')
+                        );
                     });
 
                     const enabledModels = this.store.getEnabledModels();
                     const modelList: Array<{ id: string; name: string; tag: string; label: string }> = [];
 
-                    localGroups.forEach(g => {
+                    localGroups.forEach((g) => {
                         const tagUpper = (g.connectionTag || 'LOCAL').toUpperCase();
-                        g.models.forEach(m => {
+                        g.models.forEach((m) => {
                             if (enabledModels.length === 0 || enabledModels.includes(m)) {
                                 modelList.push({
                                     id: m,
@@ -102,23 +112,29 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                     const modelName = message.model;
                     if (!modelName) return;
 
-                    vscode.window.showInformationMessage(`⚡ Ejecutando benchmark en vivo para '${modelName}'...`);
-                    
+                    vscode.window.showInformationMessage(
+                        `⚡ Ejecutando benchmark en vivo para '${modelName}'...`
+                    );
+
                     const startTime = Date.now();
                     let tokensPerSec = 0;
                     let ttftMs = 0;
 
                     try {
-                        const testRes = await fetchWithTimeout('http://127.0.0.1:11434/api/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                model: modelName,
-                                prompt: 'fn hello() { return 42; }',
-                                stream: false,
-                                options: { num_predict: 20 }
-                            })
-                        }, 10000);
+                        const testRes = await fetchWithTimeout(
+                            'http://127.0.0.1:11434/api/generate',
+                            {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    model: modelName,
+                                    prompt: 'fn hello() { return 42; }',
+                                    stream: false,
+                                    options: { num_predict: 20 }
+                                })
+                            },
+                            10000
+                        );
 
                         if (testRes.ok) {
                             const data: any = await testRes.json();
@@ -132,19 +148,53 @@ export class GiskardModelSettingsWebviewProvider implements vscode.WebviewViewPr
                     const l = modelName.toLowerCase();
                     let optimal: ModelSettings;
 
-                    if (l.includes('r1') || l.includes('reasoner') || l.includes('qwq') || l.includes('thinking')) {
-                        optimal = { temperature: 0.6, topP: 0.95, topK: 50, numCtx: 32768, numPredict: 4096, think: true, thinkBudget: 4096 };
+                    if (
+                        l.includes('r1') ||
+                        l.includes('reasoner') ||
+                        l.includes('qwq') ||
+                        l.includes('thinking')
+                    ) {
+                        optimal = {
+                            temperature: 0.6,
+                            topP: 0.95,
+                            topK: 50,
+                            numCtx: 32768,
+                            numPredict: 4096,
+                            think: true,
+                            thinkBudget: 4096
+                        };
                     } else if (l.includes('coder') || l.includes('starcoder') || l.includes('code')) {
-                        optimal = { temperature: 0.2, topP: 0.95, topK: 40, numCtx: 16384, numPredict: 4096, think: false, thinkBudget: 2048 };
+                        optimal = {
+                            temperature: 0.2,
+                            topP: 0.95,
+                            topK: 40,
+                            numCtx: 16384,
+                            numPredict: 4096,
+                            think: false,
+                            thinkBudget: 2048
+                        };
                     } else {
-                        optimal = { temperature: 0.7, topP: 0.90, topK: 40, numCtx: 8192, numPredict: 2048, think: false, thinkBudget: 2048 };
+                        optimal = {
+                            temperature: 0.7,
+                            topP: 0.9,
+                            topK: 40,
+                            numCtx: 8192,
+                            numPredict: 2048,
+                            think: false,
+                            thinkBudget: 2048
+                        };
                     }
 
                     await this.store.saveModelOverrides(modelName, optimal);
                     webviewView.webview.postMessage({ command: 'settingsLoaded', settings: optimal });
 
-                    const statsMsg = tokensPerSec > 0 ? ` [Rendimiento: ${tokensPerSec} tok/s | Latencia: ${ttftMs}ms]` : '';
-                    vscode.window.showInformationMessage(`✓ Benchmark completado${statsMsg} — Configuración óptima guardada para '${modelName}'!`);
+                    const statsMsg =
+                        tokensPerSec > 0
+                            ? ` [Rendimiento: ${tokensPerSec} tok/s | Latencia: ${ttftMs}ms]`
+                            : '';
+                    vscode.window.showInformationMessage(
+                        `✓ Benchmark completado${statsMsg} — Configuración óptima guardada para '${modelName}'!`
+                    );
                     break;
                 }
             }

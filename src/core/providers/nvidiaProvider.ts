@@ -14,7 +14,10 @@ export function clearNvidiaModelCache() {
     _cachedNvidiaModels = null;
 }
 
-export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL, apiKey?: string): Promise<string[]> {
+export async function fetchNvidiaModels(
+    baseUrl: string = NVIDIA_NIM_DEFAULT_URL,
+    apiKey?: string
+): Promise<string[]> {
     if (_cachedNvidiaModels && _cachedNvidiaModels.length > 0) {
         return _cachedNvidiaModels;
     }
@@ -24,7 +27,8 @@ export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL
 
     const filterModel = (id: string): boolean => {
         const l = id.toLowerCase();
-        return id.includes('/') &&
+        return (
+            id.includes('/') &&
             !l.includes('embed') &&
             !l.includes('detector') &&
             !l.includes('translate') &&
@@ -37,18 +41,23 @@ export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL
             !l.includes('safety') &&
             !l.includes('riva') &&
             !l.includes('neva') &&
-            !l.includes('nvclip');
+            !l.includes('nvclip')
+        );
     };
 
     // 1. Try with API key (user-authenticated)
     if (apiKey && apiKey.trim()) {
         try {
-            const res = await fetchWithTimeout(modelsUrl, {
-                headers: {
-                    'Authorization': `Bearer ${apiKey.trim()}`,
-                    'X-Client-Id': CLIENT_ID
-                }
-            }, 8000).catch(() => null);
+            const res = await fetchWithTimeout(
+                modelsUrl,
+                {
+                    headers: {
+                        Authorization: `Bearer ${apiKey.trim()}`,
+                        'X-Client-Id': CLIENT_ID
+                    }
+                },
+                8000
+            ).catch(() => null);
 
             if (res && res.ok) {
                 const data: any = await res.json().catch(() => null);
@@ -63,14 +72,18 @@ export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL
                     }
                 }
             }
-        } catch { }
+        } catch {}
     }
 
     // 2. Fetch without API key (public endpoint)
     try {
-        const res = await fetchWithTimeout(modelsUrl, {
-            headers: { 'X-Client-Id': CLIENT_ID }
-        }, 8000).catch(() => null);
+        const res = await fetchWithTimeout(
+            modelsUrl,
+            {
+                headers: { 'X-Client-Id': CLIENT_ID }
+            },
+            8000
+        ).catch(() => null);
 
         if (res && res.ok) {
             const data: any = await res.json().catch(() => null);
@@ -85,7 +98,7 @@ export async function fetchNvidiaModels(baseUrl: string = NVIDIA_NIM_DEFAULT_URL
                 }
             }
         }
-    } catch { }
+    } catch {}
 
     // If fetch fails / no connection -> return empty list (no hardcoding)
     return [];

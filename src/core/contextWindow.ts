@@ -47,13 +47,16 @@ export function trimHistory(history: ChatMessage[], budget: number): ChatMessage
         start = 1;
     }
     // First user message is the original task — always preserve
-    const firstUser = history.slice(start).find(m => m.role === 'user');
-    if (firstUser && kept.findIndex(k => k === firstUser) === -1) {
+    const firstUser = history.slice(start).find((m) => m.role === 'user');
+    if (firstUser && kept.findIndex((k) => k === firstUser) === -1) {
         kept.push(firstUser);
     }
 
     // Build from newest backwards, keeping what fits
-    const newestFirst = history.slice(start).filter(m => m !== firstUser).reverse();
+    const newestFirst = history
+        .slice(start)
+        .filter((m) => m !== firstUser)
+        .reverse();
     const candidate: ChatMessage[] = [];
     let used = kept.reduce((sum, m) => sum + estimateTokens(m.content), 0);
     for (const msg of newestFirst) {
@@ -77,7 +80,7 @@ export function buildChatMessages(
 ): ChatMessage[] {
     const base: ChatMessage[] = [
         { role: 'system', content: system },
-        ...history.filter(m => m.role !== 'system')
+        ...history.filter((m) => m.role !== 'system')
     ];
     const withUser: ChatMessage[] = [...base, { role: 'user', content: userContent }];
     return trimHistory(withUser, budget);
@@ -94,10 +97,10 @@ export function setModelContextWindow(modelName: string, maxTokens: number) {
 }
 
 export function getModelMaxContextWindow(modelName: string): number {
-    const cleanName = (modelName || "").toLowerCase().trim();
+    const cleanName = (modelName || '').toLowerCase().trim();
     if (_modelContextRegistry.has(cleanName)) {
         return _modelContextRegistry.get(cleanName)!;
     }
     // Remote models default to unrestrictive modern baseline (128,000 tokens), local models default to 32,768 tokens
-    return cleanName.startsWith("local:") ? 32768 : 128000;
+    return cleanName.startsWith('local:') ? 32768 : 128000;
 }

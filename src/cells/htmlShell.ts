@@ -12,8 +12,12 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     const chatUtilsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatUtils.js'));
     const chatStateUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatState.js'));
     const chatTabsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatTabs.js'));
-    const chatMessagesUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatMessages.js'));
-    const connectionsViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'connectionsView.js'));
+    const chatMessagesUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, 'media', 'chatMessages.js')
+    );
+    const connectionsViewUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, 'media', 'connectionsView.js')
+    );
     const mcpViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'mcpView.js'));
     const chatRouterUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatRouter.js'));
     const chatViewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatView.js'));
