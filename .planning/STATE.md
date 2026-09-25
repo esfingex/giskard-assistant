@@ -4,7 +4,8 @@
 
 ## Development State
 
-*   **Active Phase**: Descomposición COMPLETADA (waves 0-9). Regla del usuario: >500 líneas = monolítico — TODOS los archivos fuente quedan ≤507 líneas
+*   **Active Phase**: Descomposición COMPLETADA (waves 0-9) + tipado de alto valor (T1-T3).
+*   **Calidad**: ESLint (flat config, 0 errores) + Prettier integrados a `npm run verify`; drift guard del contrato postMessage; contrato webview→host y router tipados con narrowing; envelope `GiskardResponse<T>` para giskard-sys; providers tipados. `no-explicit-any` restante (~82) es MCP + glue interno — any honesto, decisión consciente.
 *   **Current Milestone**: Waves 0-6 completadas y commiteadas. `chatWebview.ts`: 1.762 → 382 líneas (−78%).
 *   **Git Position**: `main` @ wave 8
 

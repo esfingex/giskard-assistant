@@ -2,6 +2,19 @@
 
 ## [4.3.0] - 2026-09-24
 
+### Added
+- **Estándar de calidad TypeScript (ESLint + Prettier):** flat config `eslint.config.mjs` con typescript-eslint recommended; `.prettierrc` (4 espacios, single quotes, 110); scripts `lint`/`lint:fix`/`format`; `npm run verify` ahora = compile + lint + test. Baseline: 0 errores de lint; `no-explicit-any` queda como warning documentado (solo en límites MCP/glue interno).
+
+### Fixed
+- **compressMemory silencioso (T1):** el webview envía el historial en `history` pero el router leía `historyText` — la compresión BCF guardaba siempre `''`.
+- **Contrato webview→host alineado con payloads reales (T1):** `sendPrompt` (+contextType/includeActiveFile), `approvePlan` ({plan,model,tabId} en vez de {approved}), `openDiff` ({code,filePath} en vez de {text}), `openFile` (relativePath), `discoverMcpTools`/`testMcpServer` (serverId/serverType/commandOrUrl), `toolExec` (+args), `saveSettings`.
+- **`messageRouter` tipado con `WebviewToHostMessage` (T1):** cada case estrecha por discriminante; el compilador valida los campos que toca cada handler.
+
+### Added
+- **`GiskardResponse<T>` (T2):** envelope tipado del contrato REST de giskard-sys aplicado en exec, /policy, memory, graph, graphify, sandbox list/read y `execCliCommand`.
+- **Providers tipados (T3):** `ProviderModelsResponse` para NVIDIA NIM, DeepSeek, Kimi, Qwen, Ollama; envelope para giskard-sys.
+- **`no-explicit-any`:** 107 → 82 warnings; el restante es MCP (protocolo dinámico) y glue interno — decisión consciente, no deuda.
+
 ### Refactored
 - **División de `media/chatView.js` (1.138 → 5 módulos ≤412 líneas, wave 7b):**
   - `chatState.js` (107) — registro DOM compartido, estado mutable y helpers puros.
