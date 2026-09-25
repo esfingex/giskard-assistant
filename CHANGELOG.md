@@ -3,6 +3,15 @@
 ## [4.3.0] - 2026-09-24
 
 ### Refactored
+- **División de `media/chatView.js` (1.138 → 5 módulos ≤412 líneas, wave 7b):**
+  - `chatState.js` (107) — registro DOM compartido, estado mutable y helpers puros.
+  - `chatTabs.js` (296) — popover de modelos, sub-pestañas, tabs de settings, paleta.
+  - `chatMessages.js` (198) — render de mensajes, plan card, historial, token counter.
+  - `chatRouter.js` (412) — router de mensajes del host.
+  - `chatView.js` (167) — wiring y `send()`.
+  - Patrón: scope global compartido entre scripts (mismo modelo que `chatUtils.js`); orden de carga actualizado en `htmlShell.ts`; integridad verificada línea a línea (977=977).
+- **`cells/promptHandlers.ts` (wave 9):** el orquestador `_handlePrompt` (~450 líneas) extraído con interfaz `PromptHost`. `chatWebview.ts` final: **382 líneas** (desde 1.762).
+- **Streaming remoto migrado de verdad (wave 9):** la copia simplificada de `streamFromRemoteApi` en `streamManager.ts` (sin normalización de URL, sin truncado, sin timeouts) reemplazada por la implementación viva de chatWebview.
 - **Descomposición del Monolito `chatWebview.ts` (1.762 → ~1.150 líneas, waves 0-6):**
   - `cells/streamManager.ts` — streaming SSE unificado (giskard-sys, Ollama, API remota).
   - `cells/connectionsHandlers.ts` — ciclo de vida de conexiones (list/add/remove/reset/activate/test).

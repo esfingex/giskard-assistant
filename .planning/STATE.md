@@ -4,8 +4,8 @@
 
 ## Development State
 
-*   **Active Phase**: Descomposición COMPLETADA (waves 0-8 + 6b + 7a). Siguiente fase candidata: trocear `_handlePrompt` y dividir `media/chatView.js`
-*   **Current Milestone**: Waves 0-6 completadas y commiteadas. `chatWebview.ts`: 1.762 → 954 líneas (−46%).
+*   **Active Phase**: Descomposición COMPLETADA (waves 0-9). Regla del usuario: >500 líneas = monolítico — TODOS los archivos fuente quedan ≤507 líneas
+*   **Current Milestone**: Waves 0-6 completadas y commiteadas. `chatWebview.ts`: 1.762 → 382 líneas (−78%).
 *   **Git Position**: `main` @ wave 8
 
 ### Células extraídas (patrón: funciones puras con contexto explícito)
@@ -45,8 +45,10 @@
 ## Pendiente (próximas oleadas)
 
 *   ~~Wave 6b~~ **HECHA**: `cells/messageRouter.ts` (despacho de ~35 tipos con `ChatRouterDeps`; la política DeepSeek off-peak y el error boundary viven ahí).
+*   **Wave 7b HECHA**: `media/chatView.js` (1.138 líneas, IIFE) dividido en 5 módulos de scope global compartido: `chatState.js` (107), `chatTabs.js` (296), `chatMessages.js` (198), `chatRouter.js` (412), `chatView.js` (167). Integridad verificada línea a línea (977=977).
+*   **Wave 9 HECHA**: `cells/promptHandlers.ts` (483, el orquestador `_handlePrompt` con `PromptHost`); la copia débil de `streamFromRemoteApi` en streamManager reemplazada por la versión viva de chatWebview (URL normalization, truncado, timeouts). `chatWebview.ts` 954 → 382.
 *   **Wave 7a HECHA**: listeners muertos eliminados; Ctrl+L restaurado (`injectCodeSnippet`); botones ctx reconectados vía `actionBtn` y ⚡Shell vía `toolExec` enjaulado. **Pendiente verificación GUI manual.**
-*   **Wave 7b (futura)**: dividir `media/chatView.js` (~1.120 líneas, IIFE única con estado compartido) — requiere convertir el closure a namespace compartido; sin tests de webview, hacer tras verificación GUI.
+
 *   ~~Hallazgo abierto~~ **RESUELTO (wave 7a)**: `executeAction`→`actionBtn`, `executeShellCommand`→`toolExec`, Ctrl+L→`injectCodeSnippet`.
 
 ## Active Blockers

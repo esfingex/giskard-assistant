@@ -4,9 +4,9 @@
 
 ## Current Context Handoff
 
-*   **Last Milestone**: Waves 0-6, 6b, 7a y 8 commiteadas en `main`. Verificación en verde: `npm run verify` (tsc + 44 tests node:test) + `node --check` en media/*.js.
-*   **Immediate Next Step**: Verificación GUI manual (F5 → Extension Development Host): Ctrl+L muestra el bloque de contexto, botón ⚡Shell ejecuta por giskard-sys, botones ctx "cargo check"/"python unittest" devuelven actionResult.
-*   **Después (futuro)**: Wave 7b — dividir `media/chatView.js` (~1.120 líneas, IIFE con estado compartido → namespace). Opcional: trocear `_handlePrompt` (~450 líneas, último método grande de chatWebview.ts).
+*   **Last Milestone**: Waves 0-9 completadas (incl. 7b: división de chatView.js; wave 9: promptHandlers + migración remota real a streamManager). `npm run verify` en verde.
+*   **Immediate Next Step**: Verificación GUI manual (F5 → Extension Development Host) de TODA la tanda: Ctrl+L (injectCodeSnippet), botón ⚡Shell (toolExec), botones ctx (actionBtn), popover de modelos y sub-pestañas (archivos divididos en wave 7b), streaming remoto (NVIDIA/DeepSeek — cuerpo movido a streamManager en wave 9).
+*   **Estado**: objetivo de descomposición cumplido — ningún archivo fuente supera 507 líneas (regla del usuario: ≤500 tolerable). Solo quedan mejoras opcionales.
 
 ## Restart Commands
 
