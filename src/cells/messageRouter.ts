@@ -12,6 +12,7 @@
 
 import * as vscode from 'vscode';
 import { getPeakInfo } from '../core/providers/deepseekProvider';
+import { WebviewToHostMessage } from '../core/webviewContract';
 import { ConnectionStore } from '../core/connectionStore';
 import { ChatMessage } from '../core/contextWindow';
 import { setAgentActivity } from './statusBar';
@@ -80,7 +81,7 @@ export interface ChatRouterDeps {
 }
 
 export function setWebviewMessageListener(webview: vscode.Webview, deps: ChatRouterDeps): void {
-    webview.onDidReceiveMessage(async (data) => {
+    webview.onDidReceiveMessage(async (data: WebviewToHostMessage) => {
         try {
             switch (data.type) {
                 case 'sendPrompt': {
@@ -179,7 +180,7 @@ export function setWebviewMessageListener(webview: vscode.Webview, deps: ChatRou
                     break;
                 case 'openFile':
                     // Fix: el webview envía relativePath (chatView.js/chatUtils.js)
-                    await handleOpenFile(data.relativePath || data.path);
+                    await handleOpenFile(data.relativePath || data.path || '');
                     break;
                 case 'openDiff':
                     await openDiff(deps.diffCtx(), data.code, data.filePath);
@@ -237,7 +238,7 @@ export function setWebviewMessageListener(webview: vscode.Webview, deps: ChatRou
                     break;
                 case 'toolExec':
                     setAgentActivity(`ejecutando ${data.command}…`);
-                    await handleToolExec(deps.getView(), data.command, data.args, data.id);
+                    await handleToolExec(deps.getView(), data.command, data.args || [], data.id);
                     break;
                 case 'approvePlan':
                     await approvePlan(deps.agentCtx(), data.plan, data.model, data.tabId);
@@ -249,7 +250,8 @@ export function setWebviewMessageListener(webview: vscode.Webview, deps: ChatRou
                     await restoreChatHistory(deps.stateCtx());
                     break;
                 case 'compressMemory':
-                    await compressMemory(deps.getView(), data.historyText || '');
+                    // Fix T1: el webview envía el texto en `history` (antes se leía historyText y llegaba siempre '')
+                    await compressMemory(deps.getView(), data.history || '');
                     break;
                 case 'runGraphify':
                     await runGraphify(deps.knowledgeCtx());
@@ -270,8 +272,8 @@ export function setWebviewMessageListener(webview: vscode.Webview, deps: ChatRou
             if (view) {
                 view.webview.postMessage({
                     type: 'streamError',
-                    model: data?.model,
-                    tabId: data?.tabId,
+                    model: 'model' in data ? data.model : undefined,
+                    tabId: 'tabId' in data ? data.tabId : undefined,
                     error: `❌ Error inesperado en Giskard: ${err?.message || err}`
                 });
             }

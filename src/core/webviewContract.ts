@@ -233,7 +233,10 @@ export interface SendPromptMessage {
     prompt: string;
     model?: string;
     tabId?: string;
-    includeFile?: boolean;
+    includeActiveFile?: boolean;
+    contextType?: string;
+    /** Estado del checkbox (ui legacy del webview; no afecta el routing) */
+    checked?: boolean;
 }
 
 export interface StopGenerationMessage {
@@ -302,7 +305,9 @@ export interface ModelChangedMessage {
 
 export interface SaveSettingsMessage {
     type: 'saveSettings';
-    settings: Record<string, any>;
+    provider: string;
+    baseUrl?: string;
+    apiKey?: string;
 }
 
 export interface ClearContextMessage {
@@ -326,12 +331,15 @@ export interface ActionBtnMessage {
 
 export interface OpenFileMessage {
     type: 'openFile';
-    path: string;
+    /** El webview envía relativePath; el router acepta también path (legacy) */
+    relativePath?: string;
+    path?: string;
 }
 
 export interface OpenDiffMessage {
     type: 'openDiff';
-    text: string;
+    code: string;
+    filePath?: string;
 }
 
 export interface LoadMcpServersMessage {
@@ -363,12 +371,14 @@ export interface ToggleMcpToolMessage {
 
 export interface DiscoverMcpToolsMessage {
     type: 'discoverMcpTools';
-    id: number;
+    serverId: number;
 }
 
 export interface TestMcpServerMessage {
     type: 'testMcpServer';
     id: number;
+    serverType: 'docker' | 'stdio' | 'url';
+    commandOrUrl: string;
 }
 
 export interface SearchSmitheryMessage {
@@ -413,12 +423,15 @@ export interface ToolExecMessage {
     type: 'toolExec';
     command: string;
     id: number;
+    args?: string[];
     approved?: boolean;
 }
 
 export interface ApprovePlanMessage {
     type: 'approvePlan';
-    approved: boolean;
+    plan: string;
+    model?: string;
+    tabId?: string;
 }
 
 export interface SaveChatHistoryMessage {
@@ -433,6 +446,8 @@ export interface RestoreChatHistoryMessage {
 
 export interface CompressMemoryMessage {
     type: 'compressMemory';
+    /** Texto del historial a comprimir (campo real del webview) */
+    history: string;
 }
 
 export interface RunGraphifyMessage {
