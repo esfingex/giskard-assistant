@@ -232,6 +232,30 @@ export async function updateProviderConfig(
     return res.json();
 }
 
+/** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
+export interface ProviderModelsResponse {
+    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
+    data?: Array<{ id?: string; name?: string }>;
+    /** Ollama /api/tags */
+    models?: Array<{ name?: string; id?: string }>;
+}
+
+/** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
+export interface ProviderModelsResponse {
+    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
+    data?: Array<{ id?: string; name?: string }>;
+    /** Ollama /api/tags */
+    models?: Array<{ name?: string; id?: string }>;
+}
+
+/** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
+export interface ProviderModelsResponse {
+    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
+    data?: Array<{ id?: string; name?: string }>;
+    /** Ollama /api/tags */
+    models?: Array<{ name?: string; id?: string }>;
+}
+
 /** Envelope estándar de las respuestas REST de giskard-sys ({success, error, data}). */
 export interface GiskardResponse<T = unknown> {
     success: boolean;

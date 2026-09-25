@@ -3,7 +3,7 @@
  * Copyright (C) 2025-2026 Giskard Project
  */
 
-import { fetchWithTimeout, CLIENT_ID } from '../api';
+import { GiskardResponse, fetchWithTimeout, CLIENT_ID } from '../api';
 
 export const GISKARD_SYS_DEFAULT_URL = 'http://localhost:3500';
 
@@ -19,9 +19,9 @@ export async function fetchGiskardSysModels(baseUrl: string = GISKARD_SYS_DEFAUL
         ).catch(() => null);
 
         if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
+            const data = (await res.json().catch(() => null)) as GiskardResponse<Array<{ name?: string; id?: string }>> | null;
             if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
-                return data.data.map((m: any) => m.name || m.id || String(m));
+                return data.data.map((m) => m.name || m.id || String(m));
             }
         }
     } catch {}

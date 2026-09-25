@@ -3,7 +3,7 @@
  * Copyright (C) 2025-2026 Giskard Project
  */
 
-import { fetchWithTimeout, CLIENT_ID } from '../api';
+import { ProviderModelsResponse, fetchWithTimeout, CLIENT_ID } from '../api';
 
 export const NVIDIA_NIM_DEFAULT_URL = 'https://integrate.api.nvidia.com/v1';
 
@@ -60,10 +60,10 @@ export async function fetchNvidiaModels(
             ).catch(() => null);
 
             if (res && res.ok) {
-                const data: any = await res.json().catch(() => null);
+                const data = (await res.json().catch(() => null)) as ProviderModelsResponse | null;
                 if (data?.data && Array.isArray(data.data)) {
                     const models = data.data
-                        .map((m: any) => (m.id || '').trim())
+                        .map((m) => (m.id || '').trim())
                         .filter(filterModel)
                         .sort();
                     if (models.length > 0) {
@@ -86,10 +86,10 @@ export async function fetchNvidiaModels(
         ).catch(() => null);
 
         if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
+            const data = (await res.json().catch(() => null)) as ProviderModelsResponse | null;
             if (data?.data && Array.isArray(data.data)) {
                 const models = data.data
-                    .map((m: any) => (m.id || '').trim())
+                    .map((m) => (m.id || '').trim())
                     .filter(filterModel)
                     .sort();
                 if (models.length > 0) {

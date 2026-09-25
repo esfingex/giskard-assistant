@@ -3,7 +3,7 @@
  * Copyright (C) 2025-2026 Giskard Project
  */
 
-import { fetchWithTimeout, CLIENT_ID } from '../api';
+import { ProviderModelsResponse, fetchWithTimeout, CLIENT_ID } from '../api';
 
 export const DEEPSEEK_DEFAULT_URL = 'https://api.deepseek.com/v1';
 
@@ -61,9 +61,9 @@ export async function fetchDeepseekModels(
 
         const res = await fetchWithTimeout(`${cleanUrl}/models`, { headers }, 5000).catch(() => null);
         if (res && res.ok) {
-            const data: any = await res.json().catch(() => null);
+            const data = (await res.json().catch(() => null)) as ProviderModelsResponse | null;
             if (data && Array.isArray(data.data) && data.data.length > 0) {
-                return data.data.map((m: any) => m.id || m.name || String(m));
+                return data.data.map((m) => m.id || m.name || String(m));
             }
         }
     } catch {}
