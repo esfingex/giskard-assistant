@@ -1,1138 +1,167 @@
 /**
- * Giskard Assistant VSCode Extension — Module: Main Chat Controller
+ * Giskard Assistant VSCode Extension — Module: Main Chat Controller (wiring & send)
  * Copyright (C) 2025-2026 Giskard Project
+ *
+ * Extraído de chatView.js (v4.3.0 wave 7b). Scope global compartido entre
+ * scripts del webview (mismo patrón que chatUtils.js). Orden de carga importa:
+ * chatUtils -> chatState -> chatTabs -> chatMessages -> connectionsView ->
+ * mcpView -> chatRouter -> chatView.
  */
 
-(function() {
-    const modelPickerBtn = document.getElementById('model-picker-btn');
-    const modelPopoverCard = document.getElementById('model-popover-card');
-    const popoverSearchInput = document.getElementById('popover-search-input');
-    const popoverModelList = document.getElementById('popover-model-list');
-    const popoverOtherToggle = document.getElementById('popover-other-toggle');
-    const popoverOtherList = document.getElementById('popover-other-list');
-    const activeModelName = document.getElementById('active-model-name');
-    const accordionArrow = document.getElementById('accordion-arrow');
 
-    const messagesDiv = document.getElementById('messages');
-    const promptInput = document.getElementById('prompt');
-    const sendBtn = document.getElementById('send-btn');
-    const incFileCheckbox = document.getElementById('include-file') || document.getElementById('inc-file');
-    const openSettingsBtn = document.getElementById('open-settings-btn');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const settingsModal = document.getElementById('settings-modal');
-    const cfgConnectorUrl = document.getElementById('cfg-connector-url');
-    const modelSelect = document.getElementById('model-select');
-    const chatModelSelect = document.getElementById('chat-model-select');
+if (modelSelect) {
+    modelSelect.addEventListener('change', updateTokenCounter);
+}
 
-    let _enabledModelsCache = [];
-    let _allModelsCache = [];
+if (promptInput) promptInput.value = '';
 
-    if (modelPickerBtn && modelPopoverCard) {
-        modelPickerBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            modelPopoverCard.classList.toggle('open');
-            if (modelPopoverCard.classList.contains('open')) {
-                vscode.postMessage({ type: 'getModels' });
-                renderPopoverLists();
-                if (popoverSearchInput) popoverSearchInput.focus();
-            }
-        });
+if (clearCtxBtn) {
+    clearCtxBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'clearContext' });
+    });
+}
 
-        document.addEventListener('click', function(e) {
-            if (modelPopoverCard && !modelPopoverCard.contains(e.target) && !modelPickerBtn.contains(e.target)) {
-                modelPopoverCard.classList.remove('open');
-            }
-        });
-    }
+if (openSettingsBtn) {
+    openSettingsBtn.addEventListener('click', () => { 
+        if (settingsModal) settingsModal.style.display = 'flex';
+        vscode.postMessage({ type: 'loadConnections' });
+        vscode.postMessage({ type: 'loadMcpServers' });
+        vscode.postMessage({ type: 'fetchModels' });
+    });
+}
 
-    if (popoverOtherToggle && popoverOtherList) {
-        popoverOtherToggle.addEventListener('click', function() {
-            popoverOtherList.classList.toggle('open');
-            if (accordionArrow) {
-                accordionArrow.textContent = popoverOtherList.classList.contains('open') ? '▾' : '›';
-            }
-        });
-    }
+if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => { 
+        if (settingsModal) settingsModal.style.display = 'none'; 
+    });
+}
 
-    if (popoverSearchInput) {
-        popoverSearchInput.addEventListener('input', function() {
-            renderPopoverLists();
-        });
-    }
-
-    function cleanModelName(m) {
-        if (!m) return '';
-        if (typeof m === 'string') return m.trim();
-        if (typeof m === 'object') return (m.name || m.id || m.label || m.model || '').trim();
-        return String(m).trim();
-    }
-
-    function renderPopoverLists() {
-        if (!popoverModelList) return;
-        const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
-
-        const cleanedEnabled = _enabledModelsCache.map(cleanModelName).filter(Boolean);
-        const cleanedAll = _allModelsCache.map(cleanModelName).filter(Boolean);
-        
-        // Single unified list: enabled models first, followed by all other available models
-        const allAvailable = Array.from(new Set([...cleanedEnabled, ...cleanedAll]));
-        const filteredModels = allAvailable.filter(m => m.toLowerCase().includes(q));
-
-        if (filteredModels.length === 0) {
-            popoverModelList.innerHTML = '<div style="font-size:11px;color:#f87171;padding:8px 6px;text-align:center;">⚠️ Falló la conexión al obtener los modelos.<br><span style="opacity:0.8;font-size:10px;">Verifica tus conexiones activas en Ajustes ⚙️ o en la barra lateral 👈</span></div>';
-        } else {
-            popoverModelList.innerHTML = filteredModels.map(m => {
-                const isSel = (m === currentActiveModel);
-                const isCheckedInTree = cleanedEnabled.includes(m);
-                const selClass = isSel ? 'selected' : '';
-                const checkMark = isSel ? '✓ ' : '';
-                const badgeText = isSel ? 'Activo' : (isCheckedInTree ? 'Habilitado' : 'Disponible');
-                const badgeStyle = isSel ? 'background:rgba(56,189,248,0.25);color:#38bdf8;font-weight:bold;' : (isCheckedInTree ? 'background:rgba(34,197,94,0.18);color:#4ade80;font-weight:bold;' : 'opacity:0.6;');
-                
-                return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
-                    <span>${checkMark}${escapeHtml(m)}</span>
-                    <span class="popover-model-badge" style="${badgeStyle}">${badgeText}</span>
-                </div>`;
-            }).join('');
-        }
-
-        if (popoverOtherList) {
-            popoverOtherList.innerHTML = '';
-        }
-
-        const items = popoverModelList.querySelectorAll('.popover-model-item');
-        items.forEach(el => {
-            el.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const selected = el.getAttribute('data-model');
-                if (selected) {
-                    currentActiveModel = selected;
-                    const curTab = _subTabs.find(t => t.id === _activeTabId);
-                    if (curTab) {
-                        curTab.model = selected;
-                    }
-                    if (activeModelName) {
-                        activeModelName.textContent = '🤖 ' + selected;
-                    }
-                    vscode.postMessage({ type: 'modelChanged', model: selected });
-                    if (modelPopoverCard) {
-                        modelPopoverCard.classList.remove('open');
-                    }
-                    renderSubTabs();
-                    renderPopoverLists();
-                    updateTokenCounter();
-                }
-            });
-        });
-    }
-
-    // ── Internal Sub-Tabs State Management ──────────────────────────────
-    let _subTabs = [
-        { id: 'tab-1', title: 'Chat 1', model: '', messagesHtml: '' }
-    ];
-    let _activeTabId = 'tab-1';
-    let _subTabCounter = 1;
-
-    function renderSubTabs() {
-        const subTabBar = document.getElementById('sub-tab-bar');
-        if (!subTabBar) return;
-
-        subTabBar.innerHTML = _subTabs.map(t => {
-            const isActive = t.id === _activeTabId;
-            const activeClass = isActive ? 'active' : '';
-            const modelLabel = t.model ? ` [${t.model.split('/')[0]}]` : '';
-            const closeBtnHtml = _subTabs.length > 1 ? `<span class="sub-tab-close-btn" data-close-id="${t.id}">✕</span>` : '';
-            return `<div class="sub-tab-item ${activeClass}" data-tab-id="${t.id}">
-                <span>💬 ${escapeHtml(t.title)}${escapeHtml(modelLabel)}</span>
-                ${closeBtnHtml}
-            </div>`;
-        }).join('');
-
-        subTabBar.querySelectorAll('.sub-tab-item').forEach(el => {
-            el.addEventListener('click', function(e) {
-                const closeTarget = e.target.closest('.sub-tab-close-btn');
-                if (closeTarget) {
-                    e.stopPropagation();
-                    const closeId = closeTarget.getAttribute('data-close-id');
-                    closeSubTab(closeId);
-                    return;
-                }
-                const tabId = el.getAttribute('data-tab-id');
-                if (tabId) switchSubTab(tabId);
-            });
-        });
-    }
-
-    function saveCurrentTabState() {
-        const curTab = _subTabs.find(t => t.id === _activeTabId);
-        const msgDiv = document.getElementById('messages');
-        if (curTab && msgDiv) {
-            curTab.messagesHtml = msgDiv.innerHTML;
-            curTab.model = currentActiveModel;
-            curTab.rawText = currentBotRawText;
-        }
-    }
-
-    function switchSubTab(tabId) {
-        if (tabId === _activeTabId) return;
-
-        saveCurrentTabState();
-
-        _activeTabId = tabId;
-        const nextTab = _subTabs.find(t => t.id === _activeTabId);
-        if (!nextTab) return;
-
-        const msgDiv = document.getElementById('messages');
-        if (msgDiv) msgDiv.innerHTML = nextTab.messagesHtml || '';
-        currentActiveModel = nextTab.model || (_enabledModelsCache[0] || '');
-        currentBotRawText = nextTab.rawText || '';
-        currentBotMsgDiv = msgDiv ? msgDiv.querySelector('.msg.bot[data-streaming="true"]') : null;
-
-        if (activeModelName) {
-            activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
-        }
-
-        setGenerationState(Boolean(nextTab.isGenerating));
-        renderSubTabs();
-        renderPopoverLists();
-    }
-
-    function createNewSubTab() {
-        saveCurrentTabState();
-
-        _subTabCounter++;
-        const newTabId = 'tab-' + Date.now();
-        const newTitle = 'Chat ' + _subTabCounter;
-        const newModel = currentActiveModel || (_enabledModelsCache[0] || '');
-
-        const welcomeHtml = `<div class="msg bot">✨ Nuevo sub-chat #${_subTabCounter} iniciado. Selecciona cualquier modelo en <b>[ 🤖 Modelo ▾ ]</b> para interactuar en paralelo.</div>`;
-
-        _subTabs.push({
-            id: newTabId,
-            title: newTitle,
-            model: newModel,
-            messagesHtml: welcomeHtml
-        });
-
-        _activeTabId = newTabId;
-        const msgDiv = document.getElementById('messages');
-        if (msgDiv) msgDiv.innerHTML = welcomeHtml;
-        currentActiveModel = newModel;
-
-        if (activeModelName) {
-            activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
-        }
-
-        renderSubTabs();
-        renderPopoverLists();
-    }
-
-    function resequenceSubTabs() {
-        _subTabs.forEach((t, i) => {
-            t.title = 'Chat ' + (i + 1);
-        });
-        _subTabCounter = _subTabs.length;
-    }
-
-    function closeSubTab(tabId) {
-        if (_subTabs.length <= 1) return;
-
-        const idx = _subTabs.findIndex(t => t.id === tabId);
-        if (idx === -1) return;
-
-        _subTabs.splice(idx, 1);
-
-        resequenceSubTabs();
-
-        if (_activeTabId === tabId) {
-            const nextIdx = Math.max(0, idx - 1);
-            _activeTabId = _subTabs[nextIdx].id;
-            const nextTab = _subTabs[nextIdx];
-            const msgDiv = document.getElementById('messages');
-            if (msgDiv) msgDiv.innerHTML = nextTab.messagesHtml || '';
-            currentActiveModel = nextTab.model || '';
-            if (activeModelName) {
-                activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
-            }
-        }
-
-        renderSubTabs();
-        renderPopoverLists();
-    }
-
-    // Initialize sub-tabs bar
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', renderSubTabs);
-    } else {
-        renderSubTabs();
-    }
-
-    const newChatBtn = document.getElementById('new-chat-btn');
-    if (newChatBtn) {
-        newChatBtn.addEventListener('click', function() {
-            createNewSubTab();
-        });
-    }
-
-    const addCtxBtn = document.getElementById('add-ctx-btn');
-    const compressBtn = document.getElementById('compress-btn');
-    const tokenCounter = document.getElementById('token-counter');
-    const ctxMenu = document.getElementById('context-menu');
-    const offlineBadge = document.getElementById('offline-badge');
-    const clearCtxBtn = document.getElementById('clear-ctx-btn');
-
-    const tabBtnLocal = document.getElementById('tab-btn-local');
-    const tabBtnRemote = document.getElementById('tab-btn-remote');
-    const tabBtnMcp = document.getElementById('tab-btn-mcp');
-    const tabBtnExclusions = document.getElementById('tab-btn-exclusions');
-    const tabBtnPalette = document.getElementById('tab-btn-palette');
-
-    function switchSettingsTab(btn, targetId) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        if (btn) btn.classList.add('active');
-        const target = document.getElementById(targetId);
-        if (target) target.classList.add('active');
-    }
-
-    if (tabBtnLocal) tabBtnLocal.addEventListener('click', () => switchSettingsTab(tabBtnLocal, 'tab-content-local'));
-    if (tabBtnRemote) tabBtnRemote.addEventListener('click', () => switchSettingsTab(tabBtnRemote, 'tab-content-remote'));
-    if (tabBtnMcp) tabBtnMcp.addEventListener('click', () => switchSettingsTab(tabBtnMcp, 'tab-content-mcp'));
-    if (tabBtnExclusions) tabBtnExclusions.addEventListener('click', () => switchSettingsTab(tabBtnExclusions, 'tab-content-exclusions'));
-    if (tabBtnPalette) tabBtnPalette.addEventListener('click', () => switchSettingsTab(tabBtnPalette, 'tab-content-palette'));
-
-    // 🎨 Live Custom Palette Color Event Listeners
-    const palTextColor = document.getElementById('palette-text-color');
-    const palHeaderColor = document.getElementById('palette-header-color');
-    const palAccentColor = document.getElementById('palette-accent-color');
-    const palUserBg = document.getElementById('palette-user-bg');
-    const palBotBg = document.getElementById('palette-bot-bg');
-    const palThinkBg = document.getElementById('palette-think-bg');
-
-    function applyCustomPalette() {
-        const root = document.documentElement;
-        if (palAccentColor) root.style.setProperty('--accent-color', palAccentColor.value);
-        if (palUserBg) root.style.setProperty('--user-bg', palUserBg.value);
-        if (palBotBg) root.style.setProperty('--bot-bg', palBotBg.value);
-        if (palThinkBg) root.style.setProperty('--think-bg', palThinkBg.value);
-        if (palTextColor) root.style.setProperty('--text-color', palTextColor.value);
-
-        const savedPalette = {
-            textColor: palTextColor ? palTextColor.value : '',
-            headerColor: palHeaderColor ? palHeaderColor.value : '',
-            accentColor: palAccentColor ? palAccentColor.value : '',
-            userBg: palUserBg ? palUserBg.value : '',
-            botBg: palBotBg ? palBotBg.value : '',
-            thinkBg: palThinkBg ? palThinkBg.value : ''
-        };
-        try { localStorage.setItem('giskard_custom_palette', JSON.stringify(savedPalette)); } catch(e) {}
-    }
-
-    [palTextColor, palHeaderColor, palAccentColor, palUserBg, palBotBg, palThinkBg].forEach(input => {
-        if (input) {
-            input.addEventListener('input', applyCustomPalette);
-            input.addEventListener('change', applyCustomPalette);
+if (settingsModal) {
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.style.display = 'none';
         }
     });
-
-    const btnWhite = document.getElementById('preset-white');
-    const btnCyan = document.getElementById('preset-cyan');
-    const btnEmerald = document.getElementById('preset-emerald');
-    const btnPurple = document.getElementById('preset-purple');
-
-    function setPaletteValues(text, header, accent, userBg, botBg, thinkBg) {
-        if (palTextColor) palTextColor.value = text;
-        if (palHeaderColor) palHeaderColor.value = header;
-        if (palAccentColor) palAccentColor.value = accent;
-        if (palUserBg) palUserBg.value = userBg;
-        if (palBotBg) palBotBg.value = botBg;
-        if (palThinkBg) palThinkBg.value = thinkBg;
-        applyCustomPalette();
-    }
-
-    if (btnWhite) btnWhite.addEventListener('click', () => setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a'));
-    if (btnCyan) btnCyan.addEventListener('click', () => setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7'));
-    if (btnEmerald) btnEmerald.addEventListener('click', () => setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22'));
-    if (btnPurple) btnPurple.addEventListener('click', () => setPaletteValues('#faf5ff', '#ffffff', '#c084fc', '#9333ea', '#3b0764', '#1e1b4b'));
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('giskard_custom_palette') || '{}');
-        if (saved.accentColor) setPaletteValues(saved.textColor, saved.headerColor, saved.accentColor, saved.userBg, saved.botBg, saved.thinkBg);
-    } catch(e) {}
-
-    let currentBotMsgDiv = null;
-    let currentBotRawText = '';
-    let currentActiveModel = '';
-    let selectedContextType = 'none';
-    let _readFilesBatch = [];
-    let _readFileTimer = null;
-
-    /** Flush accumulated tool results (files read, dirs listed, searches) back to the model */
-    function flushToolBatch() {
-        if (_readFilesBatch.length > 0 && _lastUserPrompt) {
-            var combinedContent = _readFilesBatch.map(function(item) {
-                var content = item.content || '';
-                if (content.length > 6000) {
-                    content = content.substring(0, 6000) + '\n... [Contenido truncado a 6000 caracteres para seguridad de contexto]';
-                }
-                return 'File `' + item.path + '`:\n```\n' + content + '\n```';
-            }).join('\n\n');
-            var followUp = '[Contenido de los archivos leídos del workspace]:\n\n' + combinedContent + '\n\nCon base en la información de estos archivos del proyecto, responde a la solicitud del usuario:\n' + _lastUserPrompt;
-            // Hard cap on re-injected content: keep it inside the local model context window
-            // (32K tokens ≈ 24K chars of code) so the follow-up generation never overflows.
-            if (followUp.length > 24000) {
-                followUp = followUp.substring(0, 24000) + '\n\n... [Contenido combinado truncado para no desbordar la ventana de contexto del modelo local]';
-            }
-            _readFilesBatch = [];
-            if (promptInput) {
-                promptInput.value = followUp;
-                setTimeout(function() { send(); }, 300);
-            }
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsModal.style.display === 'flex') {
+            settingsModal.style.display = 'none';
         }
-    }
-
-    /** Fase 3b: render the model's [PLAN] with Approve/Discard buttons */
-    function showPlanCard(planText, modelName, tabId) {
-        if (!messagesDiv) return;
-        const card = document.createElement('div');
-        card.className = 'msg bot system-tool-msg';
-        card.style.cssText = 'border-left:3px solid #a78bfa;padding:8px 10px;font-size:11px;margin:6px 0;';
-        card.innerHTML =
-            '<div style="font-weight:bold;color:#a78bfa;">📋 Plan propuesto por la IA' + (modelName ? ' (' + escapeHtml(modelName) + ')' : '') + '</div>' +
-            '<pre style="white-space:pre-wrap;font-size:10px;max-height:200px;overflow:auto;margin:6px 0;">' + escapeHtml(planText) + '</pre>' +
-            '<div style="display:flex;gap:6px;margin-top:4px;">' +
-            '<button id="plan-approve-btn" style="background:#16a34a;color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:bold;">✅ Aprobar y ejecutar</button>' +
-            '<button id="plan-discard-btn" style="background:transparent;color:#f87171;border:1px solid #f87171;padding:5px 12px;border-radius:4px;font-size:10px;cursor:pointer;">❌ Descartar</button>' +
-            '</div>';
-        messagesDiv.appendChild(card);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-        const approveBtn = card.querySelector('#plan-approve-btn');
-        const discardBtn = card.querySelector('#plan-discard-btn');
-        if (approveBtn) {
-            approveBtn.addEventListener('click', function() {
-                vscode.postMessage({ type: 'approvePlan', plan: planText, model: modelName, tabId: tabId });
-                card.remove();
-            });
-        }
-        if (discardBtn) {
-            discardBtn.addEventListener('click', function() { card.remove(); });
-        }
-    }
-
-    /** Fase 4a: serialize current tabs and persist them in the extension host */
-    function persistChatHistory() {
-        try {
-            const serializable = _subTabs.map(function(t) {
-                return { id: t.id, title: t.title || '', model: t.model || '', messagesHtml: t.messagesHtml || '', rawText: t.rawText || '' };
-            });
-            vscode.postMessage({ type: 'saveChatHistory', tabs: serializable });
-        } catch (e) {}
-    }
-
-    /** Fase 4a: restore persisted tabs from the extension host */
-    function restoreChatHistory(tabs) {
-        if (!Array.isArray(tabs) || tabs.length === 0) return;
-        try {
-            const restored = tabs
-                .filter(function(t) { return t && t.id && t.messagesHtml; })
-                .map(function(t) {
-                    return {
-                        id: String(t.id),
-                        title: t.title || 'Chat',
-                        model: t.model || '',
-                        messagesHtml: String(t.messagesHtml),
-                        rawText: t.rawText || '',
-                        isGenerating: false
-                    };
-                });
-            if (restored.length === 0) return;
-            _subTabs = restored;
-            _subTabCounter = restored.length;
-            _activeTabId = restored[0].id;
-
-            const firstTab = restored[0];
-            if (messagesDiv) messagesDiv.innerHTML = firstTab.messagesHtml;
-            currentActiveModel = firstTab.model || (_enabledModelsCache[0] || '');
-            currentBotRawText = firstTab.rawText || '';
-            currentBotMsgDiv = messagesDiv ? messagesDiv.querySelector('.msg.bot[data-streaming="true"]') : null;
-
-            if (activeModelName) {
-                activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
-            }
-            renderSubTabs();
-            renderPopoverLists();
-            updateTokenCounter();
-        } catch (e) {}
-    }
-
-    function getActiveBotMsgDiv(tabId) {
-        const targetTabId = tabId || _activeTabId;
-        if (targetTabId === _activeTabId) {
-            if (currentBotMsgDiv && document.body.contains(currentBotMsgDiv)) {
-                return currentBotMsgDiv;
-            }
-            const msgDiv = document.getElementById('messages');
-            if (msgDiv) {
-                let found = msgDiv.querySelector('.msg.bot[data-streaming="true"]');
-                if (!found) {
-                    const botMsgs = msgDiv.querySelectorAll('.msg.bot');
-                    if (botMsgs.length > 0) found = botMsgs[botMsgs.length - 1];
-                }
-                if (found) {
-                    currentBotMsgDiv = found;
-                    return found;
-                }
-            }
-        }
-        return null;
-    }
-
-    function updateBotMessageDisplay(div, fullText, modelName, isStreaming) {
-        if (!div) return;
-        currentBotRawText = fullText;
-        let clean = normalizeThinkingTags(fullText);
-        
-        const activeModel = modelName || (modelSelect ? modelSelect.value : 'model');
-        const modelTagHtml = '<div class="model-tag">🏷️ ' + escapeHtml(activeModel) + '</div>';
-
-        // DeepSeek-R1 / Qwen thinking format:  think ...  response
-        if (clean.includes(' response') && (clean.includes(' think') || clean.startsWith(' think'))) {
-            const parts = clean.split(' response');
-            const thinkContent = parts[0].replace(' think', '').trim();
-            const answerContent = parts.slice(1).join(' response').trim();
-            const openAttr = isStreaming ? 'open' : '';
-            div.innerHTML = modelTagHtml +
-                            '<details class="think-box" ' + openAttr + '>' +
-                            '<summary>💡 Razonamiento de la IA (Ocultar/Mostrar)</summary>' +
-                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
-                            '</details>' +
-                            '<div class="answer-content">' + formatMarkdown(answerContent) + '</div>';
-        } else if (clean.startsWith(' think') && !clean.includes(' response')) {
-            const thinkContent = clean.replace(' think', '').trim();
-            div.innerHTML = modelTagHtml +
-                            '<details class="think-box" open>' +
-                            '<summary>💡 Razonamiento de la IA (Razonando…)</summary>' +
-                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
-                            '</details>';
-        } else if (clean.indexOf('</think>') !== -1) {
-            const parts = clean.split('</think>');
-            const thinkContent = parts[0].replace('<think>', '').trim();
-            const answerContent = parts.slice(1).join('</think>').trim();
-
-            const openAttr = isStreaming ? 'open' : '';
-            div.innerHTML = modelTagHtml +
-                            '<details class="think-box" ' + openAttr + '>' +
-                            '<summary>💡 Pensamiento de la IA (Ocultar/Mostrar)</summary>' +
-                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
-                            '</details>' +
-                            '<div class="answer-content">' + formatMarkdown(answerContent) + '</div>';
-        } else if (clean.startsWith('<think>')) {
-            const thinkContent = clean.replace('<think>', '').trim();
-            div.innerHTML = modelTagHtml +
-                            '<details class="think-box" open>' +
-                            '<summary>💡 Pensamiento de la IA (Razonando...)</summary>' +
-                            '<div class="think-content">' + formatMarkdown(thinkContent) + '</div>' +
-                            '</details>';
-        } else {
-            div.innerHTML = modelTagHtml + '<div class="answer-content">' + formatMarkdown(fullText) + '</div>';
-        }
-
-        attachCodeBlockActions(div);
-        attachFileClickHandlers(div);
-    }
-
-    function getModelMaxContext(modelName) {
-        const m = (modelName || '').toLowerCase().trim();
-        return m.startsWith('local:') ? 32768 : 128000;
-    }
-
-    function updateTokenCounter() {
-        if (!messagesDiv || !tokenCounter) return;
-        let totalChars = 0;
-        messagesDiv.querySelectorAll('.msg').forEach(m => totalChars += m.textContent.length);
-        const totalEstTokens = Math.ceil(totalChars / 4);
-
-        const currentModel = currentActiveModel || '';
-        const maxTokens = getModelMaxContext(currentModel);
-
-        tokenCounter.textContent = '🔢 Tokens: ' + totalEstTokens.toLocaleString() + ' / ' + maxTokens.toLocaleString();
-        tokenCounter.style.color = totalEstTokens > (maxTokens * 0.8) ? '#ff6b6b' : 'inherit';
-    }
-
-    if (modelSelect) {
-        modelSelect.addEventListener('change', updateTokenCounter);
-    }
-
-    if (promptInput) promptInput.value = '';
-
-    if (clearCtxBtn) {
-        clearCtxBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'clearContext' });
-        });
-    }
-
-    if (openSettingsBtn) {
-        openSettingsBtn.addEventListener('click', () => { 
-            if (settingsModal) settingsModal.style.display = 'flex';
-            vscode.postMessage({ type: 'loadConnections' });
-            vscode.postMessage({ type: 'loadMcpServers' });
-            vscode.postMessage({ type: 'fetchModels' });
-        });
-    }
-
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => { 
-            if (settingsModal) settingsModal.style.display = 'none'; 
-        });
-    }
-
-    if (settingsModal) {
-        settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) {
-                settingsModal.style.display = 'none';
-            }
-        });
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && settingsModal.style.display === 'flex') {
-                settingsModal.style.display = 'none';
-            }
-        });
-    }
-
-    if (compressBtn) {
-        compressBtn.addEventListener('click', () => {
-            let historyText = '';
-            messagesDiv.querySelectorAll('.msg').forEach(m => {
-                const isUser = m.classList.contains('user');
-                historyText += (isUser ? 'Usuario: ' : 'IA: ') + m.textContent + '\n';
-            });
-
-            if (!historyText.trim()) return;
-
-            const bMsg = document.createElement('div');
-            bMsg.className = 'msg bot';
-            bMsg.textContent = '🧠 Comprimiendo contexto y guardando memoria BCF...';
-            messagesDiv.appendChild(bMsg);
-            currentBotMsgDiv = bMsg;
-            currentBotRawText = '';
-
-            vscode.postMessage({ type: 'compressMemory', history: historyText });
-        });
-    }
-
-    if (addCtxBtn) {
-        addCtxBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (ctxMenu) ctxMenu.style.display = ctxMenu.style.display === 'flex' ? 'none' : 'flex';
-        });
-    }
-
-    document.addEventListener('click', () => {
-        if (ctxMenu) ctxMenu.style.display = 'none';
     });
+}
 
-    const ctxMedia = document.getElementById('ctx-media');
-    if (ctxMedia) ctxMedia.addEventListener('click', () => { selectedContextType = 'media'; addCtxBtn.textContent = '✓ +media'; if (ctxMenu) ctxMenu.style.display = 'none'; });
-    
-    const ctxMentions = document.getElementById('ctx-mentions');
-    if (ctxMentions) ctxMentions.addEventListener('click', () => { selectedContextType = 'mentions'; addCtxBtn.textContent = '✓ +mentions'; if (ctxMenu) ctxMenu.style.display = 'none'; });
-
-    const ctxGraphify = document.getElementById('ctx-graphify');
-    if (ctxGraphify) {
-        ctxGraphify.addEventListener('click', () => {
-            vscode.postMessage({ type: 'runGraphify' });
-            if (ctxMenu) ctxMenu.style.display = 'none';
+if (compressBtn) {
+    compressBtn.addEventListener('click', () => {
+        let historyText = '';
+        messagesDiv.querySelectorAll('.msg').forEach(m => {
+            const isUser = m.classList.contains('user');
+            historyText += (isUser ? 'Usuario: ' : 'IA: ') + m.textContent + '\n';
         });
-    }
 
-    const ctxSkills = document.getElementById('ctx-skills');
-    if (ctxSkills) {
-        ctxSkills.addEventListener('click', () => {
-            vscode.postMessage({ type: 'fetchSkills' });
-            if (ctxMenu) ctxMenu.style.display = 'none';
-        });
-    }
-    
-    const ctxCheck = document.getElementById('ctx-action-check');
-    if (ctxCheck) ctxCheck.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'cargo check' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
-    
-    const ctxPython = document.getElementById('ctx-action-python');
-    const stopBtn = document.getElementById('stop-btn');
-
-    function setGenerationState(isGenerating) {
-        if (sendBtn) sendBtn.style.display = isGenerating ? 'none' : 'inline-block';
-        if (stopBtn) stopBtn.style.display = isGenerating ? 'inline-block' : 'none';
-    }
-
-    if (stopBtn) {
-        stopBtn.addEventListener('click', () => {
-            vscode.postMessage({ type: 'stopGeneration' });
-            setGenerationState(false);
-        });
-    }
-
-    if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
-
-    if (sendBtn) sendBtn.addEventListener('click', send);
-
-    if (promptInput) {
-        promptInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                send();
-            }
-        });
-    }
-
-    function send() {
-        if (!promptInput) return;
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
-
-        _lastUserPrompt = prompt;
-        _toolCallDepth = 0;
-
-        const uMsg = document.createElement('div');
-        uMsg.className = 'msg user';
-        uMsg.textContent = prompt;
-        messagesDiv.appendChild(uMsg);
-
-        promptInput.value = '';
-
-        const activeTabId = _activeTabId;
-        const curTab = _subTabs.find(t => t.id === activeTabId);
-        if (curTab) {
-            curTab.isGenerating = true;
-            curTab.model = currentActiveModel;
-        }
+        if (!historyText.trim()) return;
 
         const bMsg = document.createElement('div');
         bMsg.className = 'msg bot';
-        bMsg.setAttribute('data-streaming', 'true');
-        bMsg.setAttribute('data-tab-id', activeTabId);
-        bMsg.textContent = 'Pensando...';
+        bMsg.textContent = '🧠 Comprimiendo contexto y guardando memoria BCF...';
         messagesDiv.appendChild(bMsg);
         currentBotMsgDiv = bMsg;
         currentBotRawText = '';
-        currentActiveModel = currentActiveModel || (_enabledModelsCache[0] || '');
 
-        if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        updateTokenCounter();
+        vscode.postMessage({ type: 'compressMemory', history: historyText });
+    });
+}
 
-        vscode.postMessage({
-            type: 'sendPrompt',
-            prompt: prompt,
-            model: currentActiveModel,
-            tabId: activeTabId,
-            includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : false,
-            contextType: selectedContextType
-        });
+if (addCtxBtn) {
+    addCtxBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (ctxMenu) ctxMenu.style.display = ctxMenu.style.display === 'flex' ? 'none' : 'flex';
+    });
+}
 
-        selectedContextType = 'none';
-        if (addCtxBtn) addCtxBtn.textContent = '+ Context';
-        setGenerationState(true);
-    }
+document.addEventListener('click', () => {
+    if (ctxMenu) ctxMenu.style.display = 'none';
+});
+if (ctxGraphify) {
+    ctxGraphify.addEventListener('click', () => {
+        vscode.postMessage({ type: 'runGraphify' });
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
+}
+if (ctxSkills) {
+    ctxSkills.addEventListener('click', () => {
+        vscode.postMessage({ type: 'fetchSkills' });
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    });
+}
+function setGenerationState(isGenerating) {
+    if (sendBtn) sendBtn.style.display = isGenerating ? 'none' : 'inline-block';
+    if (stopBtn) stopBtn.style.display = isGenerating ? 'inline-block' : 'none';
+}
 
-    // ── Main Webview Message Router ─────────────────────────────────────
-    window.addEventListener('message', event => {
-        const message = event.data;
-        switch (message.type) {
-            case 'modelsList':
-                if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
-                renderModelFilterList(message);
-                updateModelDropdown(message);
-                break;
-            case 'mcpServersLoaded':
-                if (message.servers && Array.isArray(message.servers)) {
-                    renderMcpServersList(message.servers);
-                }
-                break;
-            case 'mcpTested':
-                const mcpStatusDiv = document.getElementById('mcp-status');
-                if (mcpStatusDiv) {
-                    if (message.ok) {
-                        mcpStatusDiv.innerHTML = `<span style="color:#34d399;font-weight:bold;">✓ Conexión MCP Exitosa (${message.ms}ms)</span>`;
-                    } else {
-                        mcpStatusDiv.innerHTML = `<span style="color:#f87171;font-weight:bold;">❌ Error MCP: ${escapeHtml(message.error || 'Sin respuesta')}</span>`;
-                    }
-                }
-                break;
-            case 'streamStatus': {
-                const targetTabId = message.tabId || _activeTabId;
-                const _phase = message.phase;
-                const _prov = escapeHtml(message.provider || 'servidor');
-                const _local = message.isLocal;
-                const _icon = _local ? '🔌' : '🌐';
-                const _icon2 = _local ? '⚙️' : '📡';
-                const statusHtml = _phase === 'connecting'
-                    ? `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon} Conectando a <b>${_prov}</b>…</span>`
-                    : `<span style="opacity:0.65;font-size:11px;font-style:italic;">${_icon2} Conexión establecida — Generando respuesta…</span>`;
+if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'stopGeneration' });
+        setGenerationState(false);
+    });
+}
 
-                if (targetTabId === _activeTabId) {
-                    const targetDiv = getActiveBotMsgDiv(targetTabId);
-                    if (targetDiv) targetDiv.innerHTML = statusHtml;
-                } else {
-                    const targetTab = _subTabs.find(t => t.id === targetTabId);
-                    if (targetTab) {
-                        const tempContainer = document.createElement('div');
-                        tempContainer.innerHTML = targetTab.messagesHtml || '';
-                        let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
-                        if (!botDiv) {
-                            const botMsgs = tempContainer.querySelectorAll('.msg.bot');
-                            if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
-                        }
-                        if (botDiv) {
-                            botDiv.innerHTML = statusHtml;
-                            targetTab.messagesHtml = tempContainer.innerHTML;
-                        }
-                    }
-                }
-                break;
-            }
+if (ctxPython) ctxPython.addEventListener('click', () => { vscode.postMessage({ type: 'actionBtn', action: 'python3 -m unittest' }); if (ctxMenu) ctxMenu.style.display = 'none'; });
 
-            case 'streamToken': {
-                const targetTabId = message.tabId || _activeTabId;
-                const targetTab = _subTabs.find(t => t.id === targetTabId);
-                if (targetTab) {
-                    targetTab.rawText = (targetTab.rawText || '') + message.token;
-                }
+if (sendBtn) sendBtn.addEventListener('click', send);
 
-                if (targetTabId === _activeTabId) {
-                    const targetTokenDiv = getActiveBotMsgDiv(targetTabId);
-                    const isNearBottom = messagesDiv ? (messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 60) : false;
-
-                    currentBotRawText = (targetTab ? targetTab.rawText : currentBotRawText);
-                    if (targetTokenDiv) {
-                        updateBotMessageDisplay(targetTokenDiv, currentBotRawText, message.model || currentActiveModel, true);
-                    }
-
-                    if (messagesDiv && isNearBottom) {
-                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                    }
-                    updateTokenCounter();
-                } else if (targetTab) {
-                    const tempContainer = document.createElement('div');
-                    tempContainer.innerHTML = targetTab.messagesHtml || '';
-                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
-                    if (!botDiv) {
-                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
-                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
-                    }
-                    if (botDiv) {
-                        updateBotMessageDisplay(botDiv, targetTab.rawText, message.model || targetTab.model, true);
-                        targetTab.messagesHtml = tempContainer.innerHTML;
-                    }
-                }
-                break;
-            }
-
-            case 'streamComplete': {
-                const targetTabId = message.tabId || _activeTabId;
-                const targetTab = _subTabs.find(t => t.id === targetTabId);
-                if (targetTab) targetTab.isGenerating = false;
-
-                var rawFull = targetTab ? (targetTab.rawText || '') : currentBotRawText;
-                var parsed = parseToolCalls(rawFull);
-                var hadTools = parsed.toolCalls.length > 0;
-                var pendingPlan = extractPlan(rawFull);
-                var displayText = hadTools ? parsed.cleanText : rawFull;
-                if (pendingPlan) {
-                    displayText = displayText.replace(/\[PLAN\][\s\S]*?\[\/END_PLAN\]/g, '').trim() || '📋 La IA propuso un plan:';
-                }
-
-                if (targetTabId === _activeTabId) {
-                    const targetCompDiv = getActiveBotMsgDiv(targetTabId);
-                    if (targetCompDiv) {
-                        targetCompDiv.removeAttribute('data-streaming');
-                        updateBotMessageDisplay(targetCompDiv, displayText, message.model || currentActiveModel, false);
-                    }
-                    currentBotMsgDiv = null;
-                    currentBotRawText = '';
-                    updateTokenCounter();
-                    setGenerationState(false);
-                } else if (targetTab) {
-                    const tempContainer = document.createElement('div');
-                    tempContainer.innerHTML = targetTab.messagesHtml || '';
-                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
-                    if (!botDiv) {
-                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
-                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
-                    }
-                    if (botDiv) {
-                        botDiv.removeAttribute('data-streaming');
-                        updateBotMessageDisplay(botDiv, displayText, message.model || targetTab.model, false);
-                        targetTab.messagesHtml = tempContainer.innerHTML;
-                    }
-                }
-
-                // Fase 3b: model proposed a plan — show approve/discard UI, do NOT execute tools yet
-                if (pendingPlan && targetTabId === _activeTabId) {
-                    showPlanCard(pendingPlan, message.model || currentActiveModel, targetTabId);
-                } else if (hadTools && targetTabId === _activeTabId) {
-                    setTimeout(function() { dispatchToolCalls(parsed.toolCalls); }, 80);
-                }
-                persistChatHistory();
-                break;
-            }
-
-            case 'actionResult':
-                if (currentBotMsgDiv) {
-                    currentBotMsgDiv.textContent = message.message || message.text;
-                }
-                setGenerationState(false);
-                break;
-            case 'contextCleared':
-                if (messagesDiv) messagesDiv.innerHTML = '';
-                currentBotMsgDiv = null;
-                currentBotRawText = '';
-                currentActiveModel = '';
-                if (tokenCounter) tokenCounter.textContent = 'Tokens: 0';
-                setGenerationState(false);
-                break;
-
-            case 'injectCodeSnippet': {
-                // Fix wave 7a: el host envía {contextBlock:{relativePath,startLine,endLine,code,lang}} (webviewContract)
-                const cb = message.contextBlock || {};
-                if (messagesDiv && cb.code) {
-                    const ctxDiv = document.createElement('div');
-                    ctxDiv.className = 'msg context-block';
-                    ctxDiv.innerHTML = `<span style="font-size:9px; color:#38bdf8; font-weight:bold;">📎 Contexto adjunto (Ctrl+L)</span><br>` +
-                        `<span style="opacity:0.7; font-size:9px;">${escapeHtml(cb.relativePath || '')} · Línea ${cb.startLine || '?'}–${cb.endLine || '?'}${cb.lang ? ' · ' + escapeHtml(cb.lang) : ''}</span><br>` +
-                        `<pre style="margin:4px 0 0 0; font-size:10px; max-height:80px; overflow:auto;"><code>${escapeHtml(cb.code)}</code></pre>`;
-                    messagesDiv.appendChild(ctxDiv);
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }
-                break;
-            }
-
-
-            case 'offlineMode':
-                if (offlineBadge) {
-                    if (message.active) {
-                        offlineBadge.classList.add('visible');
-                    } else {
-                        offlineBadge.classList.remove('visible');
-                    }
-                }
-                break;
-
-            case 'connectionsLoaded':
-                renderConnectionsList(message.connections);
-                break;
-
-            case 'connectionTested':
-                const connStatusDiv = document.getElementById('connection-status');
-                if (connStatusDiv) {
-                    if (message.ok) {
-                        connStatusDiv.innerHTML = `<span style="color:#4ade80;font-weight:bold;">✓ Conectado (${message.ms}ms) — HTTP ${message.status}</span>`;
-                    } else {
-                        connStatusDiv.innerHTML = `<span style="color:#f87171;font-weight:bold;">❌ Falló (${message.ms}ms): ${escapeHtml(message.error)}</span>`;
-                    }
-                }
-                break;
-
-            case 'openSettings':
-                if (settingsModal) {
-                    settingsModal.style.display = 'flex';
-                }
-                break;
-
-            case 'selectTheme':
-                const themePreset = (message.theme || message.preset || '').toLowerCase();
-                if (themePreset.includes('white') || themePreset.includes('light')) setPaletteValues('#ffffff', '#ffffff', '#e2e8f0', '#334155', '#1e293b', '#0f172a');
-                else if (themePreset.includes('cyan') || themePreset.includes('neon')) setPaletteValues('#f8fafc', '#ffffff', '#38bdf8', '#0284c7', '#0f172a', '#0284c7');
-                else if (themePreset.includes('emerald') || themePreset.includes('midnight')) setPaletteValues('#ecfdf5', '#ffffff', '#34d399', '#059669', '#064e3b', '#022c22');
-                else setPaletteValues('#faf5ff', '#ffffff', '#c084fc', '#9333ea', '#3b0764', '#1e1b4b');
-                break;
-
-            case 'clearMessages':
-                if (messagesDiv) {
-                    messagesDiv.innerHTML = '';
-                    currentBotMsgDiv = null;
-                    currentBotRawText = '';
-                }
-                persistChatHistory();
-                break;
-
-            case 'chatHistoryRestored':
-                restoreChatHistory(message.tabs);
-                break;
-
-            case 'setEnabledModels':
-                console.log('[Giskard Webview] setEnabledModels payload:', message.enabledModels);
-                if (Array.isArray(message.enabledModels)) {
-                    _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
-                    if (_enabledModelsCache.length > 0 && !currentActiveModel) {
-                        currentActiveModel = _enabledModelsCache[0];
-                    }
-                    if (activeModelName) {
-                        activeModelName.textContent = '🤖 ' + (currentActiveModel || 'Modelo');
-                    }
-                    renderPopoverLists();
-                }
-                break;
-
-            case 'modelsList':
-                console.log('[Giskard Webview] modelsList payload:', message);
-                if (Array.isArray(message.enabledModels)) {
-                    _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
-                }
-                let list = [];
-                if (Array.isArray(message.models)) list = list.concat(message.models);
-                if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
-                if (Array.isArray(message.groups)) {
-                    message.groups.forEach(g => {
-                        if (g && Array.isArray(g.models)) {
-                            list = list.concat(g.models);
-                        }
-                    });
-                }
-                _allModelsCache = Array.from(new Set(list.map(cleanModelName).filter(Boolean)));
-
-                if (!currentActiveModel) {
-                    currentActiveModel = _enabledModelsCache[0] || _allModelsCache[0] || '';
-                }
-
-                const activeCurTab = _subTabs.find(t => t.id === _activeTabId);
-                if (activeCurTab) {
-                    if (!activeCurTab.model && currentActiveModel) {
-                        activeCurTab.model = currentActiveModel;
-                    }
-                    if (activeModelName) {
-                        activeModelName.textContent = '🤖 ' + (activeCurTab.model || currentActiveModel || 'Modelo');
-                    }
-                }
-
-                if (message.connectionMode && offlineBadge) {
-                    if (message.connectionMode === 'giskardSysActive') {
-                        offlineBadge.style.display = 'inline-block';
-                        offlineBadge.textContent = '🛡️ Giskard-Sys';
-                        offlineBadge.title = 'Conector Giskard-Sys activo con Sandbox Jail';
-                    } else {
-                        offlineBadge.style.display = 'inline-block';
-                        offlineBadge.textContent = '⚡ Ollama Directo';
-                        offlineBadge.title = 'Modo Ollama local directo (puerto 11434)';
-                    }
-                }
-
-                renderSubTabs();
-                renderPopoverLists();
-                break;
-
-            case 'toolReadFileResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error reading <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
-                } else {
-                    vscode.postMessage({ type: 'openFile', relativePath: message.path });
-                    appendActivityPill(
-                        'Read 1 file ➔ <code>' + escapeHtml(message.path) + '</code> (' + (message.content || '').length + ' chars)',
-                        '🔍'
-                    );
-                    _readFilesBatch.push(message);
-                    if (_readFileTimer) clearTimeout(_readFileTimer);
-                    _readFileTimer = setTimeout(flushToolBatch, 600);
-                }
-                break;
-
-            case 'toolListDirResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error listando <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
-                } else {
-                    appendActivityPill('📂 <code>' + escapeHtml(message.path) + '</code> — ' + (message.listing ? message.listing.split('\n').length : 0) + ' entradas', '📂');
-                    _readFilesBatch.push({ path: message.path + ' (listado)', content: message.listing || '(vacío)' });
-                    if (_readFileTimer) clearTimeout(_readFileTimer);
-                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
-                }
-                break;
-
-            case 'toolSearchResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error buscando: ' + escapeHtml(message.error), '❌');
-                } else {
-                    var sFiles = Array.isArray(message.files) ? message.files : [];
-                    appendActivityPill('🔍 «' + escapeHtml(message.query) + '» → ' + sFiles.length + ' resultados', '🔍');
-                    _readFilesBatch.push({ path: 'search:' + message.query, content: sFiles.length ? sFiles.join('\n') : '(sin resultados)' });
-                    if (_readFileTimer) clearTimeout(_readFileTimer);
-                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
-                }
-                break;
-
-            case 'toolGlobResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error en glob: ' + escapeHtml(message.error), '❌');
-                } else {
-                    var gFiles = Array.isArray(message.files) ? message.files : [];
-                    appendActivityPill('🗂️ ' + escapeHtml(message.pattern || '**/*') + ' → ' + gFiles.length + ' archivos', '🗂️');
-                    _readFilesBatch.push({ path: 'glob:' + (message.pattern || '**/*'), content: gFiles.length ? gFiles.join('\n') : '(sin resultados)' });
-                    if (_readFileTimer) clearTimeout(_readFileTimer);
-                    _readFileTimer = setTimeout(function() { flushToolBatch(); }, 600);
-                }
-                break;
-
-            case 'toolWriteFileResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error aplicando diff a <code>' + escapeHtml(message.path) + '</code>: ' + escapeHtml(message.error), '❌');
-                } else if (message.diffOpened) {
-                    appendActivityPill('Abierto cambio in-place para <code>' + escapeHtml(message.path) + '</code> — Acepta o rechaza en el editor.', '📝');
-                } else if (message.success) {
-                    appendActivityPill('Cambios aplicados a <code>' + escapeHtml(message.path) + '</code>', '✅');
-                }
-                break;
-
-            case 'toolExecResult':
-                if (message.error) {
-                    appendActivityPill('❌ Error ejecutando: ' + escapeHtml(message.error), '❌');
-                } else {
-                    appendActivityPill(
-                        'Ejecutó comando en terminal:<br><pre style="font-size:9px;margin:4px 0;max-height:120px;overflow:auto;">' + escapeHtml(message.output || '(sin salida)') + '</pre>',
-                        '⚡'
-                    );
-                }
-                break;
-
-            case 'streamError':
-            case 'settingsError': {
-                const targetTabId = message.tabId || _activeTabId;
-                const targetTab = _subTabs.find(t => t.id === targetTabId);
-                if (targetTab) targetTab.isGenerating = false;
-
-                let errText = message.error || 'Unknown error';
-                if (errText.indexOf('os error 2') !== -1 || errText.indexOf('No such file') !== -1) {
-                    errText = `⚠️ CLI tool '${(message.model || currentActiveModel).replace('cli:', '')}' is not installed.\n\n💡 Use Local Swarm models (Ollama) or configure a Remote API Key in Settings ⚙️.`;
-                }
-                const formattedErr = errText.startsWith('⚠️') ? errText : `⚠️ **Connection Error**:\n\n${errText}`;
-
-                if (targetTabId === _activeTabId) {
-                    const targetErrDiv = getActiveBotMsgDiv(targetTabId);
-                    if (targetErrDiv) {
-                        targetErrDiv.removeAttribute('data-streaming');
-                        updateBotMessageDisplay(targetErrDiv, formattedErr, message.model || currentActiveModel, false);
-                    }
-                    currentBotMsgDiv = null;
-                    currentBotRawText = '';
-                    setGenerationState(false);
-                } else if (targetTab) {
-                    const tempContainer = document.createElement('div');
-                    tempContainer.innerHTML = targetTab.messagesHtml || '';
-                    let botDiv = tempContainer.querySelector('.msg.bot[data-streaming="true"]');
-                    if (!botDiv) {
-                        const botMsgs = tempContainer.querySelectorAll('.msg.bot');
-                        if (botMsgs.length > 0) botDiv = botMsgs[botMsgs.length - 1];
-                    }
-                    if (botDiv) {
-                        botDiv.removeAttribute('data-streaming');
-                        updateBotMessageDisplay(botDiv, formattedErr, message.model || targetTab.model, false);
-                        targetTab.messagesHtml = tempContainer.innerHTML;
-                    }
-                }
-                break;
-            }
+if (promptInput) {
+    promptInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            send();
         }
     });
+}
 
-    // Send ready signal to host on startup
-    vscode.postMessage({ type: 'webviewReady' });
-    vscode.postMessage({ type: 'fetchModels' });
-    vscode.postMessage({ type: 'restoreChatHistory' });
-})();
+function send() {
+    if (!promptInput) return;
+    const prompt = promptInput.value.trim();
+    if (!prompt) return;
+
+    _lastUserPrompt = prompt;
+    _toolCallDepth = 0;
+
+    const uMsg = document.createElement('div');
+    uMsg.className = 'msg user';
+    uMsg.textContent = prompt;
+    messagesDiv.appendChild(uMsg);
+
+    promptInput.value = '';
+
+    const activeTabId = _activeTabId;
+    const curTab = _subTabs.find(t => t.id === activeTabId);
+    if (curTab) {
+        curTab.isGenerating = true;
+        curTab.model = currentActiveModel;
+    }
+
+    const bMsg = document.createElement('div');
+    bMsg.className = 'msg bot';
+    bMsg.setAttribute('data-streaming', 'true');
+    bMsg.setAttribute('data-tab-id', activeTabId);
+    bMsg.textContent = 'Pensando...';
+    messagesDiv.appendChild(bMsg);
+    currentBotMsgDiv = bMsg;
+    currentBotRawText = '';
+    currentActiveModel = currentActiveModel || (_enabledModelsCache[0] || '');
+
+    if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    updateTokenCounter();
+
+    vscode.postMessage({
+        type: 'sendPrompt',
+        prompt: prompt,
+        model: currentActiveModel,
+        tabId: activeTabId,
+        includeActiveFile: incFileCheckbox ? incFileCheckbox.checked : false,
+        contextType: selectedContextType
+    });
+
+    selectedContextType = 'none';
+    if (addCtxBtn) addCtxBtn.textContent = '+ Context';
+    setGenerationState(true);
+}
