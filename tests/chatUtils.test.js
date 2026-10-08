@@ -6,13 +6,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'media', 'chatUtils.js'), 'utf8');
 const sandbox = {
     acquireVsCodeApi: () => ({ postMessage: () => {} }),
     console,
 };
 vm.createContext(sandbox);
-vm.runInContext(src, sandbox);
+
+// wave E: el código se dividió en chatUtils + chatTools + chatMarkdown
+// (mismo scope global compartido; se cargan en orden como en htmlShell).
+for (const file of ['chatUtils.js', 'chatTools.js', 'chatMarkdown.js']) {
+    const part = fs.readFileSync(path.join(__dirname, '..', 'media', file), 'utf8');
+    vm.runInContext(part, sandbox);
+}
 
 const parseToolCalls = sandbox.parseToolCalls;
 const preprocessMarkdown = sandbox.preprocessMarkdown;

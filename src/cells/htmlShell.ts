@@ -11,6 +11,8 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'marked.min.js'));
     const highlightUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'highlight.min.js'));
     const chatUtilsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatUtils.js'));
+    const chatToolsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatTools.js'));
+    const chatMarkdownUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatMarkdown.js'));
     const chatStateUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatState.js'));
     const chatTabsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chatTabs.js'));
     const chatMessagesUri = webview.asWebviewUri(
@@ -363,6 +365,8 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
     <script src="${markedUri}"></script>
     <script src="${highlightUri}"></script>
     <script src="${chatUtilsUri}"></script>
+    <script src="${chatToolsUri}"></script>
+    <script src="${chatMarkdownUri}"></script>
     <script src="${chatStateUri}"></script>
     <script src="${chatTabsUri}"></script>
     <script src="${chatMessagesUri}"></script>
