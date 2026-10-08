@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { ConnectionStore } from '../core/connectionStore';
+import { fetchLlmModelsGrouped } from '../core/api';
 import { addRun, removeRun, updateRun } from '../core/agentRegistry';
 import {
     AgentRunner,
@@ -40,12 +41,51 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
             });
             if (!task || !task.trim()) return;
 
+            // QuickPick con los modelos habilitados (cualquiera sirve; los
+            // remotos corren en paralelo, los locales son single-thread).
             const enabled = store.getEnabledModels();
-            const model = await vscode.window.showInputBox({
-                prompt: 'Modelo para este agente (remoto = corre en paralelo)',
-                value: enabled[0] || '',
-                placeHolder: 'ej. deepseek/deepseek-chat (OpenRouter) o llama-3.3-70b (NIM)'
+            const groups = await fetchLlmModelsGrouped().catch(() => []);
+            const providerOf = new Map<string, string>();
+            groups.forEach((g) => {
+                (g.models || []).forEach((m) => {
+                    if (m && !providerOf.has(m)) {
+                        providerOf.set(m, `${(g.connectionTag || 'AI').toUpperCase()} · ${g.connectionName}`);
+                    }
+                });
             });
+
+            interface ModelPick extends vscode.QuickPickItem {
+                model?: string;
+                custom?: boolean;
+            }
+            const items: ModelPick[] = enabled.map((m) => ({
+                label: m,
+                description: providerOf.get(m) || 'proveedor desconocido',
+                model: m
+            }));
+            if (items.length > 0) {
+                items.push({ label: '$(edit) Otro modelo (escribir manualmente)…', custom: true });
+            }
+
+            let model: string | undefined;
+            if (items.length > 0) {
+                const pick = await vscode.window.showQuickPick(items, {
+                    placeHolder: 'Modelo para este agente — remoto = corre en paralelo',
+                    matchOnDescription: true
+                });
+                if (!pick) return;
+                model = pick.custom
+                    ? await vscode.window.showInputBox({
+                          prompt: 'Modelo (id exacto como aparece en el picker del chat)',
+                          value: enabled[0] || ''
+                      })
+                    : pick.model;
+            } else {
+                model = await vscode.window.showInputBox({
+                    prompt: 'No hay modelos habilitados — escribe el id del modelo (ej. de una conexión activa)',
+                    placeHolder: 'ej. deepseek/deepseek-chat o llama-3.3-70b-instruct'
+                });
+            }
             if (!model || !model.trim()) return;
 
             const defaultName = task.trim().slice(0, 40) + (task.trim().length > 40 ? '…' : '');
@@ -57,7 +97,7 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
 
             const run = addRun(makeAgentRunState(context), { name, task: task.trim(), model: model.trim() });
             tree.refresh();
-            vscode.window.showInformationMessage(`🛰️ Agente "${name}" lanzado (${model}).`);
+            vscode.window.showInformationMessage(`🛰️ Agente "${name}" lanzado (${model.trim()}).`);
             // Fire-and-forget: el run corre en background con su propio OutputChannel
             void runner.start(run);
         }),
