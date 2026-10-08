@@ -275,13 +275,23 @@ window.addEventListener('message', (event) => {
             }
             // Regla del picker: SOLO los modelos habilitados en el sidebar
             _allModelsCache = _enabledModelsCache.slice();
-            // Mapa modelo → proveedor (badge del picker), desde las conexiones activas
+            // Mapa modelo → proveedor (badge del picker). Desambiguación: el
+            // mismo id puede existir en varios catálogos (p. ej. nvidia/nemotron
+            // está en NIM y en OpenRouter) — gana el proveedor específico sobre
+            // el agregador.
             _modelProviderMap = {};
+            const AGGREGATOR_TAGS = ['OPENROUTER'];
             if (Array.isArray(message.groups)) {
                 message.groups.forEach((g) => {
                     if (g && Array.isArray(g.models)) {
                         g.models.forEach((m) => {
-                            if (m) _modelProviderMap[cleanModelName(m)] = (g.connectionTag || '').toUpperCase();
+                            const key = cleanModelName(m);
+                            if (!key) return;
+                            const tag = (g.connectionTag || '').toUpperCase();
+                            const prev = _modelProviderMap[key];
+                            if (!prev || (AGGREGATOR_TAGS.includes(prev) && !AGGREGATOR_TAGS.includes(tag))) {
+                                _modelProviderMap[key] = tag;
+                            }
                         });
                     }
                 });

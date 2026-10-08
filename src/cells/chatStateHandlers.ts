@@ -54,12 +54,12 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     // conexiones deshabilitadas —p. ej. Ollama apagado— quedan fuera).
     const knownModels = new Set([...flatGroupModels, ...remoteModels].filter((m) => Boolean(m)));
 
-    // Regla estricta del picker: SOLO lo que el usuario habilitó en el sidebar.
-    // SIN auto-enable: si la lista está vacía, el picker se muestra vacío con
-    // su mensaje (antes re-habilitaba todo silenciosamente — bug reportado).
+    // Regla estricta del picker: SOLO lo que el usuario habilitó en el sidebar,
+    // existente en conexiones ACTIVAS. El webview recibe la lista YA filtrada
+    // (antes le mandábamos el store completo y pintaba modelos desconectados).
     const visibleModels = enabledModels.filter((m) => knownModels.has(m));
 
-    ctx.postMessage({ type: 'setEnabledModels', enabledModels });
+    ctx.postMessage({ type: 'setEnabledModels', enabledModels: visibleModels });
 
     const config = vscode.workspace.getConfiguration('giskard-assistant');
     const isGiskardSysEnabled = config.get<boolean>('giskardSys.enabled', false);
@@ -68,7 +68,7 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     ctx.postMessage({
         type: 'modelsList',
         models: visibleModels,
-        enabledModels,
+        enabledModels: visibleModels,
         groups,
         localModels,
         activeTag,

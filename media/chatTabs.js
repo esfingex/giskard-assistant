@@ -42,11 +42,14 @@ if (popoverSearchInput) {
 }
 
 /** Etiqueta de proveedor para el badge del picker: mapa de conexiones activas,
- * con heurística ligera de respaldo (solo matches explícitos — sin overmatch). */
+ * con heurística ligera de respaldo. Ollama primero: hf.co/, GGUF y el formato
+ * local 'modelo:tag' (sin slash) NO son Qwen/GPT aunque el nombre lo parezca. */
 function providerLabelFor(modelName) {
     if (_modelProviderMap[modelName]) return _modelProviderMap[modelName];
     const m = (modelName || '').toLowerCase();
+    if (m.startsWith('hf.co/') || m.includes('gguf')) return 'OLLAMA';
     if (m.startsWith('local:')) return 'OLLAMA';
+    if (!m.includes('/') && m.includes(':')) return 'OLLAMA';
     if (m.includes('deepseek')) return 'DEEPSEEK';
     if (m.includes('kimi') || m.includes('moonshot')) return 'KIMI';
     if (m.includes('qwen') || m.includes('dashscope')) return 'QWEN';
