@@ -105,6 +105,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "giskard-assistant.clearEnabledModels",
+        "title": "🧹 Vaciar modelos habilitados",
+        "icon": "$(clear-all)",
+        "category": "Giskard"
+      },
+      {
         "command": "giskard-assistant.addAgentRunTree",
         "title": "🛰️ Nuevo Agente (run en paralelo)",
         "icon": "$(add)"
@@ -335,6 +341,11 @@
           "command": "giskard-assistant.createCheckpoint",
           "when": "view == giskard-agent-runs",
           "group": "navigation@2"
+        },
+        {
+          "command": "giskard-assistant.clearEnabledModels",
+          "when": "view == giskard-local-models",
+          "group": "navigation@5"
         },
         {
           "command": "giskard-assistant.newChatContext",

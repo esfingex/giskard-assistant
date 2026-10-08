@@ -159,6 +159,14 @@ export function registerTreeCommands(ctx: TreeCommandsContext): vscode.Disposabl
                 }
             }
         }),
+        vscode.commands.registerCommand('giskard-assistant.clearEnabledModels', async () => {
+            store.setEnabledModels([]);
+            localModelsTree.refresh();
+            modelSettingsProvider.refresh();
+            await provider.refreshState();
+            EventBus.instance.fire('modelsUpdated');
+            vscode.window.showInformationMessage('🧹 Lista de modelos habilitados vaciada — escoge de nuevo en el árbol.');
+        }),
         vscode.commands.registerCommand('giskard-assistant.openSettingsModal', async () => {
             await vscode.commands.executeCommand('workbench.view.extension.giskard-explorer');
         }),

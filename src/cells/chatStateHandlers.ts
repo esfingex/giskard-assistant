@@ -26,7 +26,7 @@ export interface ChatStateContext {
 export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     if (!ctx.view && !ctx.panel) return;
 
-    let enabledModels = ctx.store.getEnabledModels();
+    const enabledModels = ctx.store.getEnabledModels();
 
     const activeConn = ctx.store.getActive();
     const activeTag = activeConn?.tag || 'giskard-sys';
@@ -54,13 +54,9 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     // conexiones deshabilitadas —p. ej. Ollama apagado— quedan fuera).
     const knownModels = new Set([...flatGroupModels, ...remoteModels].filter((m) => Boolean(m)));
 
-    // Auto-enable solo si NUNCA se ha escogido nada (primera corrida del usuario)
-    if (enabledModels.length === 0 && knownModels.size > 0) {
-        enabledModels = Array.from(knownModels);
-        ctx.store.setEnabledModels(enabledModels);
-    }
-
-    // Regla del picker: SOLO los modelos habilitados en el sidebar son visibles
+    // Regla estricta del picker: SOLO lo que el usuario habilitó en el sidebar.
+    // SIN auto-enable: si la lista está vacía, el picker se muestra vacío con
+    // su mensaje (antes re-habilitaba todo silenciosamente — bug reportado).
     const visibleModels = enabledModels.filter((m) => knownModels.has(m));
 
     ctx.postMessage({ type: 'setEnabledModels', enabledModels });
