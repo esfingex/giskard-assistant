@@ -7,6 +7,7 @@
  */
 
 import * as vscode from 'vscode';
+import { resolveApiKeyForTag } from './connectionStoreCells';
 
 export interface Connection {
     id: number;
@@ -36,83 +37,32 @@ export interface McpServer {
     createdAt: string;
 }
 
-export interface ModelSettings {
-    temperature: number; // 0.0 - 1.0
-    topP: number; // 0.0 - 1.0
-    topK: number; // 1 - 100
-    numCtx: number; // 2048 - 128000
-    numPredict: number; // 512 - 4096
-    think?: boolean;
-    thinkBudget?: number;
-}
+import {
+    CONNECTIONS_KEY as STORAGE_KEY,
+    MCP_SERVERS_KEY as MCP_STORAGE_KEY,
+    EXCLUSION_PATTERNS_KEY as EXCLUSION_STORAGE_KEY,
+    MODEL_OVERRIDES_KEY as MODEL_OVERRIDES_STORAGE_KEY,
+    INITIALIZED_KEY,
+    ACTIVE_CHAT_MODEL_KEY,
+    ENABLED_CHAT_MODELS_KEY,
+    SECRET_REF_PREFIX,
+    REMOTE_PROVIDER_TAGS,
+    LOCAL_PROVIDER_TAGS,
+    DEFAULT_EXCLUSIONS
+} from './constants';
+import { GISKARD_SYS_DEFAULT_URL } from './providers';
+import type { ModelSettings } from './modelCapabilities';
+import { DEFAULT_MODEL_SETTINGS } from './modelCapabilities';
 
-const STORAGE_KEY = 'giskard_connections_v1';
-const MCP_STORAGE_KEY = 'giskard_mcp_servers_v1';
-const EXCLUSION_STORAGE_KEY = 'giskard_exclusion_patterns_v1';
-const MODEL_OVERRIDES_STORAGE_KEY = 'giskard_model_overrides_v1';
-
-export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
-    temperature: 0.7,
-    topP: 0.9,
-    topK: 40,
-    numCtx: 32768,
-    numPredict: 4096,
-    think: false,
-    thinkBudget: 2048
-};
-
-export interface ModelCapabilities {
-    thinking: boolean;
-    tools: boolean;
-    vision: boolean;
-    embedding: boolean;
-}
-
-export function getModelCapabilities(modelName: string): ModelCapabilities {
-    const l = (modelName || '').toLowerCase();
-    const thinking =
-        l.includes('r1') ||
-        l.includes('reasoner') ||
-        l.includes('qwq') ||
-        l.includes('nemotron-3') ||
-        l.includes('thinking');
-    const tools =
-        l.includes('instruct') ||
-        l.includes('coder') ||
-        l.includes('gpt') ||
-        l.includes('claude') ||
-        l.includes('gemini') ||
-        l.includes('llama-3');
-    const vision =
-        l.includes('vision') ||
-        l.includes('vl') ||
-        l.includes('gpt-4o') ||
-        l.includes('gemini-1.5') ||
-        l.includes('gemini-2') ||
-        l.includes('claude-3');
-    const embedding = l.includes('embed') || l.includes('bge') || l.includes('nomic');
-    return { thinking, tools, vision, embedding };
-}
-
-export const DEFAULT_EXCLUSIONS = [
-    'node_modules',
-    'out',
-    'dist',
-    'target',
-    'build',
-    'coverage',
-    '.git',
-    '.gemini',
-    '.cache',
-    'venv',
-    '.venv'
-];
+// Compat: los consumidores siguen importando estos símbolos desde connectionStore
+export { DEFAULT_MODEL_SETTINGS, getModelCapabilities } from './modelCapabilities';
+export type { ModelSettings } from './modelCapabilities';
 
 export class ConnectionStore {
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     async init(): Promise<void> {
-        const isInitialized = this.context.globalState.get<boolean>('giskard_initialized_v1', false);
+        const isInitialized = this.context.globalState.get<boolean>(INITIALIZED_KEY, false);
         if (!isInitialized) {
             const connections = this._getRawList();
             if (connections.length === 0) {
@@ -120,7 +70,7 @@ export class ConnectionStore {
                     id: 1,
                     name: 'Backend Local (Default)',
                     type: 'local',
-                    url: 'http://localhost:3500',
+                    url: GISKARD_SYS_DEFAULT_URL,
                     tag: 'giskard-sys',
                     secretRef: null,
                     isActive: true,
@@ -128,7 +78,7 @@ export class ConnectionStore {
                 };
                 await this.context.globalState.update(STORAGE_KEY, [defaultConn]);
             }
-            await this.context.globalState.update('giskard_initialized_v1', true);
+            await this.context.globalState.update(INITIALIZED_KEY, true);
         }
 
         // Seed default local MCP server if empty
@@ -196,17 +146,17 @@ export class ConnectionStore {
 
     /** Get active selected model for Chat */
     getActiveChatModel(): string | undefined {
-        return this.context.globalState.get<string>('giskard_active_chat_model');
+        return this.context.globalState.get<string>(ACTIVE_CHAT_MODEL_KEY);
     }
 
     /** Set active selected model for Chat */
     async setActiveChatModel(model: string): Promise<void> {
-        await this.context.globalState.update('giskard_active_chat_model', model);
+        await this.context.globalState.update(ACTIVE_CHAT_MODEL_KEY, model);
     }
 
     /** Get array of multi-selected enabled models for Chat dropdown */
     getEnabledModels(): string[] {
-        const raw = this.context.globalState.get<string[]>('giskard_enabled_chat_models_v1') || [];
+        const raw = this.context.globalState.get<string[]>(ENABLED_CHAT_MODELS_KEY) || [];
         return raw.filter((m) => typeof m === 'string' && m.trim().length > 0 && m !== '[object Object]');
     }
 
@@ -230,7 +180,7 @@ export class ConnectionStore {
             newState = true;
         }
 
-        await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
+        await this.context.globalState.update(ENABLED_CHAT_MODELS_KEY, list);
         return newState;
     }
 
@@ -238,7 +188,7 @@ export class ConnectionStore {
     async removeEnabledModel(modelName: string): Promise<void> {
         const current = this.getEnabledModels();
         const list = current.filter((m) => m !== modelName);
-        await this.context.globalState.update('giskard_enabled_chat_models_v1', list);
+        await this.context.globalState.update(ENABLED_CHAT_MODELS_KEY, list);
         await this.removeModelOverrides(modelName);
     }
 
@@ -246,7 +196,7 @@ export class ConnectionStore {
     setEnabledModels(models: string[]): void {
         const clean = models.map((m) => (typeof m === 'string' ? m.trim() : '')).filter(Boolean);
         // Use synchronous update pattern — globalState.update is async but fire-and-forget is safe here
-        void this.context.globalState.update('giskard_enabled_chat_models_v1', clean);
+        void this.context.globalState.update(ENABLED_CHAT_MODELS_KEY, clean);
     }
 
     /** Add a new connection profile */
@@ -259,7 +209,7 @@ export class ConnectionStore {
     ): Promise<number> {
         let secretRef: string | null = null;
         if (apiKey && apiKey.trim()) {
-            secretRef = `conn_${Date.now()}_token`;
+            secretRef = `${SECRET_REF_PREFIX}${Date.now()}_token`;
             await this.context.secrets.store(secretRef, apiKey.trim());
         }
 
@@ -300,7 +250,7 @@ export class ConnectionStore {
         const conn = list.find((c) => c.id === id);
         if (!conn) return;
         if (!conn.secretRef) {
-            conn.secretRef = `conn_${id}_token`;
+            conn.secretRef = `${SECRET_REF_PREFIX}${id}_token`;
         }
         await this.context.secrets.store(conn.secretRef, apiKey.trim());
         // Clear provider model caches so next fetch picks up the new key's available models
@@ -332,7 +282,7 @@ export class ConnectionStore {
         }
 
         if (list.length === 0) {
-            await this.context.globalState.update('giskard_enabled_chat_models_v1', []);
+            await this.context.globalState.update(ENABLED_CHAT_MODELS_KEY, []);
         }
 
         await this._saveRawList(list);
@@ -360,7 +310,7 @@ export class ConnectionStore {
             list.find(
                 (c) =>
                     c.isActive &&
-                    (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'openrouter'].includes(c.tag))
+                    (c.type === 'remote' || REMOTE_PROVIDER_TAGS.includes(c.tag))
             ) || null
         );
     }
@@ -370,7 +320,7 @@ export class ConnectionStore {
         const list = this._getRawList();
         return (
             list.find(
-                (c) => c.isActive && (c.type === 'local' || c.tag === 'giskard-sys' || c.tag === 'ollama')
+                (c) => c.isActive && (c.type === 'local' || LOCAL_PROVIDER_TAGS.includes(c.tag))
             ) || null
         );
     }
@@ -393,53 +343,16 @@ export class ConnectionStore {
     }
 
     /** Robust API key lookup with session RAM cache: tries exact tag match, active connection, then any saved secret in SecretStorage */
-    async getAnyRemoteApiKey(providerTag?: string): Promise<{ apiKey: string; url?: string } | null> {
-        const cleanTag = (providerTag || '').toLowerCase().trim();
-        const cacheKey = cleanTag || '__default__';
-
-        if (this._cachedTokenMap.has(cacheKey)) {
-            return this._cachedTokenMap.get(cacheKey)!;
-        }
-
-        const list = this._getRawList();
-
-        // 1. Exact tag match
-        if (cleanTag) {
-            const tagConn = list.find((c) => (c.tag || '').toLowerCase().trim() === cleanTag);
-            if (tagConn && tagConn.secretRef) {
-                const key = await this.context.secrets.get(tagConn.secretRef);
-                if (key && key.trim()) {
-                    const result = { apiKey: key.trim(), url: tagConn.url };
-                    this._cachedTokenMap.set(cacheKey, result);
-                    return result;
-                }
-            }
-        }
-
-        // 2. Active connection
-        const active = this.getActive();
-        if (active && active.secretRef) {
-            const key = await this.context.secrets.get(active.secretRef);
-            if (key && key.trim()) {
-                const result = { apiKey: key.trim(), url: active.url };
-                this._cachedTokenMap.set(cacheKey, result);
-                return result;
-            }
-        }
-
-        // 3. Any saved connection with a secret in SecretStorage
-        for (const conn of list) {
-            if (conn.secretRef) {
-                const key = await this.context.secrets.get(conn.secretRef);
-                if (key && key.trim()) {
-                    const result = { apiKey: key.trim(), url: conn.url };
-                    this._cachedTokenMap.set(cacheKey, result);
-                    return result;
-                }
-            }
-        }
-
-        return null;
+    async getAnyRemoteApiKey(
+        providerTag?: string
+    ): Promise<{ apiKey: string; url?: string } | null> {
+        return await resolveApiKeyForTag(
+            this._getRawList(),
+            this.getActive(),
+            this.context.secrets,
+            this._cachedTokenMap,
+            providerTag
+        );
     }
 
     /** Retrieve the API token for the active connection, if any */
