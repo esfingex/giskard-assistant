@@ -41,8 +41,9 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
             });
             if (!task || !task.trim()) return;
 
-            // QuickPick con los modelos habilitados (cualquiera sirve; los
-            // remotos corren en paralelo, los locales son single-thread).
+            // QuickPick: SOLO modelos habilitados que pertenecen a conexiones
+            // ACTIVAS (fuera los de Ollama deshabilitado y similares — los
+            // 'pegados' del store no se ofrecen). Detalle: proveedor · conexión.
             const enabled = store.getEnabledModels();
             const groups = await fetchLlmModelsGrouped().catch(() => []);
             const providerOf = new Map<string, string>();
@@ -53,12 +54,13 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
                     }
                 });
             });
+            const availableEnabled = enabled.filter((m) => providerOf.has(m));
 
             interface ModelPick extends vscode.QuickPickItem {
                 model?: string;
                 custom?: boolean;
             }
-            const items: ModelPick[] = enabled.map((m) => ({
+            const items: ModelPick[] = availableEnabled.map((m) => ({
                 label: m,
                 description: providerOf.get(m) || 'proveedor desconocido',
                 model: m
@@ -77,7 +79,7 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
                 model = pick.custom
                     ? await vscode.window.showInputBox({
                           prompt: 'Modelo (id exacto como aparece en el picker del chat)',
-                          value: enabled[0] || ''
+                          value: availableEnabled[0] || ''
                       })
                     : pick.model;
             } else {
