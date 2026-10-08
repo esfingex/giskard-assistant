@@ -11,9 +11,10 @@ import * as vscode from 'vscode';
 import { ConnectionStore } from '../core/connectionStore';
 import { AGENT_RUNS_KEY } from '../core/constants';
 import {
+    AGENT_OUTPUT_CAP,
+    AGENT_ROLES,
     AgentRun,
     AgentRunState,
-    AGENT_SYSTEM_PROMPT,
     getRun,
     listRuns,
     updateRun
@@ -47,13 +48,14 @@ const STATUS_LABEL: Record<AgentRun['status'], string> = {
 export class AgentRunTreeItem extends vscode.TreeItem {
     constructor(readonly run: AgentRun) {
         super(run.name, vscode.TreeItemCollapsibleState.None);
-        this.description = `${run.model} · ${STATUS_LABEL[run.status]}`;
+        const roleEmoji = AGENT_ROLES[run.role]?.emoji || '🛠️';
+        this.description = `${roleEmoji} ${run.model} · ${STATUS_LABEL[run.status]}`;
         this.tooltip = new vscode.MarkdownString(
             `**${run.name}**\n\n- Estado: ${STATUS_LABEL[run.status]}\n- Modelo: ${run.model}\n- Tarea: ${run.task}` +
                 (run.error ? `\n\n⚠️ ${run.error}` : '')
         );
         this.iconPath = new vscode.ThemeIcon(STATUS_ICON[run.status]);
-        this.contextValue = 'agentRun';
+        this.contextValue = run.status === 'done' ? 'agentRunDone' : 'agentRun';
         this.command = { command: 'giskard-assistant.openAgentRunOutput', title: 'Ver salida', arguments: [this] };
     }
 }
@@ -163,7 +165,7 @@ export class AgentRunner {
                     model: run.model,
                     stream: true,
                     messages: [
-                        { role: 'system', content: AGENT_SYSTEM_PROMPT },
+                        { role: 'system', content: AGENT_ROLES[run.role]?.prompt || AGENT_ROLES.ejecutor.prompt },
                         { role: 'user', content: run.task }
                     ]
                 }),
@@ -243,7 +245,8 @@ export class AgentRunner {
             channel.appendLine(
                 `\n${'─'.repeat(60)}\n✅ Completado en ${totalS}s — respuesta ${acc.length} chars, razonamiento ${reasoningAcc.length} chars`
             );
-            finish({ status: 'done' });
+            // Salida guardada (recortada) para encadenar el siguiente paso del ciclo
+            finish({ status: 'done', output: (acc || reasoningAcc).slice(0, AGENT_OUTPUT_CAP) });
         } catch (err: any) {
             clearInterval(heartbeat);
             clearTimeout(queueTimer);

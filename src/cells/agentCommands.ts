@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { ConnectionStore } from '../core/connectionStore';
 import { fetchLlmModelsGrouped } from '../core/api';
-import { addRun, removeRun, updateRun } from '../core/agentRegistry';
+import { AGENT_ROLES, addRun, removeRun, updateRun, type AgentRunRole } from '../core/agentRegistry';
 import {
     AgentRunner,
     AgentRunTreeItem,
@@ -40,6 +40,18 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
                 placeHolder: 'ej. Revisa los tests de providers y arregla el que falla por timeout'
             });
             if (!task || !task.trim()) return;
+
+            // Rol del ciclo de revisión: revisor / planificador / ejecutor
+            const rolePick = await vscode.window.showQuickPick(
+                (Object.keys(AGENT_ROLES) as AgentRunRole[]).map((r) => ({
+                    label: `${AGENT_ROLES[r].emoji} ${r}`,
+                    description: AGENT_ROLES[r].label,
+                    role: r
+                })),
+                { placeHolder: 'Rol del agente en el ciclo (revisar → planear → implementar)' }
+            );
+            if (!rolePick) return;
+            const role = rolePick.role;
 
             // QuickPick: SOLO modelos habilitados que pertenecen a conexiones
             // ACTIVAS (fuera los de Ollama deshabilitado y similares — los
@@ -97,7 +109,12 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
                     value: defaultName
                 })) || defaultName;
 
-            const run = addRun(makeAgentRunState(context), { name, task: task.trim(), model: model.trim() });
+            const run = addRun(makeAgentRunState(context), {
+                name,
+                task: task.trim(),
+                model: model.trim(),
+                role
+            });
             tree.refresh();
             vscode.window.showInformationMessage(`🛰️ Agente "${name}" lanzado (${model.trim()}).`);
             // Fire-and-forget: el run corre en background con su propio OutputChannel
@@ -115,6 +132,64 @@ export function registerAgentCommands(ctx: AgentCommandsContext): vscode.Disposa
                 updateRun(makeAgentRunState(context), id, { status: 'cancelled' });
                 tree.refresh();
             }
+        }),
+        vscode.commands.registerCommand('giskard-assistant.chainAgentRun', async (arg: unknown) => {
+            const id = runIdFromArg(arg);
+            if (!id) return;
+            const prev = tree.getRunById(id);
+            if (!prev) return;
+            if (!prev.output) {
+                vscode.window.showWarningMessage('Este run no tiene salida guardada (termina un run completo primero).');
+                return;
+            }
+
+            // Siguiente eslabón del ciclo: la salida del run anterior es el
+            // contexto del nuevo run, con el rol que elijas.
+            const step = await vscode.window.showQuickPick(
+                [
+                    {
+                        label: '$(search) 🔍 Re-revisar tras los cambios',
+                        description: 'Un revisor evalúa el resultado del run anterior',
+                        role: 'revisor' as AgentRunRole,
+                        instr: 'Revisa el resultado del trabajo anterior: qué está bien, qué falta y qué riesgos introdujo.'
+                    },
+                    {
+                        label: '$(tools) 🛠️ Implementar los hallazgos',
+                        description: 'Un ejecutor aplica lo propuesto',
+                        role: 'ejecutor' as AgentRunRole,
+                        instr: 'Implementa los cambios propuestos en el siguiente informe, resolviendo cada hallazgo.'
+                    },
+                    {
+                        label: '$(list-ordered) 🧭 Planificar los siguientes pasos',
+                        description: 'Un planificador ordena el trabajo pendiente',
+                        role: 'planificador' as AgentRunRole,
+                        instr: 'A partir del siguiente informe, elabora el plan de trabajo pendiente ordenado por prioridad.'
+                    }
+                ],
+                { placeHolder: `Siguiente eslabón del ciclo a partir de "${prev.name}"` }
+            );
+            if (!step) return;
+
+            const extra = await vscode.window.showInputBox({
+                prompt: 'Instrucción adicional para el nuevo run (opcional)',
+                placeHolder: 'ej. enfócate solo en los hallazgos críticos'
+            });
+
+            const task =
+                `Contexto — salida del run anterior "${prev.name}" (${prev.model}):
+\n${prev.output}\n\nInstrucción: ${step.instr}` +
+                (extra && extra.trim() ? `\nExtras: ${extra.trim()}` : '');
+
+            const shortName = `${AGENT_ROLES[step.role].emoji} ${prev.name} → ${step.role}`;
+            const run = addRun(makeAgentRunState(context), {
+                name: shortName,
+                task,
+                model: prev.model,
+                role: step.role
+            });
+            tree.refresh();
+            vscode.window.showInformationMessage(`🛰️ Ciclo continúa: "${shortName}" lanzado (${prev.model}).`);
+            void runner.start(run);
         }),
         vscode.commands.registerCommand('giskard-assistant.removeAgentRunTree', async (arg: unknown) => {
             const id = runIdFromArg(arg);

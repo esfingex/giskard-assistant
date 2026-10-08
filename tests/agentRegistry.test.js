@@ -43,6 +43,17 @@ test('updateRun: parchea el run y devuelve null si no existe', () => {
     assert.equal(reg.updateRun(state, 'no-existe', { status: 'done' }), null);
 });
 
+test('addRun: rol por defecto ejecutor y rol inválido degrada a ejecutor', () => {
+    const state = fakeState();
+    const run = reg.addRun(state, { name: 'n', task: 't', model: 'm' });
+    assert.equal(run.role, 'ejecutor');
+    const bad = reg.addRun(state, { name: 'n2', task: 't', model: 'm', role: 'hacker' });
+    assert.equal(bad.role, 'ejecutor');
+    const rev = reg.addRun(state, { name: 'n3', task: 't', model: 'm', role: 'revisor' });
+    assert.equal(rev.role, 'revisor');
+    assert.ok(reg.AGENT_ROLES[rev.role].prompt.length > 50);
+});
+
 test('removeRun: elimina solo el run pedido', () => {
     const state = fakeState();
     const a = reg.addRun(state, { name: 'a', task: 't', model: 'm' });

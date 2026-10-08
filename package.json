@@ -116,6 +116,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "giskard-assistant.chainAgentRun",
+        "title": "↪️ Continuar el ciclo con este resultado",
+        "icon": "$(arrow-right)"
+      },
+      {
         "command": "giskard-assistant.cancelAgentRunTree",
         "title": "Cancelar agente",
         "icon": "$(debug-stop)"
@@ -402,6 +407,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "giskard-assistant.chainAgentRun",
+          "when": "view == giskard-agent-runs && viewItem == agentRunDone",
+          "group": "inline@1"
+        },
         {
           "command": "giskard-assistant.openAgentRunOutput",
           "when": "view == giskard-agent-runs && viewItem == agentRun",
