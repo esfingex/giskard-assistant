@@ -129,7 +129,30 @@ export class AgentRunner {
         const base = target.resolvedRemoteUrl.replace(/\/$/, '');
         const url = base.endsWith('/chat/completions') ? base : `${base}/chat/completions`;
 
+        // NIM encola los modelos grandes (550b puede tardar minutos en dar el
+        // primer token). Latido de espera + timeout de cola con error claro.
+        const isLargeModel = /550b|405b|671b|235b|200b|ultra/i.test(run.model);
+        const queueTimeoutMs = isLargeModel ? 600_000 : 180_000;
+        const startedAt = Date.now();
+        let firstTokenAt: number | null = null;
+        let timedOut = false;
+        const queueTimer = setTimeout(() => {
+            if (!firstTokenAt) {
+                timedOut = true;
+                ac.abort();
+            }
+        }, queueTimeoutMs);
+        const heartbeat = setInterval(() => {
+            if (!firstTokenAt) {
+                const s = Math.round((Date.now() - startedAt) / 1000);
+                channel.appendLine(
+                    `⏱ ${s}s sin primer token — el modelo puede estar en cola (NIM encola los grandes)`
+                );
+            }
+        }, 30_000);
+
         try {
+            channel.appendLine(`🔄 Conectando a ${base}…`);
             const res = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -155,6 +178,8 @@ export class AgentRunner {
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
             let acc = '';
+            let reasoningAcc = '';
+            let inReasoning = false;
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -168,8 +193,38 @@ export class AgentRunner {
                     try {
                         const json = JSON.parse(data);
                         const choice = json.choices && json.choices[0];
-                        const tok = choice?.delta?.content || choice?.message?.content || json.response || '';
+                        const delta = choice?.delta || choice?.message || {};
+                        // Razonamiento (nemotron-3, deepseek-r1, o1...): se muestra
+                        // en el canal — sin esto el run parece colgado mientras
+                        // el modelo piensa minutos antes del primer contenido.
+                        const reasonTok = delta.reasoning_content || delta.reasoning || '';
+                        if (reasonTok) {
+                            if (!firstTokenAt) {
+                                firstTokenAt = Date.now();
+                                channel.appendLine(
+                                    `🧠 Primer token en ${Math.round((firstTokenAt - startedAt) / 1000)}s — razonando…`
+                                );
+                            }
+                            if (!inReasoning) {
+                                inReasoning = true;
+                                channel.appendLine('🧠 ── Razonamiento ──');
+                            }
+                            reasoningAcc += reasonTok;
+                            channel.append(reasonTok);
+                            continue;
+                        }
+                        const tok = delta.content || json.response || '';
                         if (tok) {
+                            if (!firstTokenAt) {
+                                firstTokenAt = Date.now();
+                                channel.appendLine(
+                                    `🧠 Primer token en ${Math.round((firstTokenAt - startedAt) / 1000)}s`
+                                );
+                            }
+                            if (inReasoning) {
+                                inReasoning = false;
+                                channel.appendLine(`\n── fin razonamiento (${reasoningAcc.length} chars) ──\n💬 Respuesta:`);
+                            }
                             acc += tok;
                             channel.append(tok);
                         }
@@ -178,12 +233,28 @@ export class AgentRunner {
                     }
                 }
             }
+            clearInterval(heartbeat);
+            clearTimeout(queueTimer);
 
-            if (!acc.trim()) throw new Error('El modelo no devolvió ninguna respuesta (stream vacío)');
-            channel.appendLine(`\n${'─'.repeat(60)}\n✅ Completado — ${acc.length} caracteres`);
+            if (!acc.trim() && !reasoningAcc.trim()) {
+                throw new Error('El modelo no devolvió ninguna respuesta (stream vacío)');
+            }
+            const totalS = Math.round((Date.now() - startedAt) / 1000);
+            channel.appendLine(
+                `\n${'─'.repeat(60)}\n✅ Completado en ${totalS}s — respuesta ${acc.length} chars, razonamiento ${reasoningAcc.length} chars`
+            );
             finish({ status: 'done' });
         } catch (err: any) {
-            if (ac.signal.aborted) {
+            clearInterval(heartbeat);
+            clearTimeout(queueTimer);
+            if (timedOut) {
+                const waitMin = Math.round(queueTimeoutMs / 60000);
+                channel.appendLine(`\n⏱ Sin primer token tras ${waitMin} min — probablemente en cola de NIM`);
+                finish({
+                    status: 'error',
+                    error: `Sin primer token tras ${waitMin} min (cola de NIM para modelos grandes). Reintenta o usa un modelo más chico.`
+                });
+            } else if (ac.signal.aborted) {
                 channel.appendLine(`\n⛔ Cancelado por el usuario`);
                 finish({ status: 'cancelled' });
             } else {
@@ -191,6 +262,8 @@ export class AgentRunner {
                 finish({ status: 'error', error: err.message });
             }
         } finally {
+            clearInterval(heartbeat);
+            clearTimeout(queueTimer);
             this._aborts.delete(run.id);
         }
     }
