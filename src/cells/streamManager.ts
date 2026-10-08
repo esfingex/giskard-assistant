@@ -13,7 +13,7 @@
 import * as vscode from 'vscode';
 import { GiskardResponse, getClientId, getClientToken, fetchWithTimeout } from '../core/api';
 import { clearAgentActivity } from './statusBar';
-import { getModelMaxContextWindow } from '../core/contextWindow';
+import { getModelMaxContextWindow, trimHistory, type ChatMessage } from '../core/contextWindow';
 
 /** Shared streaming context passed by the caller */
 export interface StreamContext {
@@ -283,6 +283,9 @@ export interface RemoteStreamContext {
         includeActiveFile?: boolean
     ): Promise<void>;
     clearAbort(): void;
+    /** Historial del tab (para memoria conversacional del chat remoto) */
+    getTabHistory?(tabId?: string): ChatMessage[];
+    saveTabHistory?(tabId: string | undefined, user: string, assistant: string): void;
 }
 
 export async function streamFromRemoteApi(
@@ -315,12 +318,23 @@ export async function streamFromRemoteApi(
         headers['Authorization'] = `Bearer ${apiKey.trim()}`;
     }
     let safePrompt = fullPrompt;
-    if (safePrompt.length > 100000) {
+    // Truncado dinámico según la ventana REAL del modelo (antes: tope plano de
+    // 100k chars ≈ 30k tokens — la causa de que "el contexto se pierda rápido"
+    // en modelos grandes tipo NIM 550B con ventana de 128k).
+    const maxCtx = getModelMaxContextWindow(model);
+    const charBudget = Math.max(100_000, Math.floor((maxCtx - 8_000) * 3.5));
+    if (safePrompt.length > charBudget) {
         safePrompt =
-            safePrompt.substring(0, 100000) +
-            '\n\n... [Prompt contextual truncado para no exceder los límites del servidor remoto]';
+            safePrompt.substring(0, charBudget) +
+            '\n\n... [Prompt contextual truncado para no exceder la ventana de contexto del modelo]';
     }
-    const maxResponseTokens = 4096;
+    const maxResponseTokens = maxCtx >= 128_000 ? 8192 : 4096;
+
+    // Memoria conversacional: el chat remoto reenvía el historial del tab
+    // (antes mandaba un solo mensaje user — amnesia total entre turnos).
+    const priorHistory = ctx.getTabHistory ? ctx.getTabHistory(tabId) : [];
+    const historyBudget = Math.floor(maxCtx * 0.6);
+    const messages = [...trimHistory(priorHistory, historyBudget), { role: 'user', content: safePrompt }];
 
     // Larger models (550B+) need more time to queue and start streaming on free tier
     const modelLower = model.toLowerCase();
@@ -345,7 +359,7 @@ export async function streamFromRemoteApi(
             headers,
             body: JSON.stringify({
                 model,
-                messages: [{ role: 'user', content: safePrompt }],
+                messages,
                 stream: true,
                 temperature: 0.7,
                 max_tokens: maxResponseTokens
@@ -443,6 +457,7 @@ export async function streamFromRemoteApi(
         }
 
         ctx.lastBotResponse.text = accumulated;
+        ctx.saveTabHistory?.(tabId, userPrompt || fullPrompt, accumulated);
         clearAgentActivity();
         view.webview.postMessage({ type: 'streamComplete', model, tabId });
         await ctx.maybeAutoTriggerDiff(

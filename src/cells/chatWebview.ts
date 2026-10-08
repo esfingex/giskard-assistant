@@ -15,7 +15,7 @@ import { getHtmlForWebview } from './htmlShell';
 import { sendMcpServersList } from './mcpHandlers';
 
 import { clearAgentActivity } from './statusBar';
-import { ChatMessage } from '../core/contextWindow';
+import { ChatMessage, getModelMaxContextWindow, trimHistory } from '../core/contextWindow';
 import { AgentState, AgentLoopContext, autoVerifyAndFix } from './agentLoop';
 import {
     StreamContext,
@@ -328,6 +328,19 @@ export class GiskardChatWebviewProvider implements vscode.WebviewViewProvider {
             maybeAutoTriggerDiff: (u, r, p, f) => maybeAutoTriggerDiff(this._diffCtx(), u, r, p, f),
             clearAbort: () => {
                 this._activeAbortController = null;
+            },
+            getTabHistory: (tid) => this._agentCtx().tabHistory.get(tid || '_main') || [],
+            saveTabHistory: (tid, user, assistant) => {
+                const key = tid || '_main';
+                const maxCtx = getModelMaxContextWindow(model);
+                let history = [
+                    ...(this._agentCtx().tabHistory.get(key) || []),
+                    { role: 'user' as const, content: user },
+                    { role: 'assistant' as const, content: assistant }
+                ];
+                history = trimHistory(history, Math.floor(maxCtx * 0.6));
+                if (history.length > 40) history = history.slice(-40);
+                this._agentCtx().tabHistory.set(key, history);
             }
         };
         await streamFromRemoteApi(

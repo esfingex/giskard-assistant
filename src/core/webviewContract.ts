@@ -60,6 +60,12 @@ export interface ModelsListMessage {
     connectionMode?: 'giskardSysActive' | 'ollamaDirect';
 }
 
+/** Modo de permisos de las tools del agente (sandbox/ approvals) */
+export interface ToolPermissionModeMessage {
+    type: 'toolPermissionMode';
+    mode: 'ask' | 'auto';
+}
+
 export interface SettingsErrorMessage {
     type: 'settingsError';
     error: string;
@@ -204,6 +210,7 @@ export type HostToWebviewMessage =
     | ConnectionErrorMessage
     | ConnectionTestedMessage
     | ModelsListMessage
+    | ToolPermissionModeMessage
     | SettingsErrorMessage
     | ActionResultMessage
     | StreamTokenMessage

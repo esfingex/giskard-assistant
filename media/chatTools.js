@@ -157,9 +157,25 @@ function dispatchToolCalls(toolCalls) {
                 vscode.postMessage({ type: 'toolReadFile', path: call.path, id: Date.now() });
                 break;
             case 'write_file': {
-                // Gate real (wave 012): sin aprobacion NO se escribe.
                 const previewLen = String(call.content || '').length;
                 const preview = String(call.content || '').slice(0, 200);
+                // Modo 'auto': confianza sin tarjeta (setting giskard-assistant.toolPermissions)
+                if (_toolPermissionMode === 'auto') {
+                    appendSystemMessage(
+                        '⚡ <b>auto-aprobado</b> (modo sin permisos): escribiendo <code>' +
+                            escapeHtml(call.path) +
+                            '</code>',
+                        '📝'
+                    );
+                    vscode.postMessage({
+                        type: 'toolWriteFile',
+                        path: call.path,
+                        content: call.content,
+                        id: Date.now()
+                    });
+                    break;
+                }
+                // Gate real (wave 012): sin aprobacion NO se escribe.
                 showToolApprovalCard(
                     'Escribir archivo: <code>' + escapeHtml(call.path) + '</code>',
                     'Contenido: <pre style="white-space:pre-wrap;max-height:80px;overflow:auto;margin:4px 0;">' +
@@ -210,6 +226,20 @@ function dispatchToolCalls(toolCalls) {
                       ? args.args
                       : [];
                 var cmdStr = (call.command || '') + ' ' + cmdArgs.join(' ');
+                // Modo 'auto': confianza sin tarjeta (setting giskard-assistant.toolPermissions)
+                if (_toolPermissionMode === 'auto') {
+                    appendSystemMessage(
+                        '⚡ <b>auto-aprobado</b> (modo sin permisos): <code>' + escapeHtml(cmdStr) + '</code>',
+                        '💻'
+                    );
+                    vscode.postMessage({
+                        type: 'toolExec',
+                        command: call.command,
+                        args: cmdArgs,
+                        id: Date.now()
+                    });
+                    break;
+                }
                 // Gate real (wave 012): sin aprobacion NO se ejecuta.
                 showToolApprovalCard(
                     'Ejecutar comando: <code>' + escapeHtml(cmdStr) + '</code>',

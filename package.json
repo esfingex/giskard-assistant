@@ -284,6 +284,24 @@
           "default": "",
           "description": "Token for Giskard-Sys auth_mode=strict. If set, sent as X-Client-Token header in all Giskard-Sys calls (must match client_tokens in ~/.giskard/config.json)."
         },
+        "giskard-assistant.workspaceSandbox": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sandbox del workspace: las tools del agente (read/write/glob) solo pueden tocar archivos dentro del directorio del workspace. Bloquea rutas absolutas externas y traversal '../'."
+        },
+        "giskard-assistant.toolPermissions": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Pedir permiso con tarjeta antes de cada escritura de archivo o comando",
+            "Ejecutar sin pedir permiso (confianza total — úsalo solo en workspaces desechables)"
+          ],
+          "default": "ask",
+          "description": "Permisos de las herramientas del agente: aprobar cada write_file/exec (ask) o confianza total (auto)."
+        },
         "giskard-assistant.defaultModel": {
           "type": "string",
           "default": "auto",

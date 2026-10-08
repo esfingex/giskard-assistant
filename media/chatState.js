@@ -31,6 +31,7 @@ const chatModelSelect = document.getElementById('chat-model-select');
 let _enabledModelsCache = [];
 let _allModelsCache = [];
 let _modelProviderMap = {}; // modelo → tag de proveedor (badge del picker)
+let _toolPermissionMode = 'ask'; // permisos de tools: 'ask' (tarjeta) | 'auto'
 
 function cleanModelName(m) {
     if (!m) return '';

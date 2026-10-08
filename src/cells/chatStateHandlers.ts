@@ -62,6 +62,14 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
     ctx.postMessage({ type: 'setEnabledModels', enabledModels: visibleModels });
 
     const config = vscode.workspace.getConfiguration('giskard-assistant');
+
+    // Modo de permisos de tools para el gate del webview (ask = aprobar cada
+    // write/exec; auto = confianza sin tarjeta). Default ask.
+    ctx.postMessage({
+        type: 'toolPermissionMode',
+        mode: config.get<'ask' | 'auto'>('toolPermissions', 'ask')
+    });
+
     const isGiskardSysEnabled = config.get<boolean>('giskardSys.enabled', false);
     const connectionMode = isGiskardSysEnabled ? 'giskardSysActive' : 'ollamaDirect';
 

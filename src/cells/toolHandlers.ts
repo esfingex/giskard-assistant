@@ -26,6 +26,14 @@ export async function resolveWorkspaceFile(targetPath: string): Promise<vscode.T
     if (!targetPath || !targetPath.trim()) return null;
     let cleanPath = targetPath.trim();
 
+    // Sandbox del workspace (default ON): las tools del agente solo tocan
+    // archivos dentro del directorio del workspace — ni rutas absolutas
+    // externas ni traversal con '../'. Se desactiva con la setting
+    // giskard-assistant.workspaceSandbox = false.
+    const sandbox = vscode.workspace
+        .getConfiguration('giskard-assistant')
+        .get<boolean>('workspaceSandbox', true);
+
     // Ignore requests to read build output / node_modules / git directories
     const lower = cleanPath.toLowerCase();
     if (
@@ -38,8 +46,22 @@ export async function resolveWorkspaceFile(targetPath: string): Promise<vscode.T
         return null;
     }
 
+    if (sandbox && cleanPath.split(/[\\/]/).includes('..')) {
+        return null; // traversal fuera del workspace bloqueado
+    }
+
+    const insideWorkspace = (absPath: string): boolean => {
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) return false;
+        const root = folders[0].uri.fsPath.replace(/[\\/]$/, '');
+        return absPath === root || absPath.startsWith(root + '/');
+    };
+
     // 1. Absolute path check
     if (cleanPath.startsWith('/')) {
+        if (sandbox && !insideWorkspace(vscode.Uri.file(cleanPath).fsPath)) {
+            return null; // ruta absoluta fuera del workspace bloqueada
+        }
         try {
             const uri = vscode.Uri.file(cleanPath);
             return await vscode.workspace.openTextDocument(uri);

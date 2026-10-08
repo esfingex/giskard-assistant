@@ -268,6 +268,10 @@ window.addEventListener('message', (event) => {
             }
             break;
 
+        case 'toolPermissionMode':
+            _toolPermissionMode = message.mode === 'auto' ? 'auto' : 'ask';
+            break;
+
         case 'modelsList':
             console.log('[Giskard Webview] modelsList payload:', message);
             if (Array.isArray(message.enabledModels)) {
