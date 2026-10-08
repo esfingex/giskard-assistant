@@ -3,7 +3,7 @@
  * Copyright (C) 2025-2026 Giskard Project
  */
 
-import { ProviderModelsResponse, fetchWithTimeout, CLIENT_ID } from '../api';
+import { fetchOpenAiCompatibleModels } from './openAiCompat';
 
 export const QWEN_DEFAULT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
@@ -11,18 +11,5 @@ export async function fetchQwenModels(
     baseUrl: string = QWEN_DEFAULT_URL,
     apiKey?: string
 ): Promise<string[]> {
-    try {
-        const cleanUrl = baseUrl.replace(/\/$/, '');
-        const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
-        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-
-        const res = await fetchWithTimeout(`${cleanUrl}/models`, { headers }, 5000).catch(() => null);
-        if (res && res.ok) {
-            const data = (await res.json().catch(() => null)) as ProviderModelsResponse | null;
-            if (data && Array.isArray(data.data) && data.data.length > 0) {
-                return data.data.map((m) => m.id || m.name || String(m));
-            }
-        }
-    } catch {}
-    return [];
+    return await fetchOpenAiCompatibleModels(baseUrl, apiKey);
 }
