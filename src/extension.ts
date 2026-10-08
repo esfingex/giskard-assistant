@@ -28,6 +28,8 @@ import {
     GiskardFileExclusionsTreeProvider
 } from './cells/treeViewProvider';
 import { GiskardModelSettingsWebviewProvider } from './cells/modelSettingsWebview';
+import { AgentRunner, GiskardAgentManagerTreeProvider } from './cells/agentManager';
+import { registerAgentCommands } from './cells/agentCommands';
 import { registerConnectionCommands } from './cells/connectionCommands';
 import { registerMcpCommands } from './cells/mcpCommands';
 import { registerTreeCommands } from './cells/treeCommands';
@@ -43,9 +45,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const mcpServersTree = new GiskardMcpServersTreeProvider(store);
     const fileExclusionsTree = new GiskardFileExclusionsTreeProvider(store);
     const modelSettingsProvider = new GiskardModelSettingsWebviewProvider(context.extensionUri, store);
+    const agentTree = new GiskardAgentManagerTreeProvider(context);
 
     // 0. Register Tree View Providers synchronously so VS Code finds them immediately
     context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('giskard-agent-runs', agentTree),
         vscode.window.registerTreeDataProvider('giskard-local-models', localModelsTree),
         vscode.window.registerTreeDataProvider('giskard-remote-connections', remoteConnsTree),
         vscode.window.registerTreeDataProvider('giskard-theme-palette', themePaletteTree),
@@ -81,8 +85,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // 1.1 Célula de Comandos Sandbox
     registerSandboxCommands(context);
 
-    // 2. Células de comandos (conexiones, MCP, árboles, chat)
+    // 2. Células de comandos (agent manager, conexiones, MCP, árboles, chat)
+    const agentRunner = new AgentRunner(store, context, () => agentTree.refresh());
     context.subscriptions.push(
+        ...registerAgentCommands({ context, store, runner: agentRunner, tree: agentTree }),
         ...registerConnectionCommands({
             store,
             localModelsTree,

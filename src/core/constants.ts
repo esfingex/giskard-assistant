@@ -36,6 +36,9 @@ export const REMOTE_PROVIDER_TAGS = ['nvidia', 'deepseek', 'kimi', 'qwen', 'open
 /** Tags que cuentan como conexión LOCAL (getActiveLocal) */
 export const LOCAL_PROVIDER_TAGS = ['giskard-sys', 'ollama'];
 
+/** Runs del Agent Manager (AgentRun[]) */
+export const AGENT_RUNS_KEY = 'giskard_agent_runs_v1';
+
 /** Exclusiones por defecto de indexación (coincide con el botón reset de la UI) */
 export const DEFAULT_EXCLUSIONS = [
     'node_modules',
