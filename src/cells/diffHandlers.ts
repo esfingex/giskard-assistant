@@ -12,7 +12,8 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
-import { extractCodeBlocks, resolveWorkspaceFile, applyCodeToDocument } from './toolHandlers';
+import { resolveWorkspaceFile } from './toolHandlers';
+import { extractCodeBlocks, applyCodeToDocument } from './toolApply';
 
 /** Snapshot of a pre-edit document state, for one-click revert. */
 export interface EditSnapshot {

@@ -10,18 +10,22 @@ import * as vscode from 'vscode';
 import { ConnectionModelsGroup } from '../core/api';
 import { ConnectionStore } from '../core/connectionStore';
 import { getModelMaxContextWindow } from '../core/contextWindow';
-import {
-    AgentState,
-    AgentLoopContext,
-    loadProjectRules,
-    fetchProjectMemory,
-    agentLoopOllama
-} from './agentLoop';
-import { DiffContext, maybeAutoTriggerDiff, openDiff } from './diffHandlers';
-import { extractCodeBlocks, handleOpenFile } from './toolHandlers';
+import { AgentState, AgentLoopContext, loadProjectRules, agentLoopOllama } from './agentLoop';
+import { DiffContext, maybeAutoTriggerDiff } from './diffHandlers';
+import { handleOpenFile } from './toolHandlers';
 import { clearAgentActivity } from './statusBar';
 import { getActiveMcpPromptContext } from './mcpHandlers';
 import { getClientId, getClientToken, getConnectorUrl } from '../core/api';
+import {
+    buildSystemHeader,
+    extractOpenFileTarget,
+    extractSseContentToken,
+    includeActiveFileContext,
+    injectWorkspacePrefix,
+    maybeApplyLastResponse,
+    PROVIDER_DISPLAY_NAMES,
+    resolvePromptTarget
+} from './promptBuilder';
 
 /** Dependencias del orquestador de prompts (implementado por GiskardChatWebviewProvider). */
 export interface PromptHost {
@@ -69,41 +73,13 @@ export async function handlePrompt(
     if (!view) return;
 
     // Auto-open file if prompt explicitly requests opening a file
-    const fileMatch = prompt.match(
-        /(?:abre|open|edita|modifica)\s+(?:el\s+archivo\s+|file\s+)?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)/i
-    );
-    const targetPathMatch: string | undefined = fileMatch && fileMatch[1] ? fileMatch[1] : undefined;
+    const targetPathMatch = extractOpenFileTarget(prompt);
     if (targetPathMatch) {
         await handleOpenFile(targetPathMatch);
     }
 
-    // Conversational apply flow
-    const APPLY_LAST_REGEX =
-        /^\s*(?:hazla|hazlo|ap[lí]ca(?:la|lo|r)?|s[ií]|yes|do it|ejecuta(?:lo|la)?|a[pú]ntalo|aplica|perfecto!?|ok!?|dale!?|listo!?|excelente!?|procede|proceed|apply(?:\s+it)?|use(?:\s+it)?|use\s+that|implement(?:\s+it)?)\s*$/i;
-    if (APPLY_LAST_REGEX.test(prompt.trim()) && host.agentState.lastBotResponse.trim()) {
-        const blocks = extractCodeBlocks(host.agentState.lastBotResponse);
-        if (blocks.length > 0) {
-            if (view) {
-                view.webview.postMessage({
-                    type: 'streamToken',
-                    token: '📦 Aplicando código propuesto en el editor...',
-                    model,
-                    tabId
-                });
-                view.webview.postMessage({ type: 'streamComplete', model, tabId });
-            }
-            let best = blocks[0];
-            for (const b of blocks) {
-                if (b.filePath) {
-                    best = b;
-                    break;
-                }
-                if (b.code.length > best.code.length) best = b;
-            }
-            await openDiff(host.diffCtx(), best.code, best.filePath || targetPathMatch);
-            return;
-        }
-    }
+    // Conversational apply flow ("aplícala", "hazlo", "sí"...) — promptBuilder
+    if (await maybeApplyLastResponse(host, prompt, model, tabId, targetPathMatch)) return;
 
     let fullPrompt = prompt;
 
@@ -120,51 +96,17 @@ export async function handlePrompt(
     // 2. Check active MCP context
     const mcpContext = getActiveMcpPromptContext(host.store);
 
-    // Build System Capability Context Header
-    let systemHeader = `${
-        projectRules
-            ? `[PROJECT RULES — sigue estas reglas del proyecto]
-${projectRules}
-
-`
-            : ''
-    }[VS CODE AGENT CAPABILITIES]: You are an integrated coding agent in VS Code.
-• REASONING & THINKING: Put step-by-step internal reasoning inside <thinking>...</thinking> tags before providing your answer.
-• TOOL EXECUTION: Emit tool calls as <tool_call>{"action": "read_file", "path": "src/extension.ts"}</tool_call> or [TOOL_CALL] {"tool": "read_file", "args": {"path": "src/extension.ts"}} [/END_TOOL].
-• TO WRITE OR EDIT A FILE: Place a comment with the relative file path on line 1 of your code block (e.g. // src/extension.ts).
-• TO LIST A DIRECTORY: Emit [TOOL_CALL] {"tool": "list_dir", "args": {"path": "src"}} [/END_TOOL].
-• TO SEARCH FILE CONTENTS: Emit [TOOL_CALL] {"tool": "search", "args": {"query": "functionName"}} [/END_TOOL].
-• TO GLOB FILES: Emit [TOOL_CALL] {"tool": "glob", "args": {"pattern": "src/**/*.ts"}} [/END_TOOL].
-• TO PROPOSE A PLAN BEFORE EDITING: Wrap your plan in [PLAN] ... [/END_PLAN] and WAIT for the user to approve it before emitting tool calls or code blocks.
-• RICH OUTPUT FORMATTING: Use structured GitHub Markdown, fenced code blocks with language tags, diff code blocks for changes, tables, and callouts (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING]).
-• IGNORED DIRECTORIES: Do NOT attempt to read non-source files or build output directories like node_modules, out/, dist/, target/, build/, or .git/. Focus exclusively on source code files (src/, package.json, README.md, etc.).\n\n`;
-
-    // Req 5 (wave 012): handoff comun — inyecta la memoria del proyecto
-    // (memorias y decisiones recientes) desde giskard-sys cuando esta activo.
-    if (isGiskardActive) {
-        const projectMemory = await fetchProjectMemory();
-        if (projectMemory) {
-            systemHeader += `[PROJECT MEMORY (giskard-sys) — decisiones y recuerdos recientes del proyecto, respetalos]\n${projectMemory}\n`;
-        }
-    }
-
-    if (isGiskardActive) {
-        systemHeader += `[Capa de Seguridad Giskard-Sys (${giskardConn.url}): ACTIVA | Sandbox Jail + Grafo LTM + Auditoría RTK]\n`;
-    }
-    if (mcpContext) {
-        systemHeader += `${mcpContext}\n`;
-    } else if (!isGiskardActive) {
-        systemHeader += `[Modo Chat Estándar: Sin herramientas MCP ni servidor Giskard-Sys activos]\n`;
-    }
-
+    // System header: reglas + capacidades + memoria + MCP/seguridad (promptBuilder)
+    const systemHeader = await buildSystemHeader({
+        projectRules,
+        isGiskardActive: Boolean(isGiskardActive),
+        giskardUrl: giskardConn?.url || '',
+        mcpContext
+    });
     fullPrompt = systemHeader + fullPrompt;
 
     // Passive workspace context injection
-    const folders = vscode.workspace.workspaceFolders;
-    if (folders && folders.length > 0) {
-        const activeFolder = folders[0];
-        fullPrompt = `[Proyecto Activo VSCode: ${activeFolder.name} (${activeFolder.uri.fsPath})]\n${fullPrompt}`;
-    }
+    fullPrompt = injectWorkspacePrefix(fullPrompt);
 
     const activeConn = host.store.getActive();
     const targetModel = model || host.store.getEnabledModels()[0] || '';
@@ -181,85 +123,15 @@ ${projectRules}
     // Intelligent Connection-Aware Provider Resolution
     const connGroup = host.modelConnectionMap.get(targetModel);
 
-    let isRemoteConnection: boolean;
-    let resolvedRemoteUrl = '';
-    let apiKey = '';
-    let targetTag: string;
-    let targetConnId: number | undefined = undefined;
-
-    const isExplicitLocal =
-        targetModel.startsWith('local:') || targetModel.startsWith('hf.co/') || targetModel.endsWith('.gguf');
-
-    if (targetModel.startsWith('local:')) {
-        isRemoteConnection = false;
-        targetTag = 'ollama';
-    } else if (targetModel.startsWith('remote:')) {
-        isRemoteConnection = true;
-        targetTag = 'remote';
-    } else if (connGroup) {
-        const targetConn = host.store.getAll().find((c) => c.id === connGroup.connectionId);
-        const isLocalGroup =
-            connGroup.connectionTag === 'giskard-sys' ||
-            connGroup.connectionTag === 'ollama' ||
-            targetConn?.type === 'local';
-        isRemoteConnection = !isLocalGroup;
-        targetTag = connGroup.connectionTag;
-        targetConnId = connGroup.connectionId;
-        resolvedRemoteUrl = connGroup.connectionUrl;
-    } else if (!isExplicitLocal) {
-        const vendorTag = targetModel.includes('/') ? targetModel.split('/')[0].toLowerCase() : 'remote';
-        const tagMatchConn = host.store.getConnectionByTag(vendorTag);
-        const anyRemoteConn =
-            tagMatchConn ||
-            host.store.getActiveRemote() ||
-            host.store.getAll().find((c) => c.type === 'remote');
-
-        if (anyRemoteConn) {
-            isRemoteConnection = true;
-            targetTag = anyRemoteConn.tag;
-            targetConnId = anyRemoteConn.id;
-            resolvedRemoteUrl = anyRemoteConn.url;
-        } else {
-            isRemoteConnection = false;
-            targetTag = 'giskard-sys';
-        }
-    } else {
-        isRemoteConnection = false;
-        targetTag = targetModel.startsWith('local:') ? 'ollama' : 'giskard-sys';
-    }
-
-    if (isRemoteConnection) {
-        if (targetConnId) {
-            apiKey = (await host.store.getApiKey(targetConnId)) || '';
-        }
-        if (!apiKey) {
-            const resolved = await host.store.getAnyRemoteApiKey(targetTag);
-            if (resolved) {
-                apiKey = resolved.apiKey;
-                if (resolved.url) resolvedRemoteUrl = resolved.url;
-            }
-        }
-    } else if (targetConnId) {
-        apiKey = (await host.store.getApiKey(targetConnId)) || '';
-    }
+    // Intelligent Connection-Aware Provider Resolution (promptBuilder)
+    const target = await resolvePromptTarget(host.store, targetModel, connGroup);
+    const isRemoteConnection = target.isRemoteConnection;
+    const resolvedRemoteUrl = target.resolvedRemoteUrl;
+    const apiKey = target.apiKey;
+    const targetTag = target.targetTag;
 
     if (includeActiveFile) {
-        const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document.uri.scheme === 'file') {
-            let docText = editor.document.getText();
-            const fileName = editor.document.fileName;
-            const relPath = vscode.workspace.asRelativePath(editor.document.uri);
-
-            const maxFileChars = Math.max(4000, (maxContext - 3000) * 3.5);
-            if (docText.length > maxFileChars) {
-                docText =
-                    docText.substring(0, maxFileChars) +
-                    `\n\n... [Contenido truncado para no exceder la ventana de contexto de ${maxContext.toLocaleString()} tokens del modelo ${targetModel}]`;
-            }
-
-            fullPrompt = `[Archivo Activo: ${fileName}]\n\`\`\`\n${docText}\n\`\`\`\n\n${fullPrompt}`;
-            fullPrompt += `\n\n[INSTRUCCION PARA LA IA]: Cuando propongas cambios de codigo, incluye SIEMPRE en la primera linea del bloque de codigo un comentario con la ruta relativa del archivo, por ejemplo: // ${relPath}`;
-        }
+        fullPrompt = includeActiveFileContext(fullPrompt, maxContext, targetModel);
     }
 
     // ── Local Model Concurrency Lock ──────────────────────────────────────
@@ -280,18 +152,7 @@ ${projectRules}
     let _providerDisplay: string;
     if (isRemoteConnection) {
         const _tagUp = (targetTag || 'remote').toUpperCase();
-        const _knownNames: Record<string, string> = {
-            NVIDIA: 'NVIDIA NIM API',
-            OPENAI: 'OpenAI API',
-            DEEPSEEK: 'DeepSeek API',
-            KIMI: 'Kimi API',
-            ANTHROPIC: 'Anthropic API',
-            GROQ: 'Groq API',
-            MISTRAL: 'Mistral API',
-            COHERE: 'Cohere API',
-            HF: 'Hugging Face API'
-        };
-        _providerDisplay = _knownNames[_tagUp] || `${_tagUp} API`;
+        _providerDisplay = PROVIDER_DISPLAY_NAMES[_tagUp] || `${_tagUp} API`;
     } else {
         _providerDisplay = targetTag === 'ollama' ? 'Ollama (local)' : 'Giskard-Sys Backend (local)';
     }
@@ -481,30 +342,7 @@ ${projectRules}
 
                         try {
                             const json = JSON.parse(tokenStr.trim());
-                            let contentToken = '';
-                            const choice = json.choices && json.choices[0];
-                            const delta = choice?.delta;
-                            const msg = choice?.message;
-
-                            if (delta?.content) {
-                                contentToken = delta.content;
-                            } else if (delta?.reasoning_content) {
-                                contentToken = delta.reasoning_content;
-                            } else if (delta?.thinking) {
-                                contentToken = delta.thinking;
-                            } else if (msg?.content) {
-                                contentToken = msg.content;
-                            } else if (msg?.reasoning_content) {
-                                contentToken = msg.reasoning_content;
-                            } else if (json.content) {
-                                contentToken = json.content;
-                            } else if (json.response) {
-                                contentToken = json.response;
-                            } else if (json.thinking) {
-                                contentToken = json.thinking;
-                            } else if (typeof json === 'string') {
-                                contentToken = json;
-                            }
+                            const contentToken = extractSseContentToken(json);
 
                             if (contentToken) {
                                 accumulated += contentToken;
