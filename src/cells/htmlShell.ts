@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { loadTranslations } from '../core/i18n';
+import { serializeProviderCatalog } from '../core/providerCatalog';
 
 export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webview): string {
     const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'marked.min.js'));
@@ -305,6 +306,8 @@ export function getHtmlForWebview(extensionUri: vscode.Uri, webview: vscode.Webv
 </head>
 <body>
     <div class="chat-container">
+        <!-- Catálogo de proveedores (data block JSON, no ejecutable — compatible con CSP) -->
+        <script type="application/json" id="provider-catalog">${JSON.stringify(serializeProviderCatalog())}</script>
         <div class="header">
             <div class="sub-tab-bar" id="sub-tab-bar">
                 <!-- Dynamically rendered sub-tabs -->

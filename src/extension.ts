@@ -14,6 +14,7 @@ import { revertLastAiEdit } from './cells/diffHandlers';
 import { registerSandboxCommands } from './cells/sandboxCommands';
 import { checkHealth, fetchWorkspaceList, fetchWaveCurrent, setConnectionStore } from './core/api';
 import { ConnectionStore } from './core/connectionStore';
+import { PROVIDER_CATALOG, CUSTOM_PROVIDER_ENTRY } from './core/providerCatalog';
 import { EventBus } from './core/eventBus';
 
 import { GiskardStatusBar, registerStatusBarInstance } from './cells/statusBar';
@@ -203,85 +204,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('giskard-assistant.addRemoteConnectionTree', async () => {
             const providerPick = await vscode.window.showQuickPick(
-                [
-                    {
-                        label: '🦙 Ollama Local',
-                        url: 'http://localhost:11434',
-                        tag: 'ollama',
-                        type: 'local',
-                        detail: 'Local Ollama instance on http://localhost:11434'
-                    },
-                    {
-                        label: '🦀 Giskard-Sys Backend',
-                        url: 'http://localhost:3500',
-                        tag: 'giskard-sys',
-                        type: 'local',
-                        detail: 'Local Rust Axum server on http://localhost:3500'
-                    },
-                    {
-                        label: '🐳 DeepSeek API',
-                        url: 'https://api.deepseek.com/v1',
-                        tag: 'deepseek',
-                        type: 'remote',
-                        detail: 'DeepSeek Chat & Reasoner API'
-                    },
-                    {
-                        label: '🟢 NVIDIA NIM API',
-                        url: 'https://integrate.api.nvidia.com/v1',
-                        tag: 'nvidia',
-                        type: 'remote',
-                        detail: 'NVIDIA NIM API microservices'
-                    },
-                    {
-                        label: '⚡ OpenAI API',
-                        url: 'https://api.openai.com/v1',
-                        tag: 'openai',
-                        type: 'remote',
-                        detail: 'OpenAI GPT-4o / o1 / o3 models'
-                    },
-                    {
-                        label: '🧠 Anthropic Claude API',
-                        url: 'https://api.anthropic.com/v1',
-                        tag: 'anthropic',
-                        type: 'remote',
-                        detail: 'Claude 3.5 Sonnet / Haiku / Opus'
-                    },
-                    {
-                        label: '✨ Google Gemini API',
-                        url: 'https://generativelanguage.googleapis.com/v1beta',
-                        tag: 'gemini',
-                        type: 'remote',
-                        detail: 'Gemini 1.5 Pro / Flash models'
-                    },
-                    {
-                        label: '🌙 Moonshot Kimi API',
-                        url: 'https://api.moonshot.cn/v1',
-                        tag: 'kimi',
-                        type: 'remote',
-                        detail: 'Moonshot Kimi LLM API'
-                    },
-                    {
-                        label: '☁️ Qwen / DashScope API',
-                        url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                        tag: 'qwen',
-                        type: 'remote',
-                        detail: 'Alibaba Qwen LLM models'
-                    },
-                    {
-                        label: '🌐 OpenRouter API',
-                        url: 'https://openrouter.ai/api/v1',
-                        tag: 'openrouter',
-                        type: 'remote',
-                        detail: 'Agregador multi-proveedor: 400+ modelos (Claude, GPT, Gemini, Qwen, DeepSeek, gratis :free)'
-                    },
-                    {
-                        label: '✅ Custom AI Endpoint…',
-                        url: '',
-                        tag: 'custom',
-                        type: 'remote',
-                        detail: 'Configure any OpenAI-compatible API endpoint'
-                    }
-                ],
+                [...PROVIDER_CATALOG, CUSTOM_PROVIDER_ENTRY].map((e) => ({
+                    label: `${e.emoji} ${e.name}`,
+                    url: e.url,
+                    tag: e.tag,
+                    type: e.type,
+                    detail: e.detail
+                })),
                 { placeHolder: 'Select AI Provider / Connection to Add' }
             );
 

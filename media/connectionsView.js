@@ -367,40 +367,21 @@ function renderConnectionsList(connections) {
     }
 
     if (connTagSel) {
+        // Catálogo único de proveedores inyectado por htmlShell (data block JSON)
+        let providerCatalog = [];
+        try {
+            const catalogEl = document.getElementById('provider-catalog');
+            if (catalogEl) providerCatalog = JSON.parse(catalogEl.textContent || '[]');
+        } catch {}
+
         connTagSel.addEventListener('change', () => {
             const val = connTagSel.value;
-            if (val === 'nvidia') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'NVIDIA NIM API';
-                if (connUrlInp) connUrlInp.value = 'https://integrate.api.nvidia.com/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
-            } else if (val === 'deepseek') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'DeepSeek V3 / R1 API';
-                if (connUrlInp) connUrlInp.value = 'https://api.deepseek.com/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
-            } else if (val === 'kimi') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'Moonshot Kimi API';
-                if (connUrlInp) connUrlInp.value = 'https://api.moonshot.cn/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
-            } else if (val === 'qwen') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'Qwen DashScope API';
-                if (connUrlInp) connUrlInp.value = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
-            } else if (val === 'giskard-sys') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'Giskard-Sys';
-                if (connUrlInp) connUrlInp.value = 'http://localhost:3500';
-                if (connTypeLocal) connTypeLocal.checked = true;
-            } else if (val === 'ollama') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'Ollama Local';
-                if (connUrlInp) connUrlInp.value = 'http://localhost:11434';
-                if (connTypeLocal) connTypeLocal.checked = true;
-            } else if (val === 'openrouter') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'OpenRouter API';
-                if (connUrlInp) connUrlInp.value = 'https://openrouter.ai/api/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
-            } else if (val === 'openai') {
-                if (connNameInp && !connNameInp.value) connNameInp.value = 'OpenAI API';
-                if (connUrlInp) connUrlInp.value = 'https://api.openai.com/v1';
-                if (connTypeRemote) connTypeRemote.checked = true;
+            const entry = providerCatalog.find((e) => e.tag === val);
+            if (entry) {
+                if (connNameInp && !connNameInp.value) connNameInp.value = entry.name;
+                if (connUrlInp && entry.url) connUrlInp.value = entry.url;
+                if (entry.type === 'local' && connTypeLocal) connTypeLocal.checked = true;
+                else if (connTypeRemote) connTypeRemote.checked = true;
             }
             updateConnTypeVisibility();
         });
