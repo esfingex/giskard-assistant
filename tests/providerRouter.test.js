@@ -16,6 +16,7 @@ function createRouter() {
         deepseek: async (url, apiKey) => { calls.push({ prov: 'deepseek', url, apiKey }); return ['ds-model-1']; },
         kimi: async (url, apiKey) => { calls.push({ prov: 'kimi', url, apiKey }); return ['kimi-model-1']; },
         qwen: async (url, apiKey) => { calls.push({ prov: 'qwen', url, apiKey }); return ['qwen-model-1']; },
+        openrouter: async (url, apiKey) => { calls.push({ prov: 'openrouter', url, apiKey }); return ['or-model-1']; },
         giskardSys: async (url) => { calls.push({ prov: 'giskard-sys', url }); return ['gs-model-1']; },
         ollama: async (url) => { calls.push({ prov: 'ollama', url }); return ['ollama-model-1']; },
     };
@@ -29,6 +30,8 @@ function createRouter() {
             return await providers.kimi(url, apiKey);
         if (cleanTag.includes('qwen') || (url || '').toLowerCase().includes('dashscope'))
             return await providers.qwen(url, apiKey);
+        if (cleanTag.includes('openrouter') || (url || '').toLowerCase().includes('openrouter'))
+            return await providers.openrouter(url, apiKey);
 
         if (connType === 'local') {
             if (cleanTag.includes('giskard')) return await providers.giskardSys(url);
@@ -42,7 +45,9 @@ function createRouter() {
             if (models.length > 0) return models;
             models = await providers.kimi(url, apiKey);
             if (models.length > 0) return models;
-            return await providers.qwen(url, apiKey);
+            models = await providers.qwen(url, apiKey);
+            if (models.length > 0) return models;
+            return await providers.openrouter(url, apiKey);
         }
 
         // Legacy fallback
@@ -91,6 +96,28 @@ test('router: tag qwen → llama al provider qwen', async () => {
     await route('https://dashscope.aliyuncs.com', 'qwen', 'key000', 'remote');
     assert.equal(calls.length, 1);
     assert.equal(calls[0].prov, 'qwen');
+});
+
+test('router: tag openrouter → llama al provider openrouter', async () => {
+    const { route, calls } = createRouter();
+    await route('https://openrouter.ai/api/v1', 'openrouter', 'or-key', 'remote');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].prov, 'openrouter');
+    assert.equal(calls[0].apiKey, 'or-key');
+});
+
+test('router: URL openrouter.ai sin tag detecta openrouter', async () => {
+    const { route, calls } = createRouter();
+    await route('https://openrouter.ai/api/v1', 'generic', 'key', undefined);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].prov, 'openrouter');
+});
+
+test('router: connType=remote con tag openrouter NO entra en cascada', async () => {
+    const { route, calls } = createRouter();
+    await route('https://openrouter.ai/api/v1', 'openrouter', 'key', 'remote');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].prov, 'openrouter');
 });
 
 // ─── Ruteo por Connection.type ────────────────────────────────────────────────

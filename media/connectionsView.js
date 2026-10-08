@@ -45,6 +45,9 @@ function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
     if (m.includes('qwen') || m.includes('dashscope')) {
         return { tag: 'QWEN', label: 'Qwen / DashScope API', type: 'cli' };
     }
+    if (m.includes('openrouter')) {
+        return { tag: 'OPENROUTER', label: 'OpenRouter API', type: 'cli' };
+    }
     if (m.includes('gemini')) {
         return { tag: 'GEMINI', label: 'Google Gemini', type: 'cli' };
     }
@@ -53,9 +56,16 @@ function getModelProviderMeta(modelName, fallbackTag, fallbackName) {
     }
 
     const tagUpper = (fallbackTag || 'NVIDIA').toUpperCase();
-    const tagClass = ['NVIDIA', 'DEEPSEEK', 'KIMI', 'QWEN', 'OPENAI', 'ANTHROPIC', 'GEMINI'].includes(
-        tagUpper
-    )
+    const tagClass = [
+        'NVIDIA',
+        'DEEPSEEK',
+        'KIMI',
+        'QWEN',
+        'OPENROUTER',
+        'OPENAI',
+        'ANTHROPIC',
+        'GEMINI'
+    ].includes(tagUpper)
         ? 'cli'
         : 'ollama';
     return { tag: tagUpper, label: fallbackName || 'AI Model', type: tagClass };
@@ -383,6 +393,10 @@ function renderConnectionsList(connections) {
                 if (connNameInp && !connNameInp.value) connNameInp.value = 'Ollama Local';
                 if (connUrlInp) connUrlInp.value = 'http://localhost:11434';
                 if (connTypeLocal) connTypeLocal.checked = true;
+            } else if (val === 'openrouter') {
+                if (connNameInp && !connNameInp.value) connNameInp.value = 'OpenRouter API';
+                if (connUrlInp) connUrlInp.value = 'https://openrouter.ai/api/v1';
+                if (connTypeRemote) connTypeRemote.checked = true;
             } else if (val === 'openai') {
                 if (connNameInp && !connNameInp.value) connNameInp.value = 'OpenAI API';
                 if (connUrlInp) connUrlInp.value = 'https://api.openai.com/v1';

@@ -360,7 +360,7 @@ export class ConnectionStore {
             list.find(
                 (c) =>
                     c.isActive &&
-                    (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai'].includes(c.tag))
+                    (c.type === 'remote' || ['nvidia', 'deepseek', 'kimi', 'qwen', 'openai', 'openrouter'].includes(c.tag))
             ) || null
         );
     }
@@ -384,7 +384,7 @@ export class ConnectionStore {
         return null;
     }
 
-    /** Find connection profile by exact provider tag (e.g. 'nvidia', 'openai', 'deepseek', 'giskard-sys', 'ollama') */
+    /** Find connection profile by exact provider tag (e.g. 'nvidia', 'openai', 'deepseek', 'openrouter', 'giskard-sys', 'ollama') */
     getConnectionByTag(tag: string): Connection | null {
         const cleanTag = (tag || '').toLowerCase().trim();
         if (!cleanTag) return null;

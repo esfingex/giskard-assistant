@@ -268,6 +268,13 @@ export async function activate(context: vscode.ExtensionContext) {
                         detail: 'Alibaba Qwen LLM models'
                     },
                     {
+                        label: '🌐 OpenRouter API',
+                        url: 'https://openrouter.ai/api/v1',
+                        tag: 'openrouter',
+                        type: 'remote',
+                        detail: 'Agregador multi-proveedor: 400+ modelos (Claude, GPT, Gemini, Qwen, DeepSeek, gratis :free)'
+                    },
+                    {
                         label: '✅ Custom AI Endpoint…',
                         url: '',
                         tag: 'custom',

@@ -7,6 +7,7 @@ import { fetchNvidiaModels } from './nvidiaProvider';
 import { fetchDeepseekModels } from './deepseekProvider';
 import { fetchKimiModels } from './kimiProvider';
 import { fetchQwenModels } from './qwenProvider';
+import { fetchOpenRouterModels } from './openrouterProvider';
 import { fetchGiskardSysModels } from './giskardSysProvider';
 import { fetchOllamaModels } from './ollamaProvider';
 
@@ -14,6 +15,7 @@ export * from './nvidiaProvider';
 export * from './deepseekProvider';
 export * from './kimiProvider';
 export * from './qwenProvider';
+export * from './openrouterProvider';
 export * from './giskardSysProvider';
 export * from './ollamaProvider';
 
@@ -52,7 +54,12 @@ export async function fetchModelsForProvider(
         return await fetchQwenModels(url, apiKey);
     }
 
-    // 5. Local backends: dispatch by Connection.type first, then tag heuristics
+    // 5. OpenRouter API (agregador OpenAI-compatible; /models es público)
+    if (cleanTag.includes('openrouter') || cleanUrl.includes('openrouter')) {
+        return await fetchOpenRouterModels(url, apiKey);
+    }
+
+    // 6. Local backends: dispatch by Connection.type first, then tag heuristics
     if (connType === 'local') {
         if (cleanTag.includes('giskard')) {
             return await fetchGiskardSysModels(url);
@@ -61,16 +68,17 @@ export async function fetchModelsForProvider(
         return await fetchOllamaModels(url);
     }
 
-    // 6. Remote connections: try the provider API directly
+    // 7. Remote connections: try the provider API directly
     if (connType === 'remote') {
         let models = await fetchNvidiaModels(url, apiKey);
         if (models.length === 0) models = await fetchDeepseekModels(url, apiKey);
         if (models.length === 0) models = await fetchKimiModels(url, apiKey);
         if (models.length === 0) models = await fetchQwenModels(url, apiKey);
+        if (models.length === 0) models = await fetchOpenRouterModels(url, apiKey);
         return models;
     }
 
-    // 7. Legacy fallback (no connType — backward compatible heuristics)
+    // 8. Legacy fallback (no connType — backward compatible heuristics)
     if (cleanUrl.includes(':3500') || cleanTag.includes('giskard')) {
         return await fetchGiskardSysModels(url);
     }

@@ -234,23 +234,7 @@ export async function updateProviderConfig(
 
 /** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
 export interface ProviderModelsResponse {
-    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
-    data?: Array<{ id?: string; name?: string }>;
-    /** Ollama /api/tags */
-    models?: Array<{ name?: string; id?: string }>;
-}
-
-/** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
-export interface ProviderModelsResponse {
-    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
-    data?: Array<{ id?: string; name?: string }>;
-    /** Ollama /api/tags */
-    models?: Array<{ name?: string; id?: string }>;
-}
-
-/** Formas de lista de modelos de los proveedores (OpenAI-compatible, Ollama, giskard-sys). */
-export interface ProviderModelsResponse {
-    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen) y giskard-sys */
+    /** OpenAI-compatible (NVIDIA NIM, DeepSeek, Kimi, Qwen, OpenRouter) y giskard-sys */
     data?: Array<{ id?: string; name?: string }>;
     /** Ollama /api/tags */
     models?: Array<{ name?: string; id?: string }>;
