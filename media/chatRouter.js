@@ -257,6 +257,7 @@ window.addEventListener('message', (event) => {
             console.log('[Giskard Webview] setEnabledModels payload:', message.enabledModels);
             if (Array.isArray(message.enabledModels)) {
                 _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
+                _allModelsCache = _enabledModelsCache.slice();
                 if (_enabledModelsCache.length > 0 && !currentActiveModel) {
                     currentActiveModel = _enabledModelsCache[0];
                 }
@@ -272,17 +273,24 @@ window.addEventListener('message', (event) => {
             if (Array.isArray(message.enabledModels)) {
                 _enabledModelsCache = message.enabledModels.map(cleanModelName).filter(Boolean);
             }
-            let list = [];
-            if (Array.isArray(message.models)) list = list.concat(message.models);
-            if (Array.isArray(message.localModels)) list = list.concat(message.localModels);
+            // Regla del picker: SOLO los modelos habilitados en el sidebar
+            _allModelsCache = _enabledModelsCache.slice();
+            // Mapa modelo → proveedor (badge del picker), desde las conexiones activas
+            _modelProviderMap = {};
             if (Array.isArray(message.groups)) {
                 message.groups.forEach((g) => {
                     if (g && Array.isArray(g.models)) {
-                        list = list.concat(g.models);
+                        g.models.forEach((m) => {
+                            if (m) _modelProviderMap[cleanModelName(m)] = (g.connectionTag || '').toUpperCase();
+                        });
                     }
                 });
             }
-            _allModelsCache = Array.from(new Set(list.map(cleanModelName).filter(Boolean)));
+            if (Array.isArray(message.localModels)) {
+                message.localModels.forEach((m) => {
+                    if (m && !_modelProviderMap[cleanModelName(m)]) _modelProviderMap[cleanModelName(m)] = 'OLLAMA';
+                });
+            }
 
             if (!currentActiveModel) {
                 currentActiveModel = _enabledModelsCache[0] || _allModelsCache[0] || '';

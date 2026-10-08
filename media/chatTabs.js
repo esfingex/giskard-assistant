@@ -41,33 +41,44 @@ if (popoverSearchInput) {
     });
 }
 
+/** Etiqueta de proveedor para el badge del picker: mapa de conexiones activas,
+ * con heurística ligera de respaldo (solo matches explícitos — sin overmatch). */
+function providerLabelFor(modelName) {
+    if (_modelProviderMap[modelName]) return _modelProviderMap[modelName];
+    const m = (modelName || '').toLowerCase();
+    if (m.startsWith('local:')) return 'OLLAMA';
+    if (m.includes('deepseek')) return 'DEEPSEEK';
+    if (m.includes('kimi') || m.includes('moonshot')) return 'KIMI';
+    if (m.includes('qwen') || m.includes('dashscope')) return 'QWEN';
+    if (m.includes('openrouter')) return 'OPENROUTER';
+    if (m.includes('claude') || m.includes('anthropic')) return 'ANTHROPIC';
+    if (m.includes('gemini')) return 'GEMINI';
+    if (m.includes('gpt') || m.includes('openai')) return 'OPENAI';
+    return '';
+}
+
 function renderPopoverLists() {
     if (!popoverModelList) return;
     const q = (popoverSearchInput ? popoverSearchInput.value : '').toLowerCase().trim();
 
+    // Regla del picker: SOLO los modelos habilitados desde el sidebar
     const cleanedEnabled = _enabledModelsCache.map(cleanModelName).filter(Boolean);
-    const cleanedAll = _allModelsCache.map(cleanModelName).filter(Boolean);
-
-    // Single unified list: enabled models first, followed by all other available models
-    const allAvailable = Array.from(new Set([...cleanedEnabled, ...cleanedAll]));
-    const filteredModels = allAvailable.filter((m) => m.toLowerCase().includes(q));
+    const filteredModels = cleanedEnabled.filter((m) => m.toLowerCase().includes(q));
 
     if (filteredModels.length === 0) {
         popoverModelList.innerHTML =
-            '<div style="font-size:11px;color:#f87171;padding:8px 6px;text-align:center;">⚠️ Falló la conexión al obtener los modelos.<br><span style="opacity:0.8;font-size:10px;">Verifica tus conexiones activas en Ajustes ⚙️ o en la barra lateral 👈</span></div>';
+            '<div style="font-size:11px;color:#f87171;padding:8px 6px;text-align:center;">⚠️ No hay modelos habilitados.<br><span style="opacity:0.8;font-size:10px;">Escoge modelos en la barra lateral 👈 (clic para habilitar) o activa una conexión.</span></div>';
     } else {
         popoverModelList.innerHTML = filteredModels
             .map((m) => {
                 const isSel = m === currentActiveModel;
-                const isCheckedInTree = cleanedEnabled.includes(m);
                 const selClass = isSel ? 'selected' : '';
                 const checkMark = isSel ? '✓ ' : '';
-                const badgeText = isSel ? 'Activo' : isCheckedInTree ? 'Habilitado' : 'Disponible';
+                const provLabel = providerLabelFor(m);
+                const badgeText = provLabel || (isSel ? 'Activo' : 'Habilitado');
                 const badgeStyle = isSel
                     ? 'background:rgba(56,189,248,0.25);color:#38bdf8;font-weight:bold;'
-                    : isCheckedInTree
-                      ? 'background:rgba(34,197,94,0.18);color:#4ade80;font-weight:bold;'
-                      : 'opacity:0.6;';
+                    : 'background:rgba(34,197,94,0.18);color:#4ade80;font-weight:bold;';
 
                 return `<div class="popover-model-item ${selClass}" data-model="${escapeHtml(m)}">
                 <span>${checkMark}${escapeHtml(m)}</span>

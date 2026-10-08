@@ -50,15 +50,18 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
         }
     });
 
-    const allFlatModels = Array.from(
-        new Set([...enabledModels, ...flatGroupModels, ...remoteModels, ...localModels])
-    ).filter((m) => Boolean(m));
+    // Solo los modelos de conexiones ACTIVAS son candidatos visibles (las
+    // conexiones deshabilitadas —p. ej. Ollama apagado— quedan fuera).
+    const knownModels = new Set([...flatGroupModels, ...remoteModels].filter((m) => Boolean(m)));
 
-    // Auto-enable if empty
-    if (enabledModels.length === 0 && allFlatModels.length > 0) {
-        enabledModels = allFlatModels;
+    // Auto-enable solo si NUNCA se ha escogido nada (primera corrida del usuario)
+    if (enabledModels.length === 0 && knownModels.size > 0) {
+        enabledModels = Array.from(knownModels);
         ctx.store.setEnabledModels(enabledModels);
     }
+
+    // Regla del picker: SOLO los modelos habilitados en el sidebar son visibles
+    const visibleModels = enabledModels.filter((m) => knownModels.has(m));
 
     ctx.postMessage({ type: 'setEnabledModels', enabledModels });
 
@@ -68,7 +71,7 @@ export async function sendModelsList(ctx: ChatStateContext): Promise<void> {
 
     ctx.postMessage({
         type: 'modelsList',
-        models: allFlatModels,
+        models: visibleModels,
         enabledModels,
         groups,
         localModels,
