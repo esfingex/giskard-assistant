@@ -12,11 +12,6 @@
 window.addEventListener('message', (event) => {
     const message = event.data;
     switch (message.type) {
-        case 'modelsList':
-            if (message.currentUrl && cfgConnectorUrl) cfgConnectorUrl.value = message.currentUrl;
-            renderModelFilterList(message);
-            updateModelDropdown(message);
-            break;
         case 'mcpServersLoaded':
             if (message.servers && Array.isArray(message.servers)) {
                 renderMcpServersList(message.servers);
